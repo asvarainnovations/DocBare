@@ -11,13 +11,25 @@ export async function createDocBareAgent() {
     { collection: client.db().collection("cases") }
   );
   const retriever = store.asRetriever({ k: 5 });
-  const llm = new OpenAI({ temperature: 0 });
+  const llm = new OpenAI({
+    temperature: 0,
+    model: process.env.DEEPSEEK_MODEL,
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    configuration: {
+      baseURL: process.env.DEEPSEEK_BASE_URL,
+    },
+  });
 
   // LCEL pipeline: retrieve -> LLM -> output parse
   const chain = RunnableSequence.from([
-    (input) => retriever.invoke(input),
-    (docs: Array<{ pageContent: string }>) => llm.invoke(docs.map((doc) => doc.pageContent).join("\n")),
-    new StringOutputParser(),
+    async (input) => {
+      const docs = await retriever.invoke(input);
+      return { docs, input };
+    },
+    async ({ docs, input }: { docs: Array<{ pageContent: string }>, input: any }) => {
+      const answer = await llm.invoke(docs.map((doc) => doc.pageContent).join("\n"));
+      return { answer, sourceDocuments: docs };
+    }
   ]);
 
   return chain;

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   }
 
   const agent = await createDocBareAgent();
-  const result = await agent.call({ query });
+  const result = await agent.invoke({ query });
 
-  return NextResponse.json({ answer: result.text, sources: result.sourceDocuments });
+  return NextResponse.json({ answer: result.answer, sources: result.sourceDocuments });
 } 

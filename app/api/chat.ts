@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMongo } from '@/lib/mongo';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth/[...nextauth]';
-import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);

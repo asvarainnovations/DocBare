@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMongo } from '../../lib/mongo';
-import { supabase } from '../../lib/supabaseClient';
+import { getMongo } from '@/lib/mongo';
+import { supabase } from '@/lib/supabaseClient';
 import OpenAI from 'openai';
-import { DocumentChunk, Embedding, MongoDocument } from '../../lib/mongoSchemas';
+import { DocumentChunk, Embedding, MongoDocument } from '@/lib/mongoSchemas';
 import { ObjectId } from 'mongodb';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

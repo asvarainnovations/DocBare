@@ -44,7 +44,8 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
 - **Prisma ORM** (PostgreSQL/Supabase for users, auth, subscriptions, chat session metadata)
 - **MongoDB** (Atlas, for unstructured data: documents, chunks, embeddings, RAG sessions, agent state, feedback)
 - **Supabase Storage** (for file uploads)
-- **OpenAI** (for LLM and embeddings)
+- **OpenAI** (for embeddings)
+- **DeepSeek** (for LLM/chat/completions)
 - **NextAuth.js** (Google OAuth and credentials-based authentication)
 
 ---
@@ -71,7 +72,7 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
 - **User Management:** Profile, API keys, subscriptions (Postgres/Supabase)
 - **File Upload:** Supabase Storage integration, metadata in Postgres and MongoDB
 - **Document Ingestion:** Chunking, embedding, and storage in MongoDB
-- **RAG Pipeline:** LangChain-based agent, vector search, and OpenAI integration
+- **RAG Pipeline:** LangChain-based agent, vector search, and DeepSeek integration for LLM (OpenAI for embeddings)
 - **Chat System:**
   - Chat session/message models in Prisma/Postgres
   - Chat message storage/retrieval in MongoDB

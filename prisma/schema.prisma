@@ -254,6 +254,16 @@ model ChatMessage {
   session    ChatSession @relation(fields: [sessionId], references: [id])
 }
 
+model Document {
+  id           String   @id @default(uuid())
+  userId       String
+  fileName     String
+  path         String
+  originalName String
+  mimeType     String
+  createdAt    DateTime @default(now())
+}
+
 enum MessageRole {
   USER
   ASSISTANT
