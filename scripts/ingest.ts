@@ -1,9 +1,12 @@
 import fs from 'fs';
 import readline from 'readline';
 import { getMongo } from '../lib/mongo';
-import OpenAI from 'openai';
+import { config as dotenvConfig } from 'dotenv';
 import { DocumentChunk, Embedding } from '@/lib/mongoSchemas';
 import { ObjectId } from 'mongodb';
+import OpenAI from 'openai';
+
+dotenvConfig();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -18,6 +21,17 @@ function splitIntoChunks(text: string, chunkSize = 1000): string[] {
 function countTokens(text: string): number {
   // Simple token count (can be replaced with a tokenizer)
   return text.split(/\s+/).length;
+}
+
+async function getOpenAIEmbedding(text: string): Promise<number[]> {
+  const response = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text,
+  });
+  if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
+    throw new Error('No embeddings returned from OpenAI API');
+  }
+  return response.data[0].embedding;
 }
 
 async function ingest(jsonlPath: string, documentId?: string) {
@@ -43,13 +57,10 @@ async function ingest(jsonlPath: string, documentId?: string) {
         createdAt: new Date(),
       };
       const chunkInsert = await chunksCol.insertOne(chunkDoc);
-      const { data } = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: chunkText,
-      });
+      const embeddingVector = await getOpenAIEmbedding(chunkText);
       const embeddingDoc: Embedding = {
         chunkId: chunkInsert.insertedId,
-        vector: data[0].embedding,
+        vector: embeddingVector,
         model: 'text-embedding-3-small',
         createdAt: new Date(),
       };

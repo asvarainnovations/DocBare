@@ -31,7 +31,16 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+
+# data
+/datasets/*
+!/datasets/.gitkeep
+
+# knowledge base data (shared across AI apps)
+/kb_data/
+
+/deepseek_v3_tokenizer
 
 # vercel
 .vercel
@@ -39,3 +48,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+

@@ -1,6 +1,7 @@
 import { UserCircleIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -16,6 +17,7 @@ function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
 export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSidebarToggle?: boolean; onSidebarToggle?: () => void }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { data: session, status } = useSession();
   useClickOutside(dropdownRef, () => setDropdownOpen(false));
 
   return (
@@ -36,27 +38,33 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
         {/* DocBare Text */}
         <span className="text-3xl font-semibold tracking-tight text-white select-none">DocBare</span>
       </div>
-      {/* User Avatar Dropdown */}
-      <div className="relative" ref={dropdownRef}>
-        <button
-          className="flex items-center gap-2 p-2 rounded hover:bg-slate/40 transition-colors"
-          onClick={() => setDropdownOpen((v) => !v)}
-          aria-label="User menu"
-        >
-          <UserCircleIcon className="w-8 h-8 text-white" />
-        </button>
-        {dropdownOpen && (
-          <div className="absolute right-0 mt-2 w-44 bg-slate border border-gray-700 rounded shadow-lg z-30">
-            <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
-              <UserIcon className="w-4 h-4" /> Profile
+      {/* User Avatar and Auth Button */}
+      <div className="flex items-center gap-4">
+        {status === 'authenticated' ? (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              className="flex items-center gap-2 p-2 rounded hover:bg-slate/40 transition-colors"
+              onClick={() => setDropdownOpen((v) => !v)}
+              aria-label="User menu"
+            >
+              <UserCircleIcon className="w-8 h-8 text-white" />
             </button>
-            <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
-              <Cog6ToothIcon className="w-4 h-4" /> Settings
-            </button>
-            <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-red-400">
-              <ArrowRightOnRectangleIcon className="w-4 h-4" /> Logout
-            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-slate border border-gray-700 rounded shadow-lg z-30">
+                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+                  <UserIcon className="w-4 h-4" /> Profile
+                </button>
+                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+                  <Cog6ToothIcon className="w-4 h-4" /> Settings
+                </button>
+                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-red-400" onClick={() => signOut()}>
+                  <ArrowRightOnRectangleIcon className="w-4 h-4" /> Logout
+                </button>
+              </div>
+            )}
           </div>
+        ) : (
+          <button onClick={() => signIn()} className="text-white bg-accent px-4 py-2 rounded">Login</button>
         )}
       </div>
     </header>

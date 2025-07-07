@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 import Sidebar from './components/Sidebar';
 import NavBar from './components/NavBar';
@@ -16,6 +16,16 @@ export default function Home() {
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>('1');
   const router = useRouter();
   const { data: session, status } = useSession();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+    }
+  }, [status, router]);
+
+  if (status !== 'authenticated') {
+    return null;
+  }
 
   async function handleFirstPrompt(msg: string) {
     if (!session?.user?.id) {
@@ -43,13 +53,7 @@ export default function Home() {
         {/* Always render NavBar at the top, pass showSidebarToggle only when sidebar is closed */}
         <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen(true)} />
         {/* Auth buttons */}
-        <div className="absolute top-4 right-4 z-30">
-          {status === 'authenticated' ? (
-            <button onClick={() => signOut()} className="text-white bg-accent px-4 py-2 rounded">Logout</button>
-          ) : (
-            <button onClick={() => signIn()} className="text-white bg-accent px-4 py-2 rounded">Login</button>
-          )}
-        </div>
+        {/* Removed Login/Logout button from here; now handled in NavBar */}
         {/* Centered content below NavBar */}
         <div className="flex-1 flex flex-col justify-center items-center min-h-0">
           <div className="flex flex-col items-center w-full">
