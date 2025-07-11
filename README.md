@@ -72,7 +72,12 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
 - **User Management:** Profile, API keys, subscriptions (Postgres/Supabase)
 - **File Upload:** Supabase Storage integration, metadata in Postgres and MongoDB
 - **Document Ingestion:** Chunking, embedding, and storage in MongoDB
-- **RAG Pipeline:** LangChain-based agent, vector search, and DeepSeek integration for LLM (**OpenAI for embeddings**)
+- **RAG Pipeline (Production):**
+  - Query embedding via DeepSeek API (or OpenAI/Gemini, configurable)
+  - Semantic retrieval using Vertex AI Vector Search (GCP)
+  - RAG prompt construction and answer synthesis using DeepSeek LLM
+  - Logging of queries, answers, and sources to Cloud SQL (Prisma) and Firestore
+  - All API endpoints implemented as Next.js API routes, ready for Cloud Run
 - **Chat System:**
   - Chat session/message models in Prisma/Postgres
   - Chat message storage/retrieval in MongoDB
@@ -114,6 +119,7 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
 - **Advanced RAG:**
   - Multi-modal support (images, audio)
   - More advanced agent orchestration and tool use
+  - Multi-step agentic reasoning and reranking (planned enhancement)
 
 ---
 
