@@ -274,3 +274,64 @@ flowchart TD
   B4 --> D1
   B1 -->|Synthesized Answer| A1
   ```
+
+flowchart LR
+  %% Frontend Layer
+  subgraph Frontend
+    UI["Web/Mobile UI"]
+  end
+
+  %% Agent Layer
+  subgraph AgentLayer
+    Agent["Vertex AI Agent<br/>(Gemini + Function Calls)"]
+  end
+
+  UI -- "Chat & API Calls" --> Agent
+
+  %% Receipt Ingestion
+  subgraph Ingestion
+    ReceiptParser["Receipt Parser Service<br/>(Cloud Function/Run)"]
+    VisionAPI["Document AI / Vision API"]
+  end
+
+  Agent -- "parseReceipt(img)" --> ReceiptParser
+  ReceiptParser -- "OCR & Structuring" --> VisionAPI
+  VisionAPI -- "Parsed Data" --> ReceiptParser
+
+  %% Data Storage
+  subgraph Storage
+    Firestore["Firestore Database"]
+  end
+
+  ReceiptParser -- "Store Receipt Data" --> Firestore
+  Agent -- "queryReceipts(params)" --> Firestore
+
+  %% Pass Management
+  subgraph PassMgmt
+    PassManager["Wallet Pass Manager<br/>(Cloud Function/Run)"]
+    WalletAPI["Google Wallet REST API"]
+  end
+
+  Agent -- "createPass(type,data)" --> PassManager
+  PassManager -- "REST Calls" --> WalletAPI
+  WalletAPI -- "JWT Save → User" --> UI
+
+  %% Analytics Pipeline
+  subgraph Analytics
+    Scheduler["Cloud Scheduler"]
+    PubSub["Pub/Sub Topic"]
+    Analyzer["Financial Analyzer<br/>(Cloud Function)"]
+    GeminiModel["Gemini Model (Vertex AI)"]
+  end
+
+  Scheduler -- "Daily Trigger" --> PubSub
+  PubSub --> Analyzer
+  Analyzer -- "Aggregate & Insights" --> Firestore
+  Analyzer -- "invokeInsights(params)" --> GeminiModel
+  GeminiModel -- "Insights JSON" --> Analyzer
+  Analyzer -- "updatePass(insights)" --> PassManager
+
+  %% Agent Multimodal Reasoning
+  Agent -- "invokeReasoning(params)" --> GeminiModel
+  GeminiModel -- "Results" --> Agent
+```

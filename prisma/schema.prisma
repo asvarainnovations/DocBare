@@ -5,7 +5,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -268,4 +267,22 @@ enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
+}
+
+
+model RagQueryLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  query        String
+  answer       String
+  sources      Json
+  createdAt    DateTime @default(now())
+}
+
+model DocumentChunkMetadata {
+  id           String   @id @default(uuid())
+  chunkId      String   @unique
+  title        String?
+  fileName     String?
+  createdAt    DateTime @default(now())
 }
