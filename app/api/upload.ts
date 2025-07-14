@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
 import { prisma } from '@/lib/prisma';
 import { v4 as uuidv4 } from 'uuid';
-import { getMongo } from '@/lib/mongo';
-import { MongoDocument } from '@/lib/mongoSchemas';
+import firestore from '@/lib/firestore';
+import { uploadFile } from '@/lib/gcs';
 
 export const runtime = 'edge';
 
@@ -18,24 +17,29 @@ export async function POST(req: NextRequest) {
 
   const fileExt = file.name.split('.').pop();
   const fileName = `${uuidv4()}.${fileExt}`;
-  const { data, error } = await supabase.storage.from('documents').upload(fileName, file);
+  // Upload to Google Cloud Storage
+  const { url, error: gcsError } = await uploadFile(fileName, file);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (gcsError) {
+    return NextResponse.json({ error: gcsError.message }, { status: 500 });
+  }
+
+  if (!url) {
+    return NextResponse.json({ error: 'File upload failed' }, { status: 500 });
   }
 
   const doc = await prisma.document.create({
     data: {
       userId,
       fileName,
-      path: data.path,
+      path: url,
       originalName: file.name,
       mimeType: file.type,
     },
   });
 
-  const db = await getMongo();
-  const mongoDoc: MongoDocument = {
+  // Store document metadata in Firestore
+  const firestoreDoc = {
     userId,
     filename: file.name,
     contentType: file.type,
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
     status: 'pending',
     metadata: {},
   };
-  const mongoResult = await db.collection('documents').insertOne(mongoDoc);
+  const firestoreResult = await firestore.collection('documents').add(firestoreDoc);
 
-  return NextResponse.json({ document: doc, mongoId: mongoResult.insertedId });
+  return NextResponse.json({ document: doc, firestoreId: firestoreResult.id });
 } 

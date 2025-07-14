@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMongo } from '@/lib/mongo';
-import { ObjectId } from 'mongodb';
+import firestore from '@/lib/firestore';
 
 export async function GET(req: NextRequest, { params }: { params: { sessionId: string } }) {
   const { sessionId } = params;
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
   }
-  const db = await getMongo();
-  const feedback = await db.collection('feedback').find({ sessionId: new ObjectId(sessionId) }).toArray();
+  const snapshot = await firestore.collection('feedback')
+    .where('sessionId', '==', sessionId)
+    .get();
+  const feedback = snapshot.docs.map(doc => doc.data());
   return NextResponse.json({ feedback });
 } 

@@ -1,9 +1,7 @@
 import fs from 'fs';
 import readline from 'readline';
-import { getMongo } from '../lib/mongo';
 import { config as dotenvConfig } from 'dotenv';
-import { DocumentChunk, Embedding } from '@/lib/mongoSchemas';
-import { ObjectId } from 'mongodb';
+import firestore from '@/lib/firestore';
 import OpenAI from 'openai';
 
 dotenvConfig();
@@ -35,9 +33,6 @@ async function getOpenAIEmbedding(text: string): Promise<number[]> {
 }
 
 async function ingest(jsonlPath: string, documentId?: string) {
-  const db = await getMongo();
-  const chunksCol = db.collection<DocumentChunk>('document_chunks');
-  const embeddingsCol = db.collection<Embedding>('embeddings');
   const rl = readline.createInterface({
     input: fs.createReadStream(jsonlPath),
     crlfDelay: Infinity,
@@ -45,26 +40,26 @@ async function ingest(jsonlPath: string, documentId?: string) {
   for await (const line of rl) {
     if (!line.trim()) continue;
     const rec = JSON.parse(line);
-    const docId = documentId ? new ObjectId(documentId) : new ObjectId();
+    const docId = documentId || `doc_${Math.random().toString(36).slice(2)}`;
     const chunks = splitIntoChunks(rec.text);
     for (let i = 0; i < chunks.length; i++) {
       const chunkText = chunks[i];
-      const chunkDoc: DocumentChunk = {
+      const chunkDoc = {
         documentId: docId,
         chunkIndex: i,
         text: chunkText,
         tokenCount: countTokens(chunkText),
         createdAt: new Date(),
       };
-      const chunkInsert = await chunksCol.insertOne(chunkDoc);
+      const chunkRef = await firestore.collection('document_chunks').add(chunkDoc);
       const embeddingVector = await getOpenAIEmbedding(chunkText);
-      const embeddingDoc: Embedding = {
-        chunkId: chunkInsert.insertedId,
+      const embeddingDoc = {
+        chunkId: chunkRef.id,
         vector: embeddingVector,
         model: 'text-embedding-3-small',
         createdAt: new Date(),
       };
-      await embeddingsCol.insertOne(embeddingDoc);
+      await firestore.collection('embeddings').add(embeddingDoc);
     }
   }
   console.log('Ingestion complete.');

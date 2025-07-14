@@ -1,27 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMongo } from '@/lib/mongo';
-import { RagSession } from '@/lib/mongoSchemas';
-import { ObjectId } from 'mongodb';
+import firestore from '@/lib/firestore';
 
 export async function POST(req: NextRequest) {
   const { userId, sessionName, documentIds } = await req.json();
   if (!userId || !documentIds) {
     return NextResponse.json({ error: 'Missing userId or documentIds' }, { status: 400 });
   }
-  const db = await getMongo();
-  const session: RagSession = {
+  const session = {
     userId,
     sessionName,
     createdAt: new Date(),
     lastAccessed: new Date(),
-    documentIds: documentIds.map((id: string) => new ObjectId(id)),
+    documentIds,
     memory: [],
     agentState: {},
     status: 'running',
     result: {},
   };
-  const result = await db.collection('rag_sessions').insertOne(session);
-  return NextResponse.json({ sessionId: result.insertedId });
+  const result = await firestore.collection('rag_sessions').add(session);
+  return NextResponse.json({ sessionId: result.id });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -29,15 +26,11 @@ export async function PATCH(req: NextRequest) {
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
   }
-  const db = await getMongo();
   const update: any = { lastAccessed: new Date() };
   if (memory) update.memory = memory;
   if (agentState) update.agentState = agentState;
   if (status) update.status = status;
   if (result) update.result = result;
-  await db.collection('rag_sessions').updateOne(
-    { _id: new ObjectId(sessionId) },
-    { $set: update }
-  );
+  await firestore.collection('rag_sessions').doc(sessionId).update(update);
   return NextResponse.json({ status: 'updated' });
 } 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMongo } from '@/lib/mongo';
+import firestore from '@/lib/firestore';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth/[...nextauth]';
 
@@ -12,8 +12,6 @@ export async function POST(req: NextRequest) {
   if (!sessionId || !userId || !role || !content) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
-  const db = await getMongo();
-  const col = db.collection('chats');
   const message = {
     sessionId,
     userId,
@@ -21,7 +19,7 @@ export async function POST(req: NextRequest) {
     content,
     createdAt: new Date(),
   };
-  await col.insertOne(message);
+  await firestore.collection('chat_messages').add(message);
   return NextResponse.json({ message });
 }
 
@@ -31,8 +29,10 @@ export async function GET(req: NextRequest) {
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
   }
-  const db = await getMongo();
-  const col = db.collection('chats');
-  const messages = await col.find({ sessionId }).sort({ createdAt: 1 }).toArray();
+  const snapshot = await firestore.collection('chat_messages')
+    .where('sessionId', '==', sessionId)
+    .orderBy('createdAt', 'asc')
+    .get();
+  const messages = snapshot.docs.map(doc => doc.data());
   return NextResponse.json({ messages });
 } 

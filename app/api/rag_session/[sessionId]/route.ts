@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMongo } from '@/lib/mongo';
-import { ObjectId } from 'mongodb';
+import firestore from '@/lib/firestore';
 
 export async function GET(req: NextRequest, { params }: { params: { sessionId: string } }) {
   const { sessionId } = params;
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
   }
-  const db = await getMongo();
-  const session = await db.collection('rag_sessions').findOne({ _id: new ObjectId(sessionId) });
-  if (!session) {
+  const docSnap = await firestore.collection('rag_sessions').doc(sessionId).get();
+  if (!docSnap.exists) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
-  return NextResponse.json({ session });
+  return NextResponse.json({ session: docSnap.data() });
 } 
