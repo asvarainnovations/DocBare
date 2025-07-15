@@ -1,14 +1,25 @@
-import NextAuth, { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
-import { prisma } from '@/lib/prisma';
-import { Session, User } from 'next-auth';
-import { JWT } from 'next-auth/jwt';
+import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
+import type { AuthOptions } from 'next-auth';
+
+// Monkey-patch PrismaAdapter to always provide a dummy passwordHash for OAuth users
+function PatchedPrismaAdapter(prisma) {
+  const adapter = PrismaAdapter(prisma);
+  const originalCreateUser = adapter.createUser;
+  adapter.createUser = async (data) => {
+    if (!data.passwordHash) {
+      data.passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
+    }
+    return originalCreateUser(data);
+  };
+  return adapter;
+}
 
 export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: PatchedPrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -21,7 +32,6 @@ export const authOptions: AuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        // Implement your own credentials logic here
         const user = await prisma.user.findUnique({ where: { email: credentials?.email } });
         if (user && user.passwordHash && credentials?.password) {
           const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
@@ -34,16 +44,26 @@ export const authOptions: AuthOptions = {
   session: {
     strategy: 'jwt',
   },
+  pages: {
+    signIn: '/login',
+    error: '/auth/error',
+  },
   callbacks: {
-    async session({ session, token, user }: { session: Session; token: JWT; user: User }) {
-      if (session.user && token?.sub) {
-        session.user.id = token.sub;
+    async signIn({ user, account, profile, email, credentials }) {
+      return true;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token?.id) {
+        session.user.id = token.id as string;
       }
       return session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-};
-
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST }; 
+}; 

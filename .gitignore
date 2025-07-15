@@ -50,3 +50,7 @@ yarn-error.log*
 next-env.d.ts
 
 secrets/
+
+# Firebase local/CLI config
+.firebase/
+.firebaserc

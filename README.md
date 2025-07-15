@@ -21,8 +21,15 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
    - Copy `.env.example` to `.env` and fill in all required values:
      - `DATABASE_URL`, `DIRECT_URL` (PostgreSQL/Cloud SQL)
      - `OPENAI_API_KEY` (for embeddings)
+     - `OPENAI_EMBEDDING_MODEL` (e.g. text-embedding-3-large)
      - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`
      - `FIRESTORE_PROJECT_ID` (Firestore/NoSQL backend)
+     - `FIRESTORE_DATABASE_ID` (optional, for multi-database support)
+     - `GOOGLE_CLOUD_KEY_FILE` (path to GCP service account JSON, for local dev)
+     - `GCS_BUCKET_NAME` (Google Cloud Storage bucket name)
+     - `VERTEX_AI_INDEX_ENDPOINT` (Vertex AI Vector Search endpoint)
+     - `VERTEX_AI_LOCATION` (Vertex AI region, e.g. us-central1)
+     - `DEEPSEEK_API_KEY` (for LLM completions)
 4. **Run database migrations:**
    ```bash
    npx prisma migrate dev
@@ -120,6 +127,42 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
   - Multi-step agentic reasoning and reranking (planned enhancement)
 - **SSO / Cross-site Login:**
   - Planned: If a user is logged in at the Asvara site, they should not have to log in again at DocBare (Single Sign-On / shared session).
+
+### 💡 Suggestions & Next Steps
+
+- **Frontend Integration:**
+  - Integrate document upload, listing, and deletion UI with new backend endpoints.
+  - Add document preview/download using signed URLs.
+  - Show upload progress, error, and success states.
+  - Display user’s documents in a dashboard with metadata (name, date, status).
+  - Add search/filter for documents and chat sessions.
+  - Add feedback and rating UI for document analysis results.
+  - Improve chat UI: show session history, allow renaming/deleting sessions.
+  - Add user profile and settings management.
+
+- **UI/UX Improvements:**
+  - Responsive design for mobile/tablet.
+  - Skeleton loaders and better empty/error states.
+  - Toast notifications for actions (upload, delete, feedback, etc.).
+  - Drag-and-drop file upload.
+  - Accessibility improvements (ARIA, keyboard navigation).
+  - Dark/light mode toggle.
+
+- **Backend Enhancements:**
+  - Add endpoint to update document metadata (rename, tag, etc.).
+  - Add endpoint to fetch document analysis results and feedback.
+  - Implement rate limiting and improved error handling.
+  - Add logging and monitoring for production.
+  - Implement admin endpoints for moderation and analytics.
+  - Add support for multi-modal documents (images, audio, etc.).
+  - Implement bulk document operations (delete, download, etc.).
+  - Add SSO/cross-site login integration with Asvara site.
+
+- **Testing & Security:**
+  - Add integration and e2e tests for document and chat flows.
+  - Add input validation and sanitization for all endpoints.
+  - Enforce access control for all user data and files.
+  - Set up automated CI/CD for tests and deployment.
 
 ---
 
@@ -233,5 +276,57 @@ flowchart TD
   G1 -- "Send" --> G2
   G2 -- "Store" --> G3
 ```
+
+---
+
+## Firestore Security & Indexes
+
+- Firestore security rules enforce per-user access for all collections (documents, chunks, embeddings, sessions, feedback, etc.).
+- Composite indexes are required for listing documents and chat sessions by userId and date. See `firestore.indexes.json`.
+- To deploy rules and indexes:
+  ```bash
+  firebase deploy --only firestore:rules,firestore:indexes
+  ```
+
+## Seeding Firestore (Dev/Test)
+
+- Use the provided seeding script to populate Firestore with sample users, documents, and chunks for development/testing:
+  ```bash
+  npm run seed-firestore
+  # or
+  yarn seed-firestore
+  ```
+
+## Document Management UI
+
+- The main page supports file upload with progress and error feedback.
+- A document dashboard lists uploaded documents, allows download (via signed URL), and delete.
+- All actions are per-user and require authentication.
+
+## Test Scripts
+
+- Test scripts are provided in the `scripts/` directory:
+  ```bash
+  # Firestore chat session fetch
+  ts-node scripts/test-firestore-chat-sessions.ts
+  # Firestore chat session creation
+  ts-node scripts/test-firestore-chat-sessions.ts --create
+  # Prisma user creation
+  ts-node scripts/test-prisma.ts
+  # File upload to GCS
+  ts-node scripts/test-upload-gcs.ts
+  # RAG query endpoint
+  ts-node scripts/test-rag-query.ts
+  # Feedback submission
+  ts-node scripts/test-firestore-feedback.ts
+  # Authentication (Google and credentials)
+  ts-node scripts/test-auth-credentials.ts
+  # OpenAI embedding
+  ts-node scripts/test-openai-embedding.ts
+  # DeepSeek API
+  ts-node scripts/test-deepseek-api.ts
+  # Supabase test (if used)
+  ts-node scripts/test-supabase.ts
+  ```
 
 ---

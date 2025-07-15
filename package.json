@@ -2,15 +2,17 @@
   "name": "docbare",
   "version": "0.1.0",
   "private": true,
-  "description": "DocBare: Modern legal AI platform with Firestore as the NoSQL backend (GCP-native)",
+  "description": "DocBare: Modern legal AI platform for document drafting and analysis",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed-firestore": "ts-node scripts/seed-firestore.ts"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "^4.3.0",
+    "@google-cloud/firestore": "^7.11.2",
     "@google-cloud/storage": "^7.16.0",
     "@google/genai": "^1.8.0",
     "@heroicons/react": "^2.1.1",

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import firestore from '@/lib/firestore';
 import { getServerSession } from 'next-auth';
-import { authOptions } from './auth/[...nextauth]';
+import { authOptions } from '@/lib/authOptions';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -33,6 +33,6 @@ export async function GET(req: NextRequest) {
     .where('sessionId', '==', sessionId)
     .orderBy('createdAt', 'asc')
     .get();
-  const messages = snapshot.docs.map(doc => doc.data());
+  const messages = snapshot.docs.map((doc: any) => doc.data());
   return NextResponse.json({ messages });
 } 

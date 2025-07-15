@@ -2,6 +2,7 @@ import { UserCircleIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserIcon, Bar
 import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import Link from 'next/link';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -19,6 +20,8 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { data: session, status } = useSession();
   useClickOutside(dropdownRef, () => setDropdownOpen(false));
+
+  const isGoogleUser = !!session?.user?.image;
 
   return (
     <header className={clsx(
@@ -47,17 +50,33 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
               onClick={() => setDropdownOpen((v) => !v)}
               aria-label="User menu"
             >
-              <UserCircleIcon className="w-8 h-8 text-white" />
+              {isGoogleUser && session.user.image ? (
+                <img
+                  src={session.user.image}
+                  alt="Profile"
+                  className="w-8 h-8 rounded-full object-cover border border-gray-600"
+                  onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/default-avatar.png'; }}
+                />
+              ) : (
+                <UserCircleIcon className="w-8 h-8 text-white" />
+              )}
             </button>
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-slate border border-gray-700 rounded shadow-lg z-30">
-                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
-                  <UserIcon className="w-4 h-4" /> Profile
-                </button>
-                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+              <div className="absolute right-0 mt-2 w-52 bg-slate border border-gray-700 rounded shadow-lg z-30">
+                {isGoogleUser ? (
+                  <div className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-400 cursor-default select-text opacity-70">
+                    <UserIcon className="w-4 h-4" />
+                    <span className="truncate">{session.user.email}</span>
+                  </div>
+                ) : (
+                  <Link href="/profile" className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+                    <UserIcon className="w-4 h-4" /> Profile
+                  </Link>
+                )}
+                <Link href="/settings" className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
                   <Cog6ToothIcon className="w-4 h-4" /> Settings
-                </button>
-                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-red-400" onClick={() => signOut()}>
+                </Link>
+                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-red-400" onClick={() => signOut({ callbackUrl: '/' })}>
                   <ArrowRightOnRectangleIcon className="w-4 h-4" /> Logout
                 </button>
               </div>

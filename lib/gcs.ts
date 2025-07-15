@@ -1,10 +1,14 @@
 import { Storage } from '@google-cloud/storage';
 
-const storage = new Storage({
-  keyFilename: process.env.GCS_KEYFILE_PATH,
+const gcsConfig: any = {
   projectId: process.env.FIRESTORE_PROJECT_ID,
-});
+};
 
+if (process.env.NODE_ENV === 'development' && process.env.GOOGLE_CLOUD_KEY_FILE) {
+  gcsConfig.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
+}
+
+const storage = new Storage(gcsConfig);
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME!);
 
 export async function uploadFile(fileName: string, file: File) {
@@ -33,4 +37,13 @@ export async function uploadFile(fileName: string, file: File) {
   } catch (error: any) {
     return { url: null, error };
   }
+}
+
+export async function getSignedUrl(filePath: string, expiresInSeconds = 60 * 10) {
+  const file = bucket.file(filePath);
+  const [url] = await file.getSignedUrl({
+    action: 'read',
+    expires: Date.now() + expiresInSeconds * 1000,
+  });
+  return url;
 } 

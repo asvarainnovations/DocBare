@@ -4,70 +4,47 @@ import { prisma } from '@/lib/prisma';
 import firestore from '@/lib/firestore';
 import fs from 'fs';
 import readline from 'readline';
+import { PredictionServiceClient } from '@google-cloud/aiplatform';
+import { getQueryEmbedding } from '@/lib/embeddings';
+import { getChunkTexts } from '@/lib/chunkText';
 
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL!;
+const predictionClient = new PredictionServiceClient({
+  apiEndpoint: `${process.env.VERTEX_AI_LOCATION || 'us-central1'}-aiplatform.googleapis.com`,
+});
+const endpoint = process.env.VERTEX_AI_INDEX_ENDPOINT;
+
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
-const VERTEX_AI_ENDPOINT = process.env.VERTEX_AI_ENDPOINT!;
-const VERTEX_AI_DEPLOYED_INDEX_ID = process.env.VERTEX_AI_DEPLOYED_INDEX_ID!;
 const CHUNKS_FILE = 'kb_data/datasets/legal_kb_embeddings_batch.json';
 const TOP_K = 5;
 
-// 1. Generate embedding using DeepSeek API
-async function getQueryEmbedding(query: string) {
-  const response = await axios.post(
-    DEEPSEEK_API_URL,
-    { input: [query] },
-    { headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` } }
-  );
-  if (!response.data || !Array.isArray(response.data.embeddings) || response.data.embeddings.length === 0) {
-    throw new Error('No embeddings returned from DeepSeek API');
-  }
-  return response.data.embeddings[0];
-}
-
-// 2. Query Vertex AI Vector Search
+// 2. Query Vertex AI Vector Search using SDK
 async function queryVertexAI(embedding: number[], topK = TOP_K) {
-  const body = {
-    deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
-    queries: [
+  // Use the endpoint directly from the env variable
+  const [response] = await predictionClient.predict({
+    endpoint,
+    instances: [
       {
-        embedding,
-        neighborCount: topK,
+        structValue: {
+          fields: {
+            embedding: {
+              listValue: {
+                values: embedding.map((x) => ({ numberValue: x })),
+              },
+            },
+          },
+        },
       },
     ],
-  };
-  const response = await axios.post(
-    VERTEX_AI_ENDPOINT,
-    body,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.VERTEX_AI_AUTH_TOKEN}`,
-        'Content-Type': 'application/json',
+    parameters: {
+      structValue: {
+        fields: {
+          neighborCount: { numberValue: topK },
+        },
       },
-    }
-  );
-  const neighbors = response.data.nearestNeighbors[0].neighbors;
-  return neighbors.map((n: any) => ({
-    id: n.datapoint.datapointId,
-    distance: n.distance,
-  }));
-}
-
-// 3. Retrieve chunk texts by ID
-async function getChunkTexts(ids: string[]) {
-  const rl = readline.createInterface({
-    input: fs.createReadStream(CHUNKS_FILE),
-    crlfDelay: Infinity,
+    },
   });
-  const results: { id: string, text: string }[] = [];
-  for await (const line of rl) {
-    const rec = JSON.parse(line);
-    if (ids.includes(rec.id)) {
-      results.push({ id: rec.id, text: rec.text });
-      if (results.length === ids.length) break;
-    }
-  }
-  return results;
+  // Parse response.predictions as needed for your index output
+  return response.predictions;
 }
 
 // 4. Construct RAG prompt
@@ -98,11 +75,11 @@ export async function POST(req: NextRequest) {
     // 1. Embedding
     const embedding = await getQueryEmbedding(query);
 
-    // 2. Retrieval
-    const neighbors = await queryVertexAI(embedding, TOP_K);
+    // 2. Retrieval (Vertex AI via SDK)
+    const neighbors = await queryVertexAI(embedding, TOP_K) || [];
 
     // 3. Get chunk texts
-    const chunkIds = neighbors.map((n: any) => n.id);
+    const chunkIds = Array.isArray(neighbors) ? neighbors.map((n: any) => n.id) : [];
     const chunks = await getChunkTexts(chunkIds);
 
     // 4. Build prompt

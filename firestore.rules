@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Documents: Only allow users to access their own documents
+    match /documents/{docId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Document Chunks: Only allow access if user owns the parent document
+    match /document_chunks/{chunkId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Embeddings: Only allow access if user owns the parent document
+    match /embeddings/{embeddingId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // RAG Sessions: Only allow access if user owns the session
+    match /rag_sessions/{sessionId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Chat Sessions: Only allow access if user owns the session
+    match /chat_sessions/{sessionId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Chat Messages: Only allow access if user owns the session
+    match /chat_messages/{messageId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Feedback: Only allow access if user owns the session
+    match /feedback/{feedbackId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Allow admins to access everything (optional, requires custom claims)
+    match /{document=**} {
+      allow read, write: if request.auth.token.admin == true;
+    }
+  }
+}

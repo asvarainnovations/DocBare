@@ -13,6 +13,8 @@ import {
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import SidebarNavBar from "./SidebarNavBar";
+import { useSession } from 'next-auth/react';
+import axios from 'axios';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -36,13 +38,8 @@ export default function Sidebar({
   selectedChatId?: string;
   onSelectChat?: (id: string) => void;
 }) {
-  const [chats, setChats] = useState([
-    { id: "1", title: "Asvara Legal AI Overview" },
-    { id: "2", title: "RAG Legal Knowledge Base" },
-    { id: "3", title: "Visionary Tech Founder" },
-    { id: "4", title: "Atharvaveda Digitalization Str..." },
-    { id: "5", title: "Meta Catalyst and Asvara Ins..." },
-  ]);
+  const { data: session, status } = useSession();
+  const [chats, setChats] = useState<any[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -50,30 +47,34 @@ export default function Sidebar({
 
   useClickOutside(menuRef, () => setMenuOpen(null));
 
-  function handleNewChat() {
-    const newId = Date.now().toString();
-    setChats([{ id: newId, title: "New Chat" }, ...chats]);
-    onSelectChat?.(newId);
-  }
-  function handleRename(id: string) {
-    setRenamingId(id);
-    setRenameValue(chats.find((c) => c.id === id)?.title || "");
-    setMenuOpen(null);
-  }
-  function handleRenameSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setChats(
-      chats.map((c) => (c.id === renamingId ? { ...c, title: renameValue } : c))
-    );
-    setRenamingId(null);
-  }
-  function handleDelete(id: string) {
-    setChats(chats.filter((c) => c.id !== id));
-    setMenuOpen(null);
-    if (selectedChatId === id && chats.length > 1) {
-      onSelectChat?.(chats[0].id);
+  // Fetch chat sessions for the current user
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user?.id) return;
+    async function fetchChats() {
+      try {
+        // Firestore REST API: /api/user_chats?userId=xxx (let's use this endpoint)
+        const res = await axios.get('/api/user_chats', { params: { userId: session?.user?.id } });
+        setChats(res.data.chats || []);
+      } catch (err) {
+        setChats([]);
+      }
     }
+    fetchChats();
+  }, [status, session?.user?.id]);
+
+  async function handleNewChat() {
+    if (!session?.user?.id) return;
+    try {
+      const res = await axios.post('/api/create_chat_session', { firstMessage: '', userId: session.user.id });
+      const chatId = res.data.chatId;
+      // Refetch chats after creating
+      const chatsRes = await axios.get('/api/user_chats', { params: { userId: session.user.id } });
+      setChats(chatsRes.data.chats || []);
+      onSelectChat?.(chatId);
+    } catch (err) {}
   }
+
+  // Rename and delete logic would require backend endpoints; for now, just disable them
 
   return (
     <aside
@@ -114,64 +115,15 @@ export default function Sidebar({
               onClick={() => onSelectChat?.(chat.id)}
             >
               <div className="flex items-center gap-2 overflow-hidden w-full">
-                {/* Removed icon here */}
-                {open &&
-                  (renamingId === chat.id ? (
-                    <form onSubmit={handleRenameSubmit} className="flex-1">
-                      <input
-                        className="bg-transparent border-b border-accent text-white text-sm px-1 w-full outline-none"
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={handleRenameSubmit}
-                        autoFocus
-                      />
-                    </form>
-                  ) : (
-                    <span className="truncate text-white text-sm flex-1">
-                      {chat.title}
-                    </span>
-                  ))}
+                <span className="truncate text-white text-sm flex-1">
+                  {chat.title || chat.sessionName || 'Untitled Chat'}
+                </span>
               </div>
-              {open && (
-                <div className="relative" ref={menuRef}>
-                  <button
-                    className="p-1 rounded hover:bg-slate/30 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(menuOpen === chat.id ? null : chat.id);
-                    }}
-                  >
-                    <EllipsisVerticalIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
-                  </button>
-                  {menuOpen === chat.id && (
-                    <div className="absolute right-0 mt-2 w-32 bg-slate border border-gray-700 rounded shadow-lg z-30">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRename(chat.id);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-700 text-white"
-                      >
-                        <PencilIcon className="w-4 h-4" /> Rename
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(chat.id);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-700 text-red-400"
-                      >
-                        <TrashIcon className="w-4 h-4" /> Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Menu removed for now */}
             </li>
           ))}
         </ul>
       </div>
-      {/* Bottom area (optional) */}
       <div className="h-10" />
     </aside>
   );

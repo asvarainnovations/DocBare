@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import firestore from '@/lib/firestore';
 import { uploadFile } from '@/lib/gcs';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();

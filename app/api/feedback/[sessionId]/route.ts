@@ -9,6 +9,6 @@ export async function GET(req: NextRequest, { params }: { params: { sessionId: s
   const snapshot = await firestore.collection('feedback')
     .where('sessionId', '==', sessionId)
     .get();
-  const feedback = snapshot.docs.map(doc => doc.data());
+  const feedback = snapshot.docs.map((doc: any) => doc.data());
   return NextResponse.json({ feedback });
 } 

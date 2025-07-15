@@ -10,6 +10,6 @@ export async function GET(req: NextRequest, { params }: { params: { sessionId: s
     .where('sessionId', '==', sessionId)
     .orderBy('createdAt', 'asc')
     .get();
-  const messages = snapshot.docs.map(doc => doc.data());
+  const messages = snapshot.docs.map((doc: any) => doc.data());
   return NextResponse.json({ messages });
 } 

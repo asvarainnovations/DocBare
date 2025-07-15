@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import clsx from 'clsx';
 import Sidebar from '../../components/Sidebar';
 import NavBar from '../../components/NavBar';
@@ -9,6 +9,7 @@ import axios from 'axios';
 import { useSession, signIn } from 'next-auth/react';
 import FeedbackBar from './FeedbackBar';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useDropzone } from 'react-dropzone';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -24,6 +25,15 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [errorMeta, setErrorMeta] = useState<string | null>(null);
   const [errorMessages, setErrorMessages] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    // Handle file upload logic here
+    console.log(acceptedFiles);
+  }, []);
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    noClick: true,
+  });
 
   // Fetch chat session metadata
   useEffect(() => {
@@ -103,7 +113,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex" {...getRootProps()}>
       {/* Sidebar and overlay */}
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} selectedChatId={selectedChatId} onSelectChat={setSelectedChatId} />
       {sidebarOpen && (
@@ -216,6 +226,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         {session?.user?.id && (
           <div className="px-2 md:px-0">
             <FeedbackBar sessionId={params.chatId} userId={session.user.id} />
+          </div>
+        )}
+        <input {...getInputProps()} tabIndex={-1} className="hidden" />
+        {isDragActive && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">
+            Drop files to attach
           </div>
         )}
       </div>
