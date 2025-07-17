@@ -15,6 +15,7 @@ import clsx from "clsx";
 import SidebarNavBar from "./SidebarNavBar";
 import { useSession } from 'next-auth/react';
 import axios from 'axios';
+import { useRouter } from 'next/navigation';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function Sidebar({
   onSelectChat?: (id: string) => void;
 }) {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [chats, setChats] = useState<any[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export default function Sidebar({
       {/* Buttons */}
       <div className="flex flex-col gap-1 px-2 py-3">
         <button
-          onClick={handleNewChat}
+          onClick={() => router.push('/')}
           className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
         >
           <PlusIcon className="w-5 h-5" />

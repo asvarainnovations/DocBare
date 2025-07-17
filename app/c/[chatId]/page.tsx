@@ -10,6 +10,8 @@ import { useSession, signIn } from 'next-auth/react';
 import FeedbackBar from './FeedbackBar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
+import { ClipboardIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline';
+import ChatInputBox from '../../components/ChatInputBox';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -34,6 +36,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     onDrop,
     noClick: true,
   });
+  // Add feedback state for each AI message
+  const [feedback, setFeedback] = useState<{ [idx: number]: 'good' | 'bad' | undefined }>({});
 
   // Fetch chat session metadata
   useEffect(() => {
@@ -124,8 +128,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         />
       )}
       {/* Main area */}
-      <div className={clsx('flex-1 flex flex-col min-h-screen transition-all', sidebarOpen ? 'md:ml-72' : 'md:ml-16', 'bg-black')}> 
-        <NavBar onSidebarToggle={() => setSidebarOpen((v) => !v)} />
+      <div className={clsx('flex-1 flex flex-col min-h-screen transition-all', sidebarOpen ? 'ml-60' : 'ml-0', 'bg-black')}> 
+        <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen((v) => !v)} />
         {/* Chat session metadata */}
         {loadingMeta ? (
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate text-white animate-pulse text-sm md:text-base">Loading session info…</div>
@@ -164,6 +168,65 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                 >
                   {msg.content}
+                  {/* Per-response feedback for AI responses only */}
+                  {msg.role === 'ASSISTANT' && (
+                    <div className="flex items-center gap-2 mt-2">
+                      {/* Copy button */}
+                      <button
+                        className="p-1 rounded hover:bg-gray-700 text-gray-300"
+                        onClick={() => navigator.clipboard.writeText(msg.content)}
+                        title="Copy response"
+                      >
+                        <ClipboardIcon className="w-5 h-5" />
+                      </button>
+                      {/* Good button */}
+                      <button
+                        className={clsx(
+                          'p-1 rounded',
+                          feedback[idx] === 'good' ? 'bg-green-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+                        )}
+                        onClick={() => {
+                          if (!feedback[idx]) {
+                            setFeedback(f => ({ ...f, [idx]: 'good' }));
+                            axios.post('/api/feedback', {
+                              sessionId: params.chatId,
+                              userId: session?.user?.id,
+                              rating: 1,
+                              messageIndex: idx,
+                              messageId: msg.id,
+                            });
+                          }
+                        }}
+                        disabled={!!feedback[idx]}
+                        title="Good response"
+                      >
+                        <HandThumbUpIcon className="w-5 h-5" />
+                      </button>
+                      {/* Bad button */}
+                      <button
+                        className={clsx(
+                          'p-1 rounded',
+                          feedback[idx] === 'bad' ? 'bg-red-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+                        )}
+                        onClick={() => {
+                          if (!feedback[idx]) {
+                            setFeedback(f => ({ ...f, [idx]: 'bad' }));
+                            axios.post('/api/feedback', {
+                              sessionId: params.chatId,
+                              userId: session?.user?.id,
+                              rating: -1,
+                              messageIndex: idx,
+                              messageId: msg.id,
+                            });
+                          }
+                        }}
+                        disabled={!!feedback[idx]}
+                        title="Bad response"
+                      >
+                        <HandThumbDownIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               ))}
               {loadingAI && (
@@ -181,53 +244,15 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             </AnimatePresence>
           )}
         </div>
-        {/* Input bar fixed at bottom */}
-        <form
-          className="w-full max-w-2xl mx-auto flex items-center bg-slate rounded-xl shadow-lg px-2 md:px-4 py-2 md:py-3 gap-2 mb-4 md:mb-6 sticky bottom-0 z-10"
-          onSubmit={handleSend}
-        >
-          {/* Attach Button */}
-          <button
-            type="button"
-            className="p-2 md:p-2.5 rounded hover:bg-slate/60 transition-colors text-gray-300"
-            aria-label="Add attachment"
-            disabled={loadingAI || loadingMessages}
-            style={{ minWidth: 36, minHeight: 36 }}
-          >
-            <PaperClipIcon className="w-5 h-5" />
-          </button>
-          {/* Input */}
-          <input
-            type="text"
-            className="flex-1 bg-transparent outline-none text-white placeholder-gray-400 text-sm md:text-base px-2"
-            placeholder="Ask anything"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            disabled={loadingAI || loadingMessages}
-            style={{ minHeight: 36 }}
-            autoComplete="off"
-          />
-          {/* Send Button */}
-          <button
-            type="submit"
-            className={clsx(
-              'p-2 md:p-2.5 rounded transition-colors',
-              input.trim() && !loadingAI && !loadingMessages ? 'bg-accent hover:bg-accent/80 text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            )}
-            aria-label="Send"
-            disabled={!input.trim() || loadingAI || loadingMessages}
-            style={{ minWidth: 36, minHeight: 36 }}
-          >
-            <PaperAirplaneIcon className="w-5 h-5" />
-          </button>
-        </form>
-        {sendError && <div className="text-red-400 text-sm text-center mt-2">{sendError}</div>}
-        {/* Feedback bar */}
-        {session?.user?.id && (
-          <div className="px-2 md:px-0">
-            <FeedbackBar sessionId={params.chatId} userId={session.user.id} />
-          </div>
-        )}
+        {/* Use ChatInputBox component at bottom */}
+        <ChatInputBox
+          value={input}
+          onChange={setInput}
+          onSend={handleSend}
+          loading={loadingAI || loadingMessages}
+          disabled={loadingAI || loadingMessages}
+          error={sendError}
+        />
         <input {...getInputProps()} tabIndex={-1} className="hidden" />
         {isDragActive && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">

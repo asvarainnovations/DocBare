@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -9,6 +10,20 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const params = useSearchParams();
+  const urlError = params.get("error");
+  const type = params.get("type");
+
+  let providerErrorMsg = "";
+  if (urlError === "provider-mismatch") {
+    if (type === "google") {
+      providerErrorMsg = "You are already registered with Google. Please use Google login.";
+    } else if (type === "credentials") {
+      providerErrorMsg = "You are already registered with email/password. Please use that method to log in.";
+    } else {
+      providerErrorMsg = "You are already registered with a different login method. Please use the correct method.";
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +84,7 @@ export default function LoginPage() {
           </button>
         </form>
         {error && <div className="text-red-400 text-center mt-2">{error}</div>}
+        {providerErrorMsg && <div className="text-red-400 text-center mt-2">{providerErrorMsg}</div>}
         <div className="text-center mt-4 text-gray-400">
           Don't have an account? <Link href="/signup" className="text-accent hover:underline">Sign up</Link>
         </div>

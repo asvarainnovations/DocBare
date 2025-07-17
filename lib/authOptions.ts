@@ -4,12 +4,13 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
 import type { AuthOptions } from 'next-auth';
+import { PrismaClient } from '@prisma/client';
 
 // Monkey-patch PrismaAdapter to always provide a dummy passwordHash for OAuth users
-function PatchedPrismaAdapter(prisma) {
+function PatchedPrismaAdapter(prisma: PrismaClient) {
   const adapter = PrismaAdapter(prisma);
   const originalCreateUser = adapter.createUser;
-  adapter.createUser = async (data) => {
+  adapter.createUser = async (data: any) => {
     if (!data.passwordHash) {
       data.passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
     }
@@ -50,6 +51,7 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile, email, credentials }) {
+      // Account linking logic that relied on session is removed due to NextAuth callback limitations.
       return true;
     },
     async jwt({ token, user }) {
