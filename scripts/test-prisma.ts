@@ -11,7 +11,8 @@ async function test() {
     const userCount = await prisma.user.count();
     console.log('Prisma/Postgres connection OK. User count:', userCount);
   } catch (err) {
-    console.error('Prisma test error:', err.message || err);
+    const error = err as any;
+    console.error('Prisma test error:', error.message || error);
   } finally {
     await prisma.$disconnect();
   }

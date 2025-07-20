@@ -2,8 +2,9 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Suspense } from "react";
 
-export default function AuthErrorPage() {
+function AuthErrorPageInner() {
   const params = useSearchParams();
   const error = params.get("error");
   const router = useRouter();
@@ -40,5 +41,13 @@ export default function AuthErrorPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={null}>
+      <AuthErrorPageInner />
+    </Suspense>
   );
 } 

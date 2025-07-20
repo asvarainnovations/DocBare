@@ -11,7 +11,8 @@ async function test() {
     });
     console.log('RAG query response:', res.data);
   } catch (err) {
-    console.error('RAG query error:', err.response?.data || err.message);
+    const error = err as any;
+    console.error('RAG query error:', error.response?.data || error.message || error);
   }
 }
 

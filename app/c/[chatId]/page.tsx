@@ -74,12 +74,39 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     fetchMessages();
   }, [params.chatId]);
 
+  // Auto-trigger AI response if only one user message exists
+  useEffect(() => {
+    if (!loadingMessages && messages.length === 1 && messages[0].role === 'USER' && !loadingAI) {
+      (async () => {
+        setLoadingAI(true);
+        try {
+          const aiRes = await axios.post('/api/query', { query: messages[0].content, sessionId: params.chatId });
+          setMessages(prev => [
+            ...prev,
+            {
+              sessionId: params.chatId,
+              userId: 'ai',
+              role: 'ASSISTANT',
+              content: aiRes.data.answer,
+              createdAt: new Date(),
+            },
+          ]);
+        } catch (err) {
+          setSendError('Failed to get AI response.');
+        } finally {
+          setLoadingAI(false);
+        }
+      })();
+    }
+  }, [loadingMessages, messages, loadingAI, params.chatId]);
+
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, loadingAI]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
+    console.log('handleSend called with input:', input);
     setSendError(null);
     if (!input.trim()) return;
     if (!session?.user?.id) {
@@ -249,8 +276,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           value={input}
           onChange={setInput}
           onSend={handleSend}
-          loading={loadingAI || loadingMessages}
-          disabled={loadingAI || loadingMessages}
+          loading={loadingAI}
           error={sendError}
         />
         <input {...getInputProps()} tabIndex={-1} className="hidden" />

@@ -15,7 +15,8 @@ async function test() {
     });
     console.log('Credentials auth response:', res.data);
   } catch (err) {
-    console.error('Credentials auth error:', err.response?.data || err.message);
+    const error = err as any;
+    console.error('Credentials auth error:', error.response?.data || error.message || error);
   }
 }
 

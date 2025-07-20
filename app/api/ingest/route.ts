@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
   const doc = docSnap.data();
 
   // For demo, assume doc.text exists (replace with actual file retrieval if needed)
+  if (!doc) {
+    return NextResponse.json({ error: 'Document metadata not found' }, { status: 404 });
+  }
   const text = doc.text || '';
   if (!text) {
     return NextResponse.json({ error: 'No text found in document metadata' }, { status: 400 });

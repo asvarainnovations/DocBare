@@ -4,7 +4,7 @@ const gcsConfig: any = {
   projectId: process.env.FIRESTORE_PROJECT_ID,
 };
 
-if (process.env.NODE_ENV === 'development' && process.env.GOOGLE_CLOUD_KEY_FILE) {
+if (process.env.GOOGLE_CLOUD_KEY_FILE) {
   gcsConfig.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
 }
 

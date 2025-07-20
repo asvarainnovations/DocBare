@@ -5,7 +5,7 @@ const firestoreConfig: any = {
   databaseId: process.env.FIRESTORE_DATABASE_ID,
 };
 
-if (process.env.NODE_ENV === 'development' && process.env.GOOGLE_CLOUD_KEY_FILE) {
+if (process.env.GOOGLE_CLOUD_KEY_FILE) {
   firestoreConfig.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
 }
 

@@ -25,7 +25,8 @@ async function test() {
     );
     console.log('DeepSeek response:', res.data);
   } catch (err) {
-    console.error('DeepSeek API error:', err.response?.data || err.message);
+    const error = err as any;
+    console.error('DeepSeek API error:', error.response?.data || error.message || error);
   }
 }
 
