@@ -5,18 +5,23 @@ import firestore from '@/lib/firestore';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { PredictionServiceClient } from '@google-cloud/aiplatform';
-import { MatchServiceClient } from '@google-cloud/aiplatform';
+import { v1 } from '@google-cloud/aiplatform';
 import { getQueryEmbedding } from '@/lib/embeddings';
 import { getChunkTexts } from '@/lib/chunkText';
+import { GoogleAuth } from 'google-auth-library';
 
-const predictionClient = new PredictionServiceClient({
-  apiEndpoint: `${process.env.VERTEX_AI_LOCATION || 'us-central1'}-aiplatform.googleapis.com`,
-});
-const matchClient = new MatchServiceClient({
-  apiEndpoint: `${process.env.VERTEX_AI_LOCATION || 'us-central1'}-aiplatform.googleapis.com`,
-});
+const indexEndpointServiceClient = new v1.IndexEndpointServiceClient();
 const endpoint = process.env.VERTEX_AI_INDEX_ENDPOINT;
+
+// Function to get Google Cloud access token
+async function getAccessToken(): Promise<string> {
+  const auth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  return token.token || '';
+}
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 const CHUNKS_FILE = 'kb_data/datasets/legal_kb_embeddings_batch.json';
@@ -24,35 +29,7 @@ const TOP_K = 5;
 
 console.log('[query] NODE_ENV:', process.env.NODE_ENV);
 
-// 2. Query Vertex AI Vector Search using SDK
-async function queryVertexAI(embedding: number[], topK = TOP_K) {
-  // Use the endpoint directly from the env variable
-  const [response] = await predictionClient.predict({
-    endpoint,
-    instances: [
-      {
-        structValue: {
-          fields: {
-            embedding: {
-              listValue: {
-                values: embedding.map((x) => ({ numberValue: x })),
-              },
-            },
-          },
-        },
-      },
-    ],
-    parameters: {
-      structValue: {
-        fields: {
-          neighborCount: { numberValue: topK },
-        },
-      },
-    },
-  });
-  // Parse response.predictions as needed for your index output
-  return response.predictions;
-}
+
 
 // 4. Construct RAG prompt
 function buildPrompt(query: string, docs: { id: string, text: string }[]) {
@@ -113,43 +90,59 @@ export async function POST(req: NextRequest) {
       
       let neighbors: any[] = [];
       try {
-        // Use predict method for Vector Search endpoints
-        const [response] = await predictionClient.predict({
-          endpoint,
-          instances: [
-            {
-              structValue: {
-                fields: {
-                  embedding: {
-                    listValue: {
-                      values: embedding.map((x) => ({ numberValue: x })),
-                    },
-                  },
-                },
-              },
+        // Use findNeighbors method for Vector Search endpoints
+        const deployedIndexId = process.env.VERTEX_AI_DEPLOYED_INDEX_ID;
+        console.log('[query] Using deployed index ID:', deployedIndexId);
+        
+        // Correct payload format for Vector Search
+        const request = {
+          indexEndpoint: endpoint,
+          deployedIndexId: deployedIndexId,
+          queries: [{
+            datapoint: {
+              datapointId: 'query',
+              featureVector: embedding,
             },
-          ],
-          parameters: {
-            structValue: {
-              fields: {
-                neighborCount: { numberValue: TOP_K },
-              },
+            neighborCount: TOP_K,
+          }],
+          returnFullDatapoint: true,
+        };
+        
+        console.log('[query] Vertex request:', JSON.stringify({
+          indexEndpoint: endpoint,
+          deployedIndexId: deployedIndexId,
+          queries: [{
+            datapoint: {
+              datapointId: 'query',
+              featureVector: embedding.slice(0, 5), // Log first 5 values
+              _note: `... and ${embedding.length - 5} more values`
             },
+            neighborCount: TOP_K,
+          }],
+          returnFullDatapoint: true,
+        }, null, 2));
+        
+        // Use REST API approach for Vector Search
+        const response = await fetch(`https://${process.env.VERTEX_AI_LOCATION || 'us-central1'}-aiplatform.googleapis.com/v1/${endpoint}:findNeighbors`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await getAccessToken()}`,
           },
+          body: JSON.stringify(request),
         });
         
-        console.log('[query] Vertex response:', response);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const responseData = await response.json();
+        console.log('[query] Vertex response:', responseData);
         
         // Parse the response to extract neighbors
-        if (response.predictions && response.predictions.length > 0) {
-          const prediction = response.predictions[0];
-          if (prediction.structValue?.fields?.neighbors?.listValue?.values) {
-            neighbors = prediction.structValue.fields.neighbors.listValue.values.map((n: any) => ({
-              id: n.structValue?.fields?.id?.stringValue || n.structValue?.fields?.datapointId?.stringValue,
-              distance: n.structValue?.fields?.distance?.numberValue,
-              text: n.structValue?.fields?.text?.stringValue
-            }));
-          }
+        if (responseData.nearestNeighbors && responseData.nearestNeighbors.length > 0) {
+          neighbors = responseData.nearestNeighbors[0].neighbors || [];
         }
         console.log('[query] Neighbors:', neighbors);
       } catch (vertexError: any) {

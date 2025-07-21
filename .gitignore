@@ -54,3 +54,6 @@ secrets/
 # Firebase local/CLI config
 .firebase/
 .firebaserc
+
+activity-log.md
+server-logs.txt
