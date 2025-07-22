@@ -11,9 +11,9 @@ async function test() {
       model: 'text-embedding-3-small',
       input: 'test',
     });
-    console.log('Embedding response:', res.data[0].embedding.slice(0, 8), '...');
+    console.info('🟩 [test_openai][SUCCESS] Embedding response:', res.data[0].embedding.slice(0, 8), '...');
   } catch (err) {
-    console.error('OpenAI embedding error:', err);
+    console.error('🟥 [test_openai][ERROR] OpenAI embedding error:', err);
   }
 }
 

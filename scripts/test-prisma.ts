@@ -9,10 +9,10 @@ async function test() {
   try {
     // Try to count users (if table exists)
     const userCount = await prisma.user.count();
-    console.log('Prisma/Postgres connection OK. User count:', userCount);
+    console.info('🟩 [test_prisma][SUCCESS] Prisma/Postgres connection OK. User count:', userCount);
   } catch (err) {
     const error = err as any;
-    console.error('Prisma test error:', error.message || error);
+    console.error('🟥 [test_prisma][ERROR] Prisma test error:', error.message || error);
   } finally {
     await prisma.$disconnect();
   }

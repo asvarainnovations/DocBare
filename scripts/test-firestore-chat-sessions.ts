@@ -10,9 +10,9 @@ async function test() {
       .orderBy('createdAt', 'desc')
       .get();
     const chats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('Fetched chat sessions:', chats);
+    console.info('🟦 [test_firestore_chat][INFO] Fetched chat sessions:', chats);
   } catch (err) {
-    console.error('Firestore chat session fetch error:', err);
+    console.error('🟥 [test_firestore_chat][ERROR] Firestore chat session fetch error:', err);
   }
 }
 

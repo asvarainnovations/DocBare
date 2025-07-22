@@ -9,9 +9,9 @@ async function test() {
   try {
     const { url, error } = await uploadFile('test-upload.txt', file);
     if (error) throw error;
-    console.log('Uploaded file URL:', url);
+    console.info('🟩 [test_gcs][SUCCESS] Uploaded file URL:', url);
   } catch (err) {
-    console.error('GCS upload error:', err);
+    console.error('🟥 [test_gcs][ERROR] GCS upload error:', err);
   }
 }
 

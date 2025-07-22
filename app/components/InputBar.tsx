@@ -49,7 +49,7 @@ export default function InputBar({
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // Handle file upload logic here
-    console.log(acceptedFiles);
+    console.info('🟦 [input_bar][INFO] Files dropped:', acceptedFiles);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

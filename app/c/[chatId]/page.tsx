@@ -30,7 +30,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [isDragging, setIsDragging] = useState(false);
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // Handle file upload logic here
-    console.log(acceptedFiles);
+    console.info('🟦 [chat_ui][INFO] Files dropped:', acceptedFiles);
   }, []);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -106,7 +106,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    console.log('handleSend called with input:', input);
+    console.info('🟦 [chat_ui][INFO] handleSend called with input:', input);
     setSendError(null);
     if (!input.trim()) return;
     if (!session?.user?.id) {

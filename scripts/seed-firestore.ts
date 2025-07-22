@@ -60,6 +60,6 @@ async function seed() {
 }
 
 seed().catch((err) => {
-  console.error('Seeding failed:', err);
+  console.error('🟥 [seed_firestore][ERROR] Seeding failed:', err);
   process.exit(1);
 }); 

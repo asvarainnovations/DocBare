@@ -13,10 +13,10 @@ async function test() {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
     });
-    console.log('Credentials auth response:', res.data);
+    console.info('🟩 [test_auth][SUCCESS] Credentials auth response:', res.data);
   } catch (err) {
     const error = err as any;
-    console.error('Credentials auth error:', error.response?.data || error.message || error);
+    console.error('🟥 [test_auth][ERROR] Credentials auth error:', error.response?.data || error.message || error);
   }
 }
 

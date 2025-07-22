@@ -9,10 +9,10 @@ async function test() {
       query: 'What is the capital of France?',
       userId,
     });
-    console.log('RAG query response:', res.data);
+    console.info('🟩 [test_rag_query][SUCCESS] RAG query response:', res.data);
   } catch (err) {
     const error = err as any;
-    console.error('RAG query error:', error.response?.data || error.message || error);
+    console.error('🟥 [test_rag_query][ERROR] RAG query error:', error.response?.data || error.message || error);
   }
 }
 

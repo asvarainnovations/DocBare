@@ -14,9 +14,9 @@ async function test() {
       createdAt: new Date(),
     };
     const result = await firestore.collection('feedback').add(feedback);
-    console.log('Submitted feedback with ID:', result.id);
+    console.info('🟩 [test_firestore_feedback][SUCCESS] Submitted feedback with ID:', result.id);
   } catch (err) {
-    console.error('Firestore feedback submission error:', err);
+    console.error('🟥 [test_firestore_feedback][ERROR] Firestore feedback submission error:', err);
   }
 }
 

@@ -62,7 +62,7 @@ async function ingest(jsonlPath: string, documentId?: string) {
       await firestore.collection('embeddings').add(embeddingDoc);
     }
   }
-  console.log('Ingestion complete.');
+  console.info('🟩 [ingest][SUCCESS] Ingestion complete.');
 }
 
 if (require.main === module) {

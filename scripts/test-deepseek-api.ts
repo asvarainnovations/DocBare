@@ -23,10 +23,10 @@ async function test() {
         },
       }
     );
-    console.log('DeepSeek response:', res.data);
+    console.info('🟩 [test_deepseek][SUCCESS] DeepSeek response:', res.data);
   } catch (err) {
     const error = err as any;
-    console.error('DeepSeek API error:', error.response?.data || error.message || error);
+    console.error('🟥 [test_deepseek][ERROR] DeepSeek API error:', error.response?.data || error.message || error);
   }
 }
 

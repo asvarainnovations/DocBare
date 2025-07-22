@@ -11,9 +11,9 @@ async function test() {
       createdAt: new Date(),
     };
     const result = await firestore.collection('chat_sessions').add(session);
-    console.log('Created chat session with ID:', result.id);
+    console.info('🟩 [test_firestore_create_chat][SUCCESS] Created chat session with ID:', result.id);
   } catch (err) {
-    console.error('Firestore create chat session error:', err);
+    console.error('🟥 [test_firestore_create_chat][ERROR] Firestore create chat session error:', err);
   }
 }
 
