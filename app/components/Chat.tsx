@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PaperClipIcon, DocumentIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -62,7 +63,13 @@ export default function Chat() {
                   : 'bg-accent text-white'
               )}
             >
-              <p className="text-sm">{message.content}</p>
+              {message.type === 'ai' ? (
+                <div className="prose prose-invert text-sm">
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm">{message.content}</p>
+              )}
               
               {message.attachments && message.attachments.length > 0 && (
                 <div className="mt-2 space-y-2">

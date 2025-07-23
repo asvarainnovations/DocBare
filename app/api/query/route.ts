@@ -13,7 +13,7 @@ async function callLLM(query: string) {
     {
       model: 'deepseek-reasoner',
       messages: [{ role: 'user', content: query }],
-      max_tokens: 512,
+      max_tokens: 4096, // Increased to prevent truncation
       temperature: 0.2,
     },
     { headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` } }
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
       await prisma.ragQueryLog.create({
         data: {
           userId: userId || null,
-          query,
-          answer,
+          query: query || '',
+          answer: answer || '',
           sources: [],
         },
       });
@@ -65,8 +65,9 @@ export async function POST(req: NextRequest) {
     try {
       await firestore.collection('docbare_rag_logs').add({
         userId: userId || null,
-        query,
-        answer,
+        query: query || '',
+        answer: answer || '',
+        sessionId: sessionId || null,
         sources: [],
         createdAt: new Date(),
       });

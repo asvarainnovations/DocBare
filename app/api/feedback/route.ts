@@ -6,11 +6,12 @@ export async function POST(req: NextRequest) {
   if (!sessionId || !userId || !rating) {
     return NextResponse.json({ error: 'Missing sessionId, userId, or rating' }, { status: 400 });
   }
+  // Sanitize feedback data
   const feedback = {
     sessionId,
     userId,
     rating,
-    comments,
+    comments: typeof comments === 'string' ? comments : '',
     createdAt: new Date(),
   };
   await firestore.collection('feedback').add(feedback);

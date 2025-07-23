@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { ClipboardIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline';
 import ChatInputBox from '../../components/ChatInputBox';
+import ReactMarkdown from 'react-markdown';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,7 +81,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       (async () => {
         setLoadingAI(true);
         try {
-          const aiRes = await axios.post('/api/query', { query: messages[0].content, sessionId: params.chatId });
+          const aiRes = await axios.post('/api/query', { query: messages[0].content, sessionId: params.chatId, userId: session?.user?.id });
           setMessages(prev => [
             ...prev,
             {
@@ -125,7 +126,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       setMessages([...messages, { ...newMsg, createdAt: new Date() }]);
       setInput('');
       setLoadingAI(true);
-      const aiRes = await axios.post('/api/query', { query: input, sessionId: params.chatId });
+      const aiRes = await axios.post('/api/query', { query: input, sessionId: params.chatId, userId: session?.user?.id });
       setMessages((prev) => [
         ...prev,
         {
@@ -194,7 +195,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   )}
                   style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                 >
-                  {msg.content}
+                  {msg.role === 'ASSISTANT' ? (
+                    <div className="prose prose-invert text-sm">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
                   {/* Per-response feedback for AI responses only */}
                   {msg.role === 'ASSISTANT' && (
                     <div className="flex items-center gap-2 mt-2">
