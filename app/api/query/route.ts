@@ -76,7 +76,21 @@ export async function POST(req: NextRequest) {
       console.error('🟥 [chatbot][ERROR] Firestore log error:', fsErr.message);
     }
 
-    // 4. Return answer
+    // 4. Save assistant message to chat_messages
+    try {
+      await firestore.collection('chat_messages').add({
+        sessionId: sessionId || null,
+        userId: 'ai',
+        role: 'ASSISTANT',
+        content: answer || '',
+        createdAt: new Date(),
+      });
+      console.info('🟩 [chatbot][SUCCESS] Saved assistant message to chat_messages');
+    } catch (msgErr: any) {
+      console.error('🟥 [chatbot][ERROR] Failed to save assistant message:', msgErr.message);
+    }
+
+    // 5. Return answer
     console.info('🟦 [chatbot][INFO] Returning:', { answer });
     return NextResponse.json({ answer });
   } catch (err: any) {

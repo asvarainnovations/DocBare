@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import firestore from '@/lib/firestore';
+import axios from 'axios';
+
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
+
+async function generateChatTitle(prompt: string) {
+  const response = await axios.post(
+    'https://api.deepseek.com/v1/chat/completions',
+    {
+      model: 'deepseek-reasoner',
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: `Summarize this user query in 5 words or less for a chat title: ${prompt}` }
+      ],
+      max_tokens: 16,
+      temperature: 0.3,
+    },
+    { headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` } }
+  );
+  return response.data.choices[0].message.content.trim().replace(/^"|"$/g, '');
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +36,25 @@ export async function POST(req: NextRequest) {
       console.error('🟥 [chat_session][ERROR] User not found:', userId);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+
+    // Generate chat title using DeepSeek
+    let sessionName = '';
+    if (firstMessage && firstMessage.trim()) {
+      try {
+        sessionName = (await generateChatTitle(firstMessage)).trim();
+        if (!sessionName) {
+          // fallback to first 5 words of prompt
+          sessionName = firstMessage.split(' ').slice(0, 5).join(' ');
+        }
+        console.info('🟩 [chat_session][SUCCESS] Generated session name:', sessionName);
+      } catch (err) {
+        sessionName = firstMessage.split(' ').slice(0, 5).join(' ');
+        console.error('🟥 [chat_session][ERROR] Failed to generate session name, using fallback:', err);
+      }
+    } else {
+      return NextResponse.json({ error: 'First message required to create chat' }, { status: 400 });
+    }
+
     // Create session in Postgres
     const session = await prisma.chatSession.create({
       data: {
@@ -26,6 +65,7 @@ export async function POST(req: NextRequest) {
             content: firstMessage,
           },
         },
+        // If your Postgres model supports a name/title, add: name: sessionName,
       },
       include: { messages: true },
     });
@@ -37,7 +77,7 @@ export async function POST(req: NextRequest) {
       userId,
       createdAt: now,
       lastAccessed: now,
-      sessionName: '',
+      sessionName,
       documentIds: [],
     };
     await firestore.collection('chat_sessions').doc(session.id).set(firestoreSession);

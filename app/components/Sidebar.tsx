@@ -81,7 +81,7 @@ export default function Sidebar({
   return (
     <aside
       className={clsx(
-        "fixed top-0 left-0 h-full bg-surface border-r border-gray-800 flex flex-col transition-all duration-300 z-20",
+        "fixed top-0 left-0 min-h-screen h-screen bg-surface border-r border-gray-800 flex flex-col transition-all duration-300 z-20",
         open ? "w-60" : "w-0 invisible"
       )}
       style={{ transitionProperty: "width, visibility", overflow: "hidden" }}
@@ -103,7 +103,7 @@ export default function Sidebar({
         </button>
       </div>
       {/* Chats */}
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-2 pb-48">
         <div className="text-xs text-gray-400 px-3 py-2">Chats</div>
         <ul className="space-y-1">
           {chats.map((chat) => (
@@ -114,19 +114,57 @@ export default function Sidebar({
                 "relative",
                 selectedChatId === chat.id && "bg-gray-800/80"
               )}
-              onClick={() => onSelectChat?.(chat.id)}
+              onClick={() => {
+                router.push(`/c/${chat.id}`);
+                if (onSelectChat) onSelectChat(chat.id);
+              }}
             >
               <div className="flex items-center gap-2 overflow-hidden w-full">
                 <span className="truncate text-white text-sm flex-1">
-                  {chat.title || chat.sessionName || 'Untitled Chat'}
+                  {chat.sessionName || chat.title || 'Untitled Chat'}
                 </span>
+                {/* 3-dot menu, only visible on hover */}
+                <div
+                  className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={e => { e.stopPropagation(); setMenuOpen(chat.id === menuOpen ? null : chat.id); }}
+                >
+                  <EllipsisVerticalIcon className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer" />
+                </div>
+                {/* Dropdown menu */}
+                {menuOpen === chat.id && (
+                  <div ref={menuRef} className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-36 flex flex-col animate-fade-in">
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-gray-700 rounded-t-lg"
+                      onClick={e => { e.stopPropagation(); setRenamingId(chat.id); setRenameValue(chat.sessionName || chat.title || ''); setMenuOpen(null); }}
+                    >
+                      <PencilIcon className="w-4 h-4" /> Rename
+                    </button>
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-700 rounded-b-lg"
+                      onClick={async e => {
+                        e.stopPropagation();
+                        setMenuOpen(null);
+                        if (!window.confirm('Are you sure you want to delete this chat?')) return;
+                        try {
+                          await axios.delete(`/api/sessions/${chat.id}`);
+                          setChats(prev => prev.filter(c => c.id !== chat.id));
+                          if (selectedChatId === chat.id && onSelectChat) {
+                            onSelectChat('');
+                          }
+                        } catch (err) {
+                          alert('Failed to delete chat.');
+                        }
+                      }}
+                    >
+                      <TrashIcon className="w-4 h-4" /> Delete
+                    </button>
+                  </div>
+                )}
               </div>
-              {/* Menu removed for now */}
             </li>
           ))}
         </ul>
       </div>
-      <div className="h-10" />
     </aside>
   );
 }

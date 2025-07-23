@@ -13,6 +13,7 @@ import { useDropzone } from 'react-dropzone';
 import { ClipboardIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline';
 import ChatInputBox from '../../components/ChatInputBox';
 import ReactMarkdown from 'react-markdown';
+import { useRouter } from 'next/navigation';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -39,6 +40,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   });
   // Add feedback state for each AI message
   const [feedback, setFeedback] = useState<{ [idx: number]: 'good' | 'bad' | undefined }>({});
+  const router = useRouter();
+  // Track if this chat was just created in this session
+  const [justCreated, setJustCreated] = useState(false);
 
   // Fetch chat session metadata
   useEffect(() => {
@@ -75,9 +79,27 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     fetchMessages();
   }, [params.chatId]);
 
-  // Auto-trigger AI response if only one user message exists
+  // Track if this chat was just created in this session
   useEffect(() => {
-    if (!loadingMessages && messages.length === 1 && messages[0].role === 'USER' && !loadingAI) {
+    // Check sessionStorage for justCreated flag
+    if (typeof window !== 'undefined') {
+      if (sessionStorage.getItem('justCreatedChatId') === params.chatId) {
+        setJustCreated(true);
+        sessionStorage.removeItem('justCreatedChatId');
+      }
+    }
+  }, [params.chatId]);
+
+  // Auto-trigger AI response only if justCreated is true
+  useEffect(() => {
+    if (
+      justCreated &&
+      !loadingMessages &&
+      messages.length === 1 &&
+      messages[0].role === 'USER' &&
+      !loadingAI &&
+      !messages.some(m => m.role === 'ASSISTANT')
+    ) {
       (async () => {
         setLoadingAI(true);
         try {
@@ -96,10 +118,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           setSendError('Failed to get AI response.');
         } finally {
           setLoadingAI(false);
+          setJustCreated(false); // Only trigger once
         }
       })();
     }
-  }, [loadingMessages, messages, loadingAI, params.chatId]);
+  }, [justCreated, loadingMessages, messages, loadingAI, params.chatId]);
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
@@ -164,16 +187,16 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         ) : errorMeta ? (
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-red-900 text-red-300 text-sm md:text-base">{errorMeta}</div>
         ) : sessionMeta && (
-          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate flex flex-col md:flex-row md:items-center md:justify-between text-white text-sm md:text-base">
+          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate flex flex-col md:flex-row md:items-center md:justify-between text-white text-sm md:text-base shadow-md border border-gray-700 bg-opacity-80">
             <div>
-              <div className="font-semibold">Chat with {sessionMeta.user.name}</div>
+              <div className="font-semibold text-base md:text-lg">Chat with {sessionMeta.user.name}</div>
               <div className="text-xs text-gray-400">Started: {new Date(sessionMeta.createdAt).toLocaleString()}</div>
             </div>
             <div className="text-xs text-gray-400 break-all">Session ID: {sessionMeta.id}</div>
           </div>
         )}
         {/* Chat history */}
-        <div ref={chatRef} className="flex-1 overflow-y-auto px-2 md:px-0 py-4 md:py-8 flex flex-col gap-3 md:gap-4 max-w-2xl w-full mx-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div ref={chatRef} className="flex-1 overflow-y-auto px-0 py-4 md:py-8 flex flex-col gap-0 max-w-full w-full mx-auto bg-black" style={{ WebkitOverflowScrolling: 'touch', paddingBottom: '200px' }}>
           {loadingMessages ? (
             <div className="text-white text-center animate-pulse text-base md:text-lg">Loading messages…</div>
           ) : errorMessages ? (
@@ -188,77 +211,75 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.2 }}
                   className={clsx(
-                    'px-3 py-2 md:px-4 md:py-2 rounded-lg max-w-[90vw] md:max-w-[70%] text-sm md:text-base break-words',
-                    msg.role === 'USER'
-                      ? 'self-end bg-accent text-white'
-                      : 'self-start bg-slate text-white'
+                    'w-full flex',
+                    msg.role === 'USER' ? 'justify-end' : 'justify-start'
                   )}
-                  style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                 >
                   {msg.role === 'ASSISTANT' ? (
-                    <div className="prose prose-invert text-sm">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2">
+                      <div className="prose prose-invert prose-headings:font-bold prose-headings:text-lg prose-p:my-2 prose-li:my-1 prose-code:bg-gray-800 prose-code:text-blue-300 prose-code:px-1 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-xs prose-pre:p-3 prose-pre:rounded-lg bg-transparent">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                      {/* Per-response feedback for AI responses only */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          className="p-1 rounded hover:bg-gray-700 text-gray-300"
+                          onClick={() => navigator.clipboard.writeText(msg.content)}
+                          title="Copy response"
+                        >
+                          <ClipboardIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                          className={clsx(
+                            'p-1 rounded',
+                            feedback[idx] === 'good' ? 'bg-green-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+                          )}
+                          onClick={() => {
+                            if (!feedback[idx]) {
+                              setFeedback(f => ({ ...f, [idx]: 'good' }));
+                              axios.post('/api/feedback', {
+                                sessionId: params.chatId,
+                                userId: session?.user?.id,
+                                rating: 1,
+                                messageIndex: idx,
+                                messageId: msg.id,
+                              });
+                            }
+                          }}
+                          disabled={!!feedback[idx]}
+                          title="Good response"
+                        >
+                          <HandThumbUpIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                          className={clsx(
+                            'p-1 rounded',
+                            feedback[idx] === 'bad' ? 'bg-red-600 text-white' : 'hover:bg-gray-700 text-gray-300'
+                          )}
+                          onClick={() => {
+                            if (!feedback[idx]) {
+                              setFeedback(f => ({ ...f, [idx]: 'bad' }));
+                              axios.post('/api/feedback', {
+                                sessionId: params.chatId,
+                                userId: session?.user?.id,
+                                rating: -1,
+                                messageIndex: idx,
+                                messageId: msg.id,
+                              });
+                            }
+                          }}
+                          disabled={!!feedback[idx]}
+                          title="Bad response"
+                        >
+                          <HandThumbDownIcon className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    msg.content
-                  )}
-                  {/* Per-response feedback for AI responses only */}
-                  {msg.role === 'ASSISTANT' && (
-                    <div className="flex items-center gap-2 mt-2">
-                      {/* Copy button */}
-                      <button
-                        className="p-1 rounded hover:bg-gray-700 text-gray-300"
-                        onClick={() => navigator.clipboard.writeText(msg.content)}
-                        title="Copy response"
-                      >
-                        <ClipboardIcon className="w-5 h-5" />
-                      </button>
-                      {/* Good button */}
-                      <button
-                        className={clsx(
-                          'p-1 rounded',
-                          feedback[idx] === 'good' ? 'bg-green-600 text-white' : 'hover:bg-gray-700 text-gray-300'
-                        )}
-                        onClick={() => {
-                          if (!feedback[idx]) {
-                            setFeedback(f => ({ ...f, [idx]: 'good' }));
-                            axios.post('/api/feedback', {
-                              sessionId: params.chatId,
-                              userId: session?.user?.id,
-                              rating: 1,
-                              messageIndex: idx,
-                              messageId: msg.id,
-                            });
-                          }
-                        }}
-                        disabled={!!feedback[idx]}
-                        title="Good response"
-                      >
-                        <HandThumbUpIcon className="w-5 h-5" />
-                      </button>
-                      {/* Bad button */}
-                      <button
-                        className={clsx(
-                          'p-1 rounded',
-                          feedback[idx] === 'bad' ? 'bg-red-600 text-white' : 'hover:bg-gray-700 text-gray-300'
-                        )}
-                        onClick={() => {
-                          if (!feedback[idx]) {
-                            setFeedback(f => ({ ...f, [idx]: 'bad' }));
-                            axios.post('/api/feedback', {
-                              sessionId: params.chatId,
-                              userId: session?.user?.id,
-                              rating: -1,
-                              messageIndex: idx,
-                              messageId: msg.id,
-                            });
-                          }
-                        }}
-                        disabled={!!feedback[idx]}
-                        title="Bad response"
-                      >
-                        <HandThumbDownIcon className="w-5 h-5" />
-                      </button>
+                    <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2 flex justify-end">
+                      <div className="rounded-2xl px-6 py-4 mb-1 max-w-[70%] whitespace-pre-wrap break-words shadow-lg border bg-blue-600 text-white self-end border-blue-700 text-base font-medium">
+                        {msg.content}
+                      </div>
                     </div>
                   )}
                 </motion.div>
@@ -269,23 +290,36 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.2 }}
-                  className="self-start px-3 py-2 md:px-4 md:py-2 rounded-lg max-w-[90vw] md:max-w-[70%] text-sm md:text-base bg-slate text-white opacity-70 animate-pulse"
-                  style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+                  className="w-full flex justify-start"
                 >
-                  AI is typing…
+                  <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2">
+                    <div className="prose prose-invert bg-transparent opacity-70 animate-pulse">AI is typing…</div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           )}
         </div>
-        {/* Use ChatInputBox component at bottom */}
-        <ChatInputBox
-          value={input}
-          onChange={setInput}
-          onSend={handleSend}
-          loading={loadingAI}
-          error={sendError}
-        />
+        {/* Fixed ChatInputBox at bottom */}
+        <div className="fixed bottom-0 left-0 w-full flex flex-col items-center z-30 bg-black shadow-[0_-2px_16px_0_rgba(0,0,0,0.7)]">
+          <div className="w-full max-w-2xl mx-auto px-4 md:px-0 pb-2 pt-2">
+            <div className="flex items-end bg-[#18181b] rounded-2xl shadow-lg border border-gray-800 px-4 py-2 gap-2">
+              <ChatInputBox
+                value={input}
+                onChange={setInput}
+                onSend={handleSend}
+                loading={loadingAI}
+                error={sendError}
+              />
+            </div>
+            {/* Info message below chatbox */}
+            <div className="w-full flex justify-center mt-3 mb-2">
+              <div className="text-xs text-gray-400 bg-transparent px-2 py-1 rounded text-center">
+                ChatGPT can make mistakes. Check important info. See Cookie Preferences.
+              </div>
+            </div>
+          </div>
+        </div>
         <input {...getInputProps()} tabIndex={-1} className="hidden" />
         {isDragActive && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">

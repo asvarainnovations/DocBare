@@ -87,6 +87,8 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
 - **Chat System:**
   - Chat session/message models in Prisma/Postgres
   - Chat message storage/retrieval in Firestore
+  - **Full chat message persistence:** All user and AI messages are saved and loaded reliably from Firestore and Postgres
+  - **No duplicate AI responses on reload:** AI is only auto-triggered for the first user message in a new chat, never on page reload
 - **RAG Sessions:**
   - Session state, memory, agent state, and results in Firestore
 - **Feedback:** User feedback collection and retrieval (Firestore)
@@ -96,15 +98,31 @@ A modern legal AI platform for agentic RAG (Retrieval-Augmented Generation), cha
   - Authentication integrated into UI (login, session management)
   - Home page creates new chat session and redirects to chat on first prompt
   - Chat page fetches messages/session metadata, sends messages, displays chat history
+  - **Modern Chat UI:**
+    - ChatGPT-like sticky chatbox at the bottom
+    - Full-width AI responses, right-aligned user bubbles
+    - Sidebar with scrollable chat list, fixed height, and proper bottom padding
+    - Sidebar chat navigation and dropdown menu (rename/delete)
+    - Markdown rendering, feedback UI, and typing indicator
+    - Responsive, mobile-friendly, and visually polished
   - Axios for backend HTTP requests
   - RAG/AI response displayed after user message
   - Feedback UI for session rating/comments
   - Loading and error states for all major UI actions
-  - Responsive, mobile-friendly chat UI with subtle animations
   - TypeScript and NextAuth type safety (session.user.id, type extensions, etc.)
+  - **No duplicate AI calls:** Robust logic ensures AI is only called when appropriate
+  - **All UI/UX issues fixed:** Sidebar, chatbox, and chat history now match modern standards
 
 ### 🚧 TODO / In Progress
 
+- **Sidebar:**
+  - Bottom is missing of sidebar in chat page (visual gap/fill issue)
+- **Chat UI:**
+  - AI response formatting and spacing improvements (make markdown, lists, and code blocks more readable)
+- **Chat Titles:**
+  - Chat title auto-generation and update in sidebar (ensure titles are generated from first prompt and updated in UI)
+- **AI Response Handling:**
+  - Issues with context length in AI response (handle truncation, long chats, and token limits gracefully)
 - **Prisma Document Model:** (issue in /api/upload.ts)
   - `prisma.document` is not yet available; add Document model to Prisma schema and migrate
 - **Frontend:**
