@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import clsx from 'clsx';
-import Sidebar from './components/Sidebar';
 import NavBar from './components/NavBar';
 import { PaperClipIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import InputBar from './components/InputBar';
@@ -12,9 +11,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { useDropzone } from 'react-dropzone';
 
 export default function Home() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState('');
-  const [selectedChatId, setSelectedChatId] = useState<string | undefined>('1');
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
@@ -25,7 +22,9 @@ export default function Home() {
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!session?.user?.id) return;
-    for (const file of acceptedFiles) {
+    if (acceptedFiles.length === 1) {
+      // Single file upload (backward compatible)
+      const file = acceptedFiles[0];
       setUploadedFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
       const formData = new FormData();
       formData.append('file', file);
@@ -36,11 +35,10 @@ export default function Home() {
           body: formData,
         });
         const data = await res.json();
+        const result = data.results ? data.results[0] : data.document ? { name: file.name, status: 'done', url: data.document.path } : { name: file.name, status: 'error', error: data.error || 'Upload failed' };
         setUploadedFiles(prev => prev.map(f =>
           f.name === file.name && f.status === 'uploading'
-            ? data.document
-              ? { name: file.name, status: 'done', url: data.document.path }
-              : { name: file.name, status: 'error', error: data.error || 'Upload failed' }
+            ? result
             : f
         ));
       } catch (err: any) {
@@ -49,6 +47,34 @@ export default function Home() {
             ? { name: file.name, status: 'error', error: err.message || 'Upload failed' }
             : f
         ));
+      }
+    } else if (acceptedFiles.length > 1) {
+      // Multiple file upload
+      for (const file of acceptedFiles) {
+        setUploadedFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
+      }
+      const formData = new FormData();
+      for (const file of acceptedFiles) {
+        formData.append('files', file);
+      }
+      formData.append('userId', session.user.id);
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.results && Array.isArray(data.results)) {
+          setUploadedFiles(prev => prev.map(f => {
+            const result = data.results.find((r: any) => r.name === f.name);
+            return result ? result : f;
+          }));
+        } else {
+          // fallback: mark all as error
+          setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error', error: 'Upload failed' })));
+        }
+      } catch (err: any) {
+        setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error', error: err.message || 'Upload failed' })));
       }
     }
   }, [session?.user?.id]);
@@ -164,19 +190,10 @@ export default function Home() {
 
   return (
     <div {...getRootProps()} className="min-h-screen flex relative" style={{ width: '100vw' }}>
-      {/* Sidebar and overlay */}
-      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} selectedChatId={selectedChatId} onSelectChat={setSelectedChatId} />
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-10 bg-black/40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close sidebar overlay"
-        />
-      )}
       {/* Main area */}
-      <div className={clsx('flex-1 flex flex-col min-h-screen transition-all', sidebarOpen ? 'md:ml-60' : 'md:ml-0')}> 
-        {/* Always render NavBar at the top, pass showSidebarToggle only when sidebar is closed */}
-        <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen(true)} />
+      <div className="flex-1 flex flex-col min-h-screen transition-all"> 
+        {/* Always render NavBar at the top */}
+        <NavBar />
         {/* Auth buttons */}
         {/* Removed Login/Logout button from here; now handled in NavBar */}
         {/* Centered content below NavBar */}

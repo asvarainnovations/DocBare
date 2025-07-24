@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed-firestore": "ts-node scripts/seed-firestore.ts"
+    "seed-firestore": "ts-node scripts/seed-firestore.ts",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "^4.3.0",
@@ -36,15 +37,20 @@
     "tailwind-merge": "^2.2.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.0",
     "@types/react": "18.3.23",
     "@types/react-dom": "^18.2.0",
+    "@types/supertest": "^6.0.3",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
+    "jest": "^29.0.0",
     "postcss": "^8.4.35",
     "prisma": "^6.10.1",
+    "supertest": "^6.3.0",
     "tailwindcss": "^3.4.1",
+    "ts-jest": "^29.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

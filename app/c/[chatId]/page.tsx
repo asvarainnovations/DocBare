@@ -2,25 +2,21 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import clsx from 'clsx';
-import Sidebar from '../../components/Sidebar';
 import NavBar from '../../components/NavBar';
 import { PaperClipIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import { useSession, signIn } from 'next-auth/react';
-import FeedbackBar from './FeedbackBar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { ClipboardIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline';
+import { ClipboardIcon, HandThumbUpIcon, HandThumbDownIcon, CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import ChatInputBox from '../../components/ChatInputBox';
 import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/navigation';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [sessionMeta, setSessionMeta] = useState<any>(null);
-  const [selectedChatId, setSelectedChatId] = useState<string | undefined>(params.chatId);
   const chatRef = useRef<HTMLDivElement>(null);
   const { data: session, status } = useSession();
   const [loadingAI, setLoadingAI] = useState(false);
@@ -173,20 +169,163 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }
 
+  // Feedback UI for each AI message
+  function FeedbackSection({
+    sessionId,
+    userId,
+    messageId,
+    messageIndex,
+    onFeedback,
+  }: {
+    sessionId: string;
+    userId: string;
+    messageId: string;
+    messageIndex: number;
+    onFeedback: (type: 'good' | 'bad', comment?: string) => void;
+  }) {
+    const [state, setState] = useState<'init' | 'good' | 'bad' | 'badDialog' | 'done'>('init');
+    const [showCopyCheck, setShowCopyCheck] = useState(false);
+    const [comment, setComment] = useState('');
+    const [commentError, setCommentError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    // Animated copy button
+    const handleCopy = async (content: string) => {
+      await navigator.clipboard.writeText(content);
+      setShowCopyCheck(true);
+      setTimeout(() => setShowCopyCheck(false), 1200);
+    };
+
+    // Good feedback
+    const handleGood = async () => {
+      setSubmitting(true);
+      try {
+        await axios.post('/api/feedback', {
+          sessionId,
+          userId,
+          rating: 1,
+          messageIndex,
+          messageId,
+        });
+        setState('good');
+        onFeedback('good');
+        setTimeout(() => setState('done'), 1200);
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    // Bad feedback
+    const handleBad = () => {
+      setState('badDialog');
+    };
+    const handleBadSubmit = async () => {
+      if (!comment.trim()) {
+        setCommentError('Comment is required');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await axios.post('/api/feedback', {
+          sessionId,
+          userId,
+          rating: -1,
+          messageIndex,
+          messageId,
+          comments: comment,
+        });
+        setState('bad');
+        onFeedback('bad', comment);
+        setTimeout(() => setState('done'), 1200);
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    if (state === 'good') {
+      return (
+        <div className="flex items-center gap-2 mt-2 text-green-400 animate-fade-in">
+          <CheckCircleIcon className="w-5 h-5" /> Thank you for your feedback!
+        </div>
+      );
+    }
+    if (state === 'bad') {
+      return (
+        <div className="flex items-center gap-2 mt-2 text-red-400 animate-fade-in">
+          <XMarkIcon className="w-5 h-5" /> Feedback received. Thank you!
+        </div>
+      );
+    }
+    if (state === 'badDialog') {
+      return (
+        <div className="flex flex-col gap-2 mt-2 bg-gray-900 p-3 rounded-lg border border-gray-700 max-w-xs animate-fade-in">
+          <div className="text-sm text-red-300 font-semibold">Please tell us what was wrong:</div>
+          <textarea
+            className="bg-black/30 text-white rounded p-2 mt-1 border border-gray-700"
+            placeholder="Your comment (required)"
+            value={comment}
+            onChange={e => { setComment(e.target.value); setCommentError(''); }}
+            rows={2}
+            disabled={submitting}
+          />
+          {commentError && <div className="text-xs text-red-400">{commentError}</div>}
+          <div className="flex gap-2 justify-end">
+            <button
+              className="px-3 py-1 rounded bg-gray-700 text-white text-sm"
+              onClick={() => setState('init')}
+              type="button"
+              disabled={submitting}
+            >Cancel</button>
+            <button
+              className="px-3 py-1 rounded bg-accent text-white text-sm disabled:opacity-50"
+              onClick={handleBadSubmit}
+              disabled={submitting}
+            >Submit</button>
+          </div>
+        </div>
+      );
+    }
+    if (state === 'done') {
+      return null;
+    }
+    // Initial state: both buttons
+    return (
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          className={clsx(
+            'p-1 rounded',
+            'hover:bg-gray-700 text-gray-300',
+            'transition-colors duration-150',
+            submitting && 'opacity-50 pointer-events-none'
+          )}
+          onClick={handleGood}
+          disabled={submitting}
+          title="Good response"
+        >
+          <HandThumbUpIcon className="w-5 h-5" />
+        </button>
+        <button
+          className={clsx(
+            'p-1 rounded',
+            'hover:bg-gray-700 text-gray-300',
+            'transition-colors duration-150',
+            submitting && 'opacity-50 pointer-events-none'
+          )}
+          onClick={handleBad}
+          disabled={submitting}
+          title="Bad response"
+        >
+          <HandThumbDownIcon className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex" {...getRootProps()}>
-      {/* Sidebar and overlay */}
-      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} selectedChatId={selectedChatId} onSelectChat={setSelectedChatId} />
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-10 bg-black/40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close sidebar overlay"
-        />
-      )}
       {/* Main area */}
-      <div className={clsx('flex-1 flex flex-col min-h-screen transition-all', sidebarOpen ? 'ml-60' : 'ml-0', 'bg-black')}> 
-        <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen((v) => !v)} />
+      <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-black"> 
+        <NavBar />
         {/* Chat session metadata */}
         {loadingMeta ? (
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate text-white animate-pulse text-sm md:text-base">Loading session info…</div>
@@ -226,59 +365,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                       <div className="prose prose-invert prose-headings:font-bold prose-headings:text-lg prose-p:my-2 prose-li:my-1 prose-code:bg-gray-800 prose-code:text-blue-300 prose-code:px-1 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-xs prose-pre:p-3 prose-pre:rounded-lg bg-transparent">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
-                      {/* Per-response feedback for AI responses only */}
                       <div className="flex items-center gap-2 mt-2">
-                        <button
-                          className="p-1 rounded hover:bg-gray-700 text-gray-300"
-                          onClick={() => navigator.clipboard.writeText(msg.content)}
-                          title="Copy response"
-                        >
-                          <ClipboardIcon className="w-5 h-5" />
-                        </button>
-                        <button
-                          className={clsx(
-                            'p-1 rounded',
-                            feedback[idx] === 'good' ? 'bg-green-600 text-white' : 'hover:bg-gray-700 text-gray-300'
-                          )}
-                          onClick={() => {
-                            if (!feedback[idx]) {
-                              setFeedback(f => ({ ...f, [idx]: 'good' }));
-                              axios.post('/api/feedback', {
-                                sessionId: params.chatId,
-                                userId: session?.user?.id,
-                                rating: 1,
-                                messageIndex: idx,
-                                messageId: msg.id,
-                              });
-                            }
-                          }}
-                          disabled={!!feedback[idx]}
-                          title="Good response"
-                        >
-                          <HandThumbUpIcon className="w-5 h-5" />
-                        </button>
-                        <button
-                          className={clsx(
-                            'p-1 rounded',
-                            feedback[idx] === 'bad' ? 'bg-red-600 text-white' : 'hover:bg-gray-700 text-gray-300'
-                          )}
-                          onClick={() => {
-                            if (!feedback[idx]) {
-                              setFeedback(f => ({ ...f, [idx]: 'bad' }));
-                              axios.post('/api/feedback', {
-                                sessionId: params.chatId,
-                                userId: session?.user?.id,
-                                rating: -1,
-                                messageIndex: idx,
-                                messageId: msg.id,
-                              });
-                            }
-                          }}
-                          disabled={!!feedback[idx]}
-                          title="Bad response"
-                        >
-                          <HandThumbDownIcon className="w-5 h-5" />
-                        </button>
+                        <AnimatedCopyButton content={msg.content} />
+                        <FeedbackSection sessionId={params.chatId} userId={session?.user?.id || ''} messageId={msg.id} messageIndex={idx} onFeedback={(type, comment) => setFeedback(f => ({ ...f, [idx]: type }))} />
                       </div>
                     </div>
                   ) : (
@@ -334,5 +423,27 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         )}
       </div>
     </div>
+  );
+} 
+
+function AnimatedCopyButton({ content }: { content: string }) {
+  const [showCheck, setShowCheck] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(content);
+    setShowCheck(true);
+    setTimeout(() => setShowCheck(false), 1200);
+  };
+  return (
+    <button
+      className={clsx(
+        'p-1 rounded hover:bg-gray-700 text-gray-300 transition-colors duration-150',
+        showCheck && 'text-green-400 animate-bounce'
+      )}
+      onClick={handleCopy}
+      title={showCheck ? 'Copied!' : 'Copy response'}
+      aria-label="Copy response"
+    >
+      {showCheck ? <CheckCircleIcon className="w-5 h-5" /> : <ClipboardIcon className="w-5 h-5" />}
+    </button>
   );
 } 
