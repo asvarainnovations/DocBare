@@ -62,7 +62,9 @@ export default function Sidebar({
       }
     }
     fetchChats();
-  }, [status, session?.user?.id]);
+  }, [status, session?.user?.id, selectedChatId]);
+
+  // Remove router.events code
 
   async function handleNewChat() {
     if (!session?.user?.id) return;

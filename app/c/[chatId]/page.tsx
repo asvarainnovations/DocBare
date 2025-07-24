@@ -85,6 +85,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     if (typeof window !== 'undefined') {
       if (sessionStorage.getItem('justCreatedChatId') === params.chatId) {
         setJustCreated(true);
+        // Optimistically add the first message if present
+        const optimisticMsg = sessionStorage.getItem('optimisticFirstMessage');
+        if (optimisticMsg) {
+          setMessages([{ role: 'USER', content: optimisticMsg }]);
+          sessionStorage.removeItem('optimisticFirstMessage');
+        }
         sessionStorage.removeItem('justCreatedChatId');
       }
     }

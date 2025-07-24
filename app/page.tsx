@@ -21,6 +21,7 @@ export default function Home() {
   const [docActionMsg, setDocActionMsg] = useState<string | null>(null);
   const router = useRouter();
   const { data: session, status } = useSession();
+  const [loadingFirstPrompt, setLoadingFirstPrompt] = useState(false);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!session?.user?.id) return;
@@ -127,6 +128,13 @@ export default function Home() {
     }
   }, [status, router]);
 
+  // Preload chat page route for snappier navigation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      router.prefetch && router.prefetch('/c/placeholder');
+    }
+  }, [router]);
+
   if (status !== 'authenticated') {
     return null;
   }
@@ -136,9 +144,22 @@ export default function Home() {
       signIn();
       return;
     }
-    const sessionRes = await axios.post('/api/create_chat_session', { firstMessage: msg, userId: session.user.id });
-    const { chatId } = sessionRes.data;
-    router.push(`/c/${chatId}`);
+    setLoadingFirstPrompt(true);
+    try {
+      // Optimistically store the first message for the chat page
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('optimisticFirstMessage', msg);
+      }
+      const sessionRes = await axios.post('/api/create_chat_session', { firstMessage: msg, userId: session.user.id });
+      const { chatId } = sessionRes.data;
+      // Mark this chat as just created for the chat page
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('justCreatedChatId', chatId);
+      }
+      router.push(`/c/${chatId}`);
+    } finally {
+      setLoadingFirstPrompt(false);
+    }
   }
 
   return (
@@ -188,8 +209,18 @@ export default function Home() {
               </div>
             )}
             <div className="w-full max-w-2xl">
-              <InputBar onSend={handleFirstPrompt} />
+              <InputBar onSend={handleFirstPrompt} loading={loadingFirstPrompt} />
             </div>
+            {/* Loading overlay for first prompt */}
+            {loadingFirstPrompt && (
+              <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 text-white text-xl font-semibold">
+                <svg className="animate-spin w-10 h-10 mb-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#fff" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="#fff" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Creating your chat...
+              </div>
+            )}
           </div>
         </div>
         <input {...getInputProps()} tabIndex={-1} className="hidden" />

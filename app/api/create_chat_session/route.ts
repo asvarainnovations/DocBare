@@ -15,7 +15,7 @@ async function generateChatTitle(prompt: string) {
         { role: 'user', content: `Summarize this user query in 5 words or less for a chat title: ${prompt}` }
       ],
       max_tokens: 16,
-      temperature: 0.3,
+      temperature: 0.5,
     },
     { headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` } }
   );
