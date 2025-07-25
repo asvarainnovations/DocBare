@@ -193,7 +193,7 @@ export default function Home() {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-screen transition-all"> 
         {/* Always render NavBar at the top */}
-        <NavBar />
+        {/* Removed any direct <NavBar /> usage from this file */}
         {/* Auth buttons */}
         {/* Removed Login/Logout button from here; now handled in NavBar */}
         {/* Centered content below NavBar */}
@@ -225,7 +225,7 @@ export default function Home() {
                 ))}
               </div>
             )}
-            <div className="w-full max-w-2xl">
+            <div className="w-full max-w-2xl w-full">
               <InputBar onSend={handleFirstPrompt} loading={loadingFirstPrompt} />
             </div>
             {/* Loading overlay for first prompt */}

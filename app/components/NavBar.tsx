@@ -25,7 +25,7 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
 
   return (
     <header className={clsx(
-      'flex items-center justify-between px-4 sticky top-0 z-20 shadow-sm',
+      'flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm',
       'bg-transparent'
     )}>
       <div className="flex items-center gap-3">
