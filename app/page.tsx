@@ -1,9 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import clsx from 'clsx';
-import NavBar from './components/NavBar';
-import { PaperClipIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import InputBar from './components/InputBar';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
@@ -110,44 +107,6 @@ export default function Home() {
     // eslint-disable-next-line
   }, [uploadedFiles]);
 
-  // Download document
-  const handleDownload = async (doc: any) => {
-    if (!session?.user?.id) return;
-    setDocActionMsg('Generating download link...');
-    try {
-      const res = await fetch(`/api/documents/signed_url?userId=${session.user.id}&documentId=${doc.id}`);
-      const data = await res.json();
-      if (data.url) {
-        window.open(data.url, '_blank');
-        setDocActionMsg(null);
-      } else {
-        setDocActionMsg('Failed to get download link.');
-      }
-    } catch {
-      setDocActionMsg('Failed to get download link.');
-    }
-  };
-
-  // Delete document
-  const handleDelete = async (doc: any) => {
-    if (!session?.user?.id) return;
-    if (!window.confirm('Delete this document?')) return;
-    setDocActionMsg('Deleting...');
-    try {
-      const res = await fetch(`/api/documents/delete?userId=${session.user.id}&documentId=${doc.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.status === 'deleted') {
-        setDocActionMsg('Document deleted.');
-        fetchDocuments();
-      } else {
-        setDocActionMsg(data.error || 'Delete failed.');
-      }
-    } catch {
-      setDocActionMsg('Delete failed.');
-    }
-    setTimeout(() => setDocActionMsg(null), 1500);
-  };
-
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login');
@@ -189,64 +148,54 @@ export default function Home() {
   }
 
   return (
-    <div {...getRootProps()} className="min-h-screen flex relative" style={{ width: '100vw' }}>
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-screen transition-all"> 
-        {/* Always render NavBar at the top */}
-        {/* Removed any direct <NavBar /> usage from this file */}
-        {/* Auth buttons */}
-        {/* Removed Login/Logout button from here; now handled in NavBar */}
-        {/* Centered content below NavBar */}
-        <div className="flex-1 flex flex-col justify-center items-center min-h-0">
-          <div className="flex flex-col items-center w-full">
-            <h1 className="text-2xl font-medium text-white mb-6 text-center">What's on your mind today?</h1>
-            {/* Attachment pills/cards UI */}
-            {uploadedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4 w-full max-w-2xl justify-start">
-                {uploadedFiles.map((file, idx) => (
-                  <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-3 py-2 gap-2 shadow border border-gray-700">
-                    {/* File icon (PDF, etc.) */}
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
-                      {file.name.split('.').pop()?.toUpperCase() || 'DOC'}
-                    </span>
-                    <span className="truncate max-w-[120px] text-xs text-white">{file.name}</span>
-                    {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
-                    {file.status === 'done' && <span className="text-green-400 text-xs">Uploaded</span>}
-                    {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
-                    <button
-                      className="ml-1 text-gray-400 hover:text-red-400 text-xs"
-                      onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
-                      aria-label="Remove attachment"
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+    <div className="flex-1 flex flex-col justify-center items-center min-h-screen">
+      <div className="flex flex-col items-center w-full">
+        <h1 className="text-2xl font-medium text-white mb-6 text-center">What's on your mind today?</h1>
+        {/* Attachment pills/cards UI */}
+        {uploadedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4 w-full max-w-2xl justify-start">
+            {uploadedFiles.map((file, idx) => (
+              <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-3 py-2 gap-2 shadow border border-gray-700">
+                {/* File icon (PDF, etc.) */}
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
+                  {file.name.split('.').pop()?.toUpperCase() || 'DOC'}
+                </span>
+                <span className="truncate max-w-[120px] text-xs text-white">{file.name}</span>
+                {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
+                {file.status === 'done' && <span className="text-green-400 text-xs">Uploaded</span>}
+                {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
+                <button
+                  className="ml-1 text-gray-400 hover:text-red-400 text-xs"
+                  onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
+                  aria-label="Remove attachment"
+                  type="button"
+                >
+                  ×
+                </button>
               </div>
-            )}
-            <div className="w-full max-w-2xl w-full">
-              <InputBar onSend={handleFirstPrompt} loading={loadingFirstPrompt} />
-            </div>
-            {/* Loading overlay for first prompt */}
-            {loadingFirstPrompt && (
-              <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 text-white text-xl font-semibold">
-                <svg className="animate-spin w-10 h-10 mb-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#fff" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="#fff" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                Creating your chat...
-              </div>
-            )}
+            ))}
           </div>
+        )}
+        <div className="mx-auto max-w-2xl w-full">
+          <InputBar onSend={handleFirstPrompt} loading={loadingFirstPrompt} />
         </div>
-        <input {...getInputProps()} tabIndex={-1} className="hidden" />
-        {isDragActive && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">
-            Drop files to attach
+        {/* Loading overlay for first prompt */}
+        {loadingFirstPrompt && (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 text-white text-xl font-semibold">
+            <svg className="animate-spin w-10 h-10 mb-4" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#fff" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="#fff" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+            Creating your chat...
           </div>
         )}
       </div>
+      <input {...getInputProps()} tabIndex={-1} className="hidden" />
+      {isDragActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">
+          Drop files to attach
+        </div>
+      )}
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
               onClick={() => setDropdownOpen((v) => !v)}
               aria-label="User menu"
             >
-              {isGoogleUser && session.user.image ? (
+              {session?.user?.image ? (
                 <img
                   src={session.user.image}
                   alt="Profile"

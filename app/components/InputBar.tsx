@@ -26,7 +26,7 @@ export default function InputBar({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 128) + 'px';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 240) + 'px';
     }
   }, [message]);
 
@@ -114,9 +114,9 @@ export default function InputBar({
             ref={textareaRef}
             aria-label="Type your question here"
             className={clsx(
-              'flex-1 resize-none bg-transparent text-white text-base font-normal placeholder:italic placeholder:text-[#6E6F77] placeholder:font-semibold',
+              'resize-none bg-transparent text-white text-base font-normal placeholder:italic placeholder:text-[#6E6F77] placeholder:font-semibold',
               'outline-none focus:ring-0',
-              'min-h-[2.5rem] max-h-32',
+              'min-h-[3rem] max-h-[240px]',
               'transition-colors duration-150',
               error
                 ? 'border-[#E53E3E]'
@@ -139,7 +139,7 @@ export default function InputBar({
             onBlur={handleBlur}
             placeholder="Ask your legal question…"
             disabled={loading}
-            rows={1}
+            rows={2}
           />
           {/* Buttons row below textarea */}
           <div className="flex flex-row items-center mt-0 gap-2 justify-between">

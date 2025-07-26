@@ -54,15 +54,17 @@ export const authOptions: AuthOptions = {
       // Account linking logic that relied on session is removed due to NextAuth callback limitations.
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
       if (user) {
         token.id = user.id;
+        token.picture = user.image || ((profile as any)?.picture);
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token?.id) {
         session.user.id = token.id as string;
+        session.user.image = token.picture;
       }
       return session;
     },

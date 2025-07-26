@@ -128,6 +128,7 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         let buffer = "";
+        let closed = false;
         stream.on("data", (chunk: Buffer) => {
           const str = chunk.toString();
           buffer += str;
@@ -138,7 +139,10 @@ export async function POST(req: NextRequest) {
             if (line.startsWith("data: ")) {
               const data = line.replace("data: ", "").trim();
               if (data === "[DONE]") {
-                controller.close();
+                if (!closed) {
+                  closed = true;
+                  controller.close();
+                }
                 return;
               }
               try {
@@ -154,70 +158,70 @@ export async function POST(req: NextRequest) {
             }
           }
         });
-        stream.on("end", () => {
-          controller.close();
+        stream.on("end", async () => {
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
+          if (errorDuringStream) return;
+          try {
+            await prisma.ragQueryLog.create({
+              data: {
+                userId: userId || null,
+                query: query || "",
+                answer: answer || "",
+                sources: [],
+              },
+            });
+            console.info("🟩 [chatbot][SUCCESS] Logged to Prisma ragQueryLog");
+          } catch (prismaErr: any) {
+            console.error(
+              "🟥 [chatbot][ERROR] Prisma log error:",
+              prismaErr.message
+            );
+          }
+          try {
+            await firestore.collection("docbare_rag_logs").add({
+              userId: userId || null,
+              query: query || "",
+              answer: answer || "",
+              sessionId: sessionId || null,
+              sources: [],
+              createdAt: new Date(),
+            });
+            console.info(
+              "🟩 [chatbot][SUCCESS] Logged to Firestore docbare_rag_logs"
+            );
+          } catch (fsErr: any) {
+            console.error(
+              "🟥 [chatbot][ERROR] Firestore log error:",
+              fsErr.message
+            );
+          }
+          try {
+            await firestore.collection("chat_messages").add({
+              sessionId: sessionId || null,
+              userId: "ai",
+              role: "ASSISTANT",
+              content: answer || "",
+              createdAt: new Date(),
+            });
+            console.info(
+              "🟩 [chatbot][SUCCESS] Saved assistant message to chat_messages"
+            );
+          } catch (msgErr: any) {
+            console.error(
+              "🟥 [chatbot][ERROR] Failed to save assistant message:",
+              msgErr.message
+            );
+          }
         });
-        stream.on("error", (err: any) => {
+        stream.on("error", async (err: any) => {
           errorDuringStream = err;
           controller.error(err);
+          // Optionally log error here as well
         });
       },
-    });
-
-    // 3. Log to Cloud SQL (Prisma) and Firestore after streaming is done
-    readable.getReader().closed.then(async () => {
-      if (errorDuringStream) return;
-      try {
-        await prisma.ragQueryLog.create({
-          data: {
-            userId: userId || null,
-            query: query || "",
-            answer: answer || "",
-            sources: [],
-          },
-        });
-        console.info("🟩 [chatbot][SUCCESS] Logged to Prisma ragQueryLog");
-      } catch (prismaErr: any) {
-        console.error(
-          "🟥 [chatbot][ERROR] Prisma log error:",
-          prismaErr.message
-        );
-      }
-      try {
-        await firestore.collection("docbare_rag_logs").add({
-          userId: userId || null,
-          query: query || "",
-          answer: answer || "",
-          sessionId: sessionId || null,
-          sources: [],
-          createdAt: new Date(),
-        });
-        console.info(
-          "🟩 [chatbot][SUCCESS] Logged to Firestore docbare_rag_logs"
-        );
-      } catch (fsErr: any) {
-        console.error(
-          "🟥 [chatbot][ERROR] Firestore log error:",
-          fsErr.message
-        );
-      }
-      try {
-        await firestore.collection("chat_messages").add({
-          sessionId: sessionId || null,
-          userId: "ai",
-          role: "ASSISTANT",
-          content: answer || "",
-          createdAt: new Date(),
-        });
-        console.info(
-          "🟩 [chatbot][SUCCESS] Saved assistant message to chat_messages"
-        );
-      } catch (msgErr: any) {
-        console.error(
-          "🟥 [chatbot][ERROR] Failed to save assistant message:",
-          msgErr.message
-        );
-      }
     });
 
     // 4. Return streaming response
@@ -236,3 +240,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
