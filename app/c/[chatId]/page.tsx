@@ -6,7 +6,6 @@ import axios from 'axios';
 import { useSession, signIn } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import ChatInputBox from '../../components/ChatInputBox';
 import AnimatedCopyButton from '../../components/AnimatedCopyButton';
 import FeedbackSection from '../../components/FeedbackSection';
 import RegenerateButton from '../../components/RegenerateButton';
@@ -14,6 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useRouter } from 'next/navigation';
+import ChatInput from '../../components/ChatInput';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [input, setInput] = useState('');
@@ -147,11 +147,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     lastMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loadingAI, regeneratingIdx]);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    console.info('🟦 [chat_ui][INFO] handleSend called with input:', input);
+  // Refactored handleSend to accept a message string
+  async function handleSend(message: string) {
+    console.info('🟦 [chat_ui][INFO] handleSend called with input:', message);
     setSendError(null);
-    if (!input.trim()) return;
+    if (!message.trim()) return;
     if (!session?.user?.id) {
       signIn();
       return;
@@ -161,7 +161,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       sessionId: params.chatId,
       userId,
       role: 'USER',
-      content: input,
+      content: message,
     };
     try {
       await axios.post('/api/chat', newMsg);
@@ -172,7 +172,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: input, sessionId: params.chatId, userId: session?.user?.id })
+        body: JSON.stringify({ query: message, sessionId: params.chatId, userId: session?.user?.id })
       });
       if (!res.body) throw new Error('No response body');
       let aiMsg = { sessionId: params.chatId, userId: 'ai', role: 'ASSISTANT', content: '', createdAt: new Date() };
@@ -210,17 +210,17 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-red-900 text-red-300 text-sm md:text-base">{errorMeta}</div>
         ) : sessionMeta && (
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate flex flex-col md:flex-row md:items-center md:justify-between text-white text-sm md:text-base shadow-md border border-gray-700 bg-opacity-80">
-            <div>
-              <div className="font-semibold text-base md:text-lg">Chat with {sessionMeta.user.name}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-base md:text-lg truncate">Chat with {sessionMeta.user.name}</div>
               <div className="text-xs text-gray-400">Started: {new Date(sessionMeta.createdAt).toLocaleString()}</div>
             </div>
-            <div className="text-xs text-gray-400 break-all">Session ID: {sessionMeta.id}</div>
+            <div className="text-xs text-gray-400 break-all mt-2 md:mt-0 md:ml-4">Session ID: {sessionMeta.id}</div>
           </div>
         )}
         {/* Chat history */}
         <div
           ref={chatRef}
-          className="flex-1 overflow-y-auto px-0 py-4 md:py-8 flex flex-col gap-6 max-w-full w-full mx-auto bg-black"
+          className="flex-1 overflow-y-auto px-2 md:px-0 py-4 md:py-8 flex flex-col gap-4 md:gap-6 max-w-full w-full mx-auto bg-black"
           style={{ WebkitOverflowScrolling: 'touch', paddingBottom: '200px' }}
           role="log"
           aria-live="polite"
@@ -248,7 +248,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   aria-label={msg.role === 'USER' ? 'User message' : 'AI response'}
                 >
                   {msg.role === 'ASSISTANT' ? (
-                    <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2">
+                    <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
                       <div className="markdown-content max-w-none bg-transparent">
                         <ReactMarkdown
                           components={{
@@ -332,8 +332,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                       </div>
                     </div>
                   ) : (
-                    <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2 flex justify-end">
-                      <div className="rounded-2xl px-4 py-3 max-w-[80%] whitespace-pre-wrap break-words bg-blue-600 text-white self-end text-sm leading-relaxed">
+                    <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 flex justify-end">
+                      <div className="rounded-2xl px-3 md:px-4 py-3 max-w-[85%] md:max-w-[80%] whitespace-pre-wrap break-words bg-blue-600 text-white self-end text-sm leading-relaxed">
                         {msg.content}
                       </div>
                     </div>
@@ -366,14 +366,16 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         {/* Fixed ChatInputBox at bottom */}
         {/* TODO: make this a component and it is causing the problem */}
         <div className="fixed bottom-0 left-0 w-full flex flex-col items-center z-30 bg-black shadow-[0_-2px_16px_0_rgba(0,0,0,0.7)]">
-          <div className="w-full max-w-2xl mx-auto px-4 md:px-0 pb-2 pt-2">
+          <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 pb-2 pt-2">
             <div className="flex items-end bg-[#18181b] rounded-2xl shadow-lg border border-gray-800 px-4 py-2 gap-2">
-              <ChatInputBox
+              <ChatInput
+                variant="chat"
                 value={input}
                 onChange={setInput}
                 onSend={handleSend}
                 loading={loadingAI}
                 error={sendError}
+                showAttachments={true}
               />
             </div>
             {/* Info message below chatbox */}

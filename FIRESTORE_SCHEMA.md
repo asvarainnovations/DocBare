@@ -124,6 +124,21 @@ This file documents the expected structure (schema) of all Firestore collections
 
 ---
 
+## document_analyses
+
+```json
+{
+  "documentId": "string",       // ID of the document being analyzed
+  "userId": "string",           // ID of the user who owns the analysis
+  "analysisType": "string",     // Type of analysis (summary, clauses, risks, insights)
+  "result": "string",           // The analysis result text
+  "createdAt": "Timestamp",     // When the analysis was created
+  "documentName": "string"      // Name of the document for reference
+}
+```
+
+---
+
 ## Notes
 - All collections include a Firestore-generated document ID as the primary key.
 - Timestamps are Firestore `Timestamp` objects.

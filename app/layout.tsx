@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import NextAuthSessionProvider from "./components/SessionProvider";
 import RootLayoutClient from "./components/RootLayoutClient";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,9 +26,11 @@ export default function RootLayout({
         className={`${inter.variable} antialiased bg-background text-white`}
       >
         <NextAuthSessionProvider>
-          <RootLayoutClient>
-            {children}
-          </RootLayoutClient>
+          <ErrorBoundary>
+            <RootLayoutClient>
+              {children}
+            </RootLayoutClient>
+          </ErrorBoundary>
         </NextAuthSessionProvider>
       </body>
     </html>

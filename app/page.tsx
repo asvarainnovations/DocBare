@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import InputBar from './components/InputBar';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useDropzone } from 'react-dropzone';
+import ChatInput from './components/ChatInput';
 
 export default function Home() {
   const [input, setInput] = useState('');
@@ -16,6 +16,7 @@ export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [loadingFirstPrompt, setLoadingFirstPrompt] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!session?.user?.id) return;
@@ -130,6 +131,7 @@ export default function Home() {
       return;
     }
     setLoadingFirstPrompt(true);
+    setSendError(null); // Clear previous errors
     try {
       // Optimistically store the first message for the chat page
       if (typeof window !== 'undefined') {
@@ -142,6 +144,8 @@ export default function Home() {
         sessionStorage.setItem('justCreatedChatId', chatId);
       }
       router.push(`/c/${chatId}`);
+    } catch (err: any) {
+      setSendError(err.message || 'Failed to create chat session');
     } finally {
       setLoadingFirstPrompt(false);
     }
@@ -177,7 +181,15 @@ export default function Home() {
           </div>
         )}
         <div className="mx-auto max-w-2xl w-full">
-          <InputBar onSend={handleFirstPrompt} loading={loadingFirstPrompt} />
+          <ChatInput 
+            variant="home"
+            onSend={handleFirstPrompt} 
+            loading={loadingFirstPrompt} 
+            error={sendError}
+            showAttachments={true}
+            value={input}
+            onChange={setInput}
+          />
         </div>
         {/* Loading overlay for first prompt */}
         {loadingFirstPrompt && (

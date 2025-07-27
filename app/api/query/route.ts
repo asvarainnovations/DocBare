@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { prisma } from "@/lib/prisma";
 import firestore from "@/lib/firestore";
+import { validateQuery } from "@/lib/validation";
+import { withRateLimit, rateLimitConfigs } from "@/lib/rateLimit";
+import { aiLogger } from "@/lib/logger";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 
 // Call DeepSeek LLM for answer (streaming)
 async function callLLMStream(query: string) {
-  console.info("🟦 [chatbot][INFO] Sending to DeepSeek (streaming):", query);
+  aiLogger.aiRequest('DeepSeek', 'deepseek-reasoner', { query });
+  const startTime = Date.now();
 
   const systemPrompt = `
     You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts. When given a document or clause, follow this internal pipeline:
@@ -75,22 +79,29 @@ async function callLLMStream(query: string) {
     responseType: "stream"
   });
 
+  const duration = Date.now() - startTime;
+  aiLogger.aiResponse('DeepSeek', 'deepseek-reasoner', duration, { query });
+
   return response.data;
 }
 
 
 export async function POST(req: NextRequest) {
-  try {
-    const { query, userId, sessionId } = await req.json();
-    console.info("🟦 [chatbot][INFO] Received request:", {
-      query,
-      userId,
-      sessionId,
-    });
-    if (!query) {
-      console.error("🟥 [chatbot][ERROR] Missing query");
-      return NextResponse.json({ error: "Missing query" }, { status: 400 });
-    }
+  return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
+    try {
+      // Validate request
+      const validation = await validateQuery(req);
+      if (validation.error) {
+        return validation.error;
+      }
+
+      const { query, userId, sessionId } = validation.data;
+      
+      aiLogger.info("Received AI query request", {
+        query: query.substring(0, 100) + (query.length > 100 ? '...' : ''),
+        userId,
+        sessionId,
+      });
 
     // 1. Call DeepSeek (streaming)
     let answer = "";
@@ -102,9 +113,7 @@ export async function POST(req: NextRequest) {
     } catch (llmErr: any) {
       const apiError = llmErr?.response?.data?.error;
       if (apiError && apiError.message === "Insufficient Balance") {
-        console.error(
-          "🟥 [chatbot][ERROR] DeepSeek: Insufficient Balance. Please top up your account."
-        );
+        aiLogger.error("DeepSeek API insufficient balance", llmErr);
         return NextResponse.json(
           {
             error:
@@ -113,10 +122,7 @@ export async function POST(req: NextRequest) {
           { status: 402 }
         );
       }
-      console.error(
-        "🟥 [chatbot][ERROR] DeepSeek error:",
-        llmErr?.response?.data || llmErr.message
-      );
+      aiLogger.error("DeepSeek API error", llmErr);
       return NextResponse.json(
         { error: "Failed to get response from DeepSeek AI." },
         { status: 500 }
@@ -173,12 +179,9 @@ export async function POST(req: NextRequest) {
                 sources: [],
               },
             });
-            console.info("🟩 [chatbot][SUCCESS] Logged to Prisma ragQueryLog");
+            aiLogger.success("Logged to Prisma ragQueryLog", { userId, sessionId });
           } catch (prismaErr: any) {
-            console.error(
-              "🟥 [chatbot][ERROR] Prisma log error:",
-              prismaErr.message
-            );
+            aiLogger.error("Prisma log error", prismaErr);
           }
           try {
             await firestore.collection("docbare_rag_logs").add({
@@ -189,14 +192,9 @@ export async function POST(req: NextRequest) {
               sources: [],
               createdAt: new Date(),
             });
-            console.info(
-              "🟩 [chatbot][SUCCESS] Logged to Firestore docbare_rag_logs"
-            );
+            aiLogger.success("Logged to Firestore docbare_rag_logs", { userId, sessionId });
           } catch (fsErr: any) {
-            console.error(
-              "🟥 [chatbot][ERROR] Firestore log error:",
-              fsErr.message
-            );
+            aiLogger.error("Firestore log error", fsErr);
           }
           try {
             await firestore.collection("chat_messages").add({
@@ -206,20 +204,15 @@ export async function POST(req: NextRequest) {
               content: answer || "",
               createdAt: new Date(),
             });
-            console.info(
-              "🟩 [chatbot][SUCCESS] Saved assistant message to chat_messages"
-            );
+            aiLogger.success("Saved assistant message to chat_messages", { userId, sessionId });
           } catch (msgErr: any) {
-            console.error(
-              "🟥 [chatbot][ERROR] Failed to save assistant message:",
-              msgErr.message
-            );
+            aiLogger.error("Failed to save assistant message", msgErr);
           }
         });
         stream.on("error", async (err: any) => {
           errorDuringStream = err;
+          aiLogger.error("Stream error during AI response", err);
           controller.error(err);
-          // Optionally log error here as well
         });
       },
     });
@@ -232,12 +225,13 @@ export async function POST(req: NextRequest) {
         "Cache-Control": "no-cache",
       },
     });
-  } catch (err: any) {
-    console.error("🟥 [chatbot][ERROR] Unhandled error:", err);
-    return NextResponse.json(
-      { error: err.message || "Internal error" },
-      { status: 500 }
-    );
-  }
+    } catch (err: any) {
+      aiLogger.error("Unhandled error in query route", err);
+      return NextResponse.json(
+        { error: err.message || "Internal error" },
+        { status: 500 }
+      );
+    }
+  });
 }
 

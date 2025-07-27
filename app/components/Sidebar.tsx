@@ -84,7 +84,7 @@ export default function Sidebar({
     <aside
       className={clsx(
         "fixed top-0 left-0 min-h-screen h-screen bg-surface border-r border-gray-800 flex flex-col transition-all duration-300 z-20",
-        open ? "w-60" : "w-0 invisible"
+        open ? "w-60 md:w-64" : "w-0 invisible"
       )}
       style={{ transitionProperty: "width, visibility", overflow: "hidden" }}
     >
@@ -95,18 +95,22 @@ export default function Sidebar({
         <button
           onClick={() => router.push('/')}
           className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
+          aria-label="Create new chat"
         >
           <PlusIcon className="w-5 h-5" />
-          {open && <span>New chat</span>}
+          {open && <span className="hidden sm:inline">New chat</span>}
         </button>
-        <button className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white">
+        <button 
+          className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
+          aria-label="Search chats"
+        >
           <MagnifyingGlassIcon className="w-5 h-5" />
-          {open && <span>Search chats</span>}
+          {open && <span className="hidden sm:inline">Search chats</span>}
         </button>
       </div>
       {/* Chats */}
       <div className="flex-1 overflow-y-auto px-2 pb-48">
-        <div className="text-xs text-gray-400 px-3 py-2">Chats</div>
+        <div className="text-xs text-gray-400 px-3 py-2 hidden sm:block">Chats</div>
         <ul className="space-y-1">
           {chats.map((chat) => (
             <li
@@ -122,7 +126,7 @@ export default function Sidebar({
               }}
             >
               <div className="flex items-center gap-2 overflow-hidden w-full">
-                <span className="truncate text-white text-sm flex-1">
+                <span className="truncate text-white text-sm flex-1 min-w-0">
                   {chat.sessionName || chat.title || 'Untitled Chat'}
                 </span>
                 {/* 3-dot menu, only visible on hover */}

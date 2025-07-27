@@ -55,5 +55,13 @@ secrets/
 .firebase/
 .firebaserc
 
+# Logs and activity files
 activity-log.md
 server-logs.txt
+
+# SWC compiler cache
+.swc/
+
+# Playwright test results and reports
+test-results/
+playwright-report/
