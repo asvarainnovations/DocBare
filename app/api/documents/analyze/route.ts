@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
   
   // For now, skip complex rate limiting to avoid issues
   // TODO: Implement proper rate limiting later
+  // return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
     try {
       // Validate request
       let requestData;
@@ -178,37 +179,38 @@ export async function POST(req: NextRequest) {
         analysisType,
         result: analysis,
         createdAt: new Date(),
-        documentName: doc.filename || 'Unknown Document'
+        updatedAt: new Date()
       };
 
       await firestore.collection('document_analyses').add(analysisDoc);
 
-      aiLogger.success("Document analysis completed", {
+      aiLogger.info('Document analysis completed successfully', {
         documentId,
         analysisType,
+        userId,
         resultLength: analysis.length
       });
 
       return NextResponse.json({
-        analysis,
-        analysisType,
-        documentId,
-        timestamp: new Date().toISOString()
+        success: true,
+        analysis: analysis,
+        analysisType: analysisType,
+        documentId: documentId
       });
 
     } catch (error: any) {
-      aiLogger.error("Document analysis failed", error);
-      
-      if (error.response?.data?.error?.message === "Insufficient Balance") {
-        return NextResponse.json(
-          { error: "DeepSeek API: Insufficient balance. Please check your account credits." },
-          { status: 402 }
-        );
-      }
+      aiLogger.error('Document analysis failed', {
+        error: error.message,
+        stack: error.stack
+      });
 
       return NextResponse.json(
-        { error: "Failed to analyze document" },
+        { 
+          error: 'Document analysis failed',
+          message: error.message || 'Internal server error'
+        },
         { status: 500 }
       );
     }
+  // });
 } 

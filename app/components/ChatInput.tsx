@@ -1,9 +1,11 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { PaperAirplaneIcon, PaperClipIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
+import axios from 'axios';
+import { toast } from 'sonner';
 
 interface ChatInputProps {
   variant?: 'home' | 'chat';
@@ -16,6 +18,7 @@ interface ChatInputProps {
   maxHeight?: number;
   value?: string;
   onChange?: (value: string) => void;
+  userId?: string; // Add userId prop
 }
 
 export default function ChatInput({
@@ -28,10 +31,12 @@ export default function ChatInput({
   showAttachments = true,
   maxHeight = 240,
   value: controlledValue,
-  onChange: controlledOnChange
+  onChange: controlledOnChange,
+  userId
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState(controlledValue || '');
   const [showError, setShowError] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
 
@@ -92,10 +97,71 @@ export default function ChatInput({
   useEffect(() => {
     if (error) {
       setShowError(true);
+      toast.error(error);
       const timer = setTimeout(() => setShowError(false), 5000);
       return () => clearTimeout(timer);
     }
   }, [error]);
+
+  // Dropzone configuration
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    console.info('🟦 [chat_input][INFO] Files dropped:', acceptedFiles);
+    
+    if (!acceptedFiles.length) return;
+    
+    if (!userId) {
+      toast.error('User ID is required for file upload');
+      return;
+    }
+    
+    setUploading(true);
+    
+    try {
+      // Handle file upload logic
+      const formData = new FormData();
+      formData.append('file', acceptedFiles[0]);
+      formData.append('userId', userId);
+      
+      const response = await axios.post('/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          console.info('🟦 [chat_input][INFO] Upload progress:', percentCompleted + '%');
+        },
+      });
+      
+      console.info('🟦 [chat_input][SUCCESS] File uploaded successfully:', response.data);
+      toast.success(`File "${acceptedFiles[0].name}" uploaded successfully!`);
+      
+      // Optionally trigger document ingestion
+      if (response.data.url) {
+        try {
+          await axios.post('/api/ingest', {
+            documentId: response.data.documentId,
+            userId: userId,
+          });
+          console.info('🟦 [chat_input][SUCCESS] Document ingestion started');
+          toast.success('Document processing started');
+        } catch (ingestError) {
+          console.error('🟥 [chat_input][ERROR] Failed to start ingestion:', ingestError);
+          toast.error('Failed to start document processing');
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('🟥 [chat_input][ERROR] File upload failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  }, [userId]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    noClick: true,
+  });
 
   const containerClasses = clsx(
     'w-full',

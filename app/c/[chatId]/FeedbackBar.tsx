@@ -6,10 +6,13 @@ export default function FeedbackBar({ sessionId, userId }: { sessionId: string; 
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
+    
     try {
       await axios.post('/api/feedback', {
         sessionId,
@@ -18,8 +21,9 @@ export default function FeedbackBar({ sessionId, userId }: { sessionId: string; 
         comments: comment,
       });
       setSubmitted(true);
-    } catch (err) {
-      // handle error
+    } catch (err: any) {
+      console.error('🟥 [FEEDBACK][ERROR] Failed to submit feedback:', err);
+      setError(err.response?.data?.error || 'Failed to submit feedback. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -31,6 +35,9 @@ export default function FeedbackBar({ sessionId, userId }: { sessionId: string; 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 mt-4 bg-slate rounded p-4 max-w-2xl mx-auto">
+      {error && (
+        <div className="text-red-400 text-sm mb-2">{error}</div>
+      )}
       <div className="flex items-center gap-2">
         <span className="text-white">Rate this session:</span>
         {[1, 2, 3, 4, 5].map((star) => (

@@ -87,7 +87,7 @@ function LoginPageInner() {
         {error && <div className="text-red-400 text-center mt-2">{error}</div>}
         {providerErrorMsg && <div className="text-red-400 text-center mt-2">{providerErrorMsg}</div>}
         <div className="text-center mt-4 text-gray-400">
-          Don't have an account? <Link href="/signup" className="text-accent hover:underline">Sign up</Link>
+          Don&apos;t have an account? <Link href="/signup" className="text-accent hover:underline">Sign up</Link>
         </div>
         <div className="flex items-center my-6">
           <div className="flex-1 h-px bg-gray-700" />

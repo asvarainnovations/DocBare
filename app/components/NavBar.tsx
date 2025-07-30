@@ -3,6 +3,8 @@ import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
+import { useSidebar } from './SidebarContext';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -19,14 +21,21 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { data: session, status } = useSession();
+  const { sidebarOpen } = useSidebar();
   useClickOutside(dropdownRef, () => setDropdownOpen(false));
 
   const isGoogleUser = !!session?.user?.image;
 
   return (
     <header className={clsx(
-      'flex items-center justify-between px-3 sm:px-4 py-2 fixed top-0 left-0 right-0 z-40',
-      'bg-main-bg/95 backdrop-blur-sm border-b border-gray-800'
+      'flex items-center justify-between px-3 sm:px-4 py-2 fixed top-0 z-40',
+      'background-transparent',
+      // Responsive positioning based on sidebar state
+      'left-0 right-0',
+      // Desktop: adjust left position when sidebar is open
+      sidebarOpen ? 'lg:left-64 lg:right-0' : 'lg:left-0 lg:right-0',
+      // Hide on mobile/tablet when sidebar is open
+      sidebarOpen ? 'hidden lg:flex' : 'flex'
     )}>
       <div className="flex items-center gap-2 sm:gap-3">
         {showSidebarToggle && (
@@ -41,8 +50,8 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
         {/* DocBare Text */}
         <span className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-white select-none pl-2 sm:pl-4">DocBare</span>
       </div>
-      {/* User Avatar and Auth Button */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      {/* User Avatar and Auth Button - Only visible on desktop */}
+      <div className="hidden lg:flex items-center gap-2 sm:gap-4">
         {status === 'authenticated' ? (
           <div className="relative" ref={dropdownRef}>
             <button
@@ -51,9 +60,11 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
               aria-label="User menu"
             >
               {session?.user?.image ? (
-                <img
+                <Image
                   src={session.user.image}
                   alt="Profile"
+                  width={32}
+                  height={32}
                   className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-gray-600"
                   onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/default-avatar.png'; }}
                 />

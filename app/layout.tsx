@@ -1,37 +1,44 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import NextAuthSessionProvider from "./components/SessionProvider";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
+import { SessionProvider } from "next-auth/react";
 import RootLayoutClient from "./components/RootLayoutClient";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { Toaster } from 'sonner';
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DocBare",
-  description: "Legal AI Document Platform",
+  title: "DocBare - Legal AI Platform",
+  description: "Modern legal AI platform for document drafting and analysis",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en">
-      <body
-        className={`${inter.variable} antialiased bg-background text-white`}
-      >
-        <NextAuthSessionProvider>
-          <ErrorBoundary>
+      <body className={inter.className}>
+        <ErrorBoundary>
+          <SessionProvider session={session}>
             <RootLayoutClient>
               {children}
             </RootLayoutClient>
-          </ErrorBoundary>
-        </NextAuthSessionProvider>
+            <Toaster 
+              position="top-right"
+              richColors
+              closeButton
+              duration={4000}
+              theme="dark"
+            />
+          </SessionProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

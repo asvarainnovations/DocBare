@@ -359,7 +359,7 @@ export default function DocumentAnalysis({ documentId, documentName, userId, onC
                           {!isLoading && !error && !result && (
                             <div className="text-center py-8 text-gray-400">
                               <Icon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                              <p>Click "Analyze All" or select this analysis type to begin</p>
+                              <p>Click &quot;Analyze All&quot; or select this analysis type to begin</p>
                             </div>
                           )}
                         </div>

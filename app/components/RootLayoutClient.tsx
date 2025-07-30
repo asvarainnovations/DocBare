@@ -16,7 +16,7 @@ function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-main-bg/40 lg:hidden"
+          className="fixed inset-0 z-20 bg-main-bg/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-label="Close sidebar overlay"
         />
@@ -30,11 +30,11 @@ function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
         'md:w-full',
         // Desktop: margin when sidebar open
         sidebarOpen ? 'lg:ml-64 lg:w-[calc(100vw-16rem)]' : 'lg:ml-0 lg:w-full',
-        'relative pt-16' // Add top padding for fixed NavBar
+        'relative' // Removed pt-16 to prevent vertical scrolling
       )}>
         {/* NavBar at the top of main content */}
         <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen(true)} />
-        {/* Main content with top padding for NavBar */}
+        {/* Main content */}
         <div className="flex-1 flex flex-col">
           {children}
         </div>
