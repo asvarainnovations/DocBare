@@ -14,8 +14,11 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useRouter } from 'next/navigation';
 import ChatInput from '../../components/ChatInput';
+import { useSidebar } from '../../components/SidebarContext';
+import LoadingSkeleton from '../../components/LoadingSkeleton';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
+  const { sidebarOpen } = useSidebar();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [sessionMeta, setSessionMeta] = useState<any>(null);
@@ -29,6 +32,10 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [errorMessages, setErrorMessages] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ [idx: number]: 'good' | 'bad' | undefined }>({});
+  
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // Handle file upload logic here
     console.info('🟦 [chat_ui][INFO] Files dropped:', acceptedFiles);
@@ -37,24 +44,40 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     onDrop,
     noClick: true,
   });
-  // Add feedback state for each AI message
-  const [feedback, setFeedback] = useState<{ [idx: number]: 'good' | 'bad' | undefined }>({});
-  const router = useRouter();
-  // Track if this chat was just created in this session
-  const [justCreated, setJustCreated] = useState(false);
-  const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null);
 
-  // Fetch chat session metadata
+  // Check for optimistic first message from sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const optimisticMessage = sessionStorage.getItem('optimisticFirstMessage');
+      const justCreatedChatId = sessionStorage.getItem('justCreatedChatId');
+      
+      if (optimisticMessage && justCreatedChatId === params.chatId) {
+        // Add the optimistic message to the messages array
+        setMessages([{
+          id: 'optimistic-user-message',
+          sessionId: params.chatId,
+          userId: session?.user?.id,
+          role: 'USER',
+          content: optimisticMessage,
+          createdAt: new Date()
+        }]);
+        
+        // Clear the sessionStorage
+        sessionStorage.removeItem('optimisticFirstMessage');
+        sessionStorage.removeItem('justCreatedChatId');
+      }
+    }
+  }, [params.chatId, session?.user?.id]);
+
+  // Fetch session metadata
   useEffect(() => {
     async function fetchMeta() {
-      setLoadingMeta(true);
-      setErrorMeta(null);
+      if (!params.chatId) return;
       try {
         const res = await axios.get(`/api/sessions/${params.chatId}/metadata`);
         setSessionMeta(res.data);
-      } catch (err) {
-        setSessionMeta(null);
-        setErrorMeta('Failed to load session info.');
+      } catch (err: any) {
+        setErrorMeta(err.response?.data?.error || 'Failed to load session info');
       } finally {
         setLoadingMeta(false);
       }
@@ -62,53 +85,65 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     fetchMeta();
   }, [params.chatId]);
 
-  // Fetch chat messages on load
+  // Fetch messages
   useEffect(() => {
     async function fetchMessages() {
-      setLoadingMessages(true);
-      setErrorMessages(null);
+      if (!params.chatId) return;
       try {
         const res = await axios.get(`/api/sessions/${params.chatId}`);
-        setMessages(res.data.messages || []);
-      } catch (err) {
-        setErrorMessages('Failed to load messages.');
+        const fetchedMessages = res.data.messages || [];
+        
+        // If we have an optimistic message, merge it with fetched messages
+        const optimisticMessage = sessionStorage.getItem('optimisticFirstMessage');
+        if (optimisticMessage && fetchedMessages.length === 0) {
+          setMessages([{
+            id: 'optimistic-user-message',
+            sessionId: params.chatId,
+            userId: session?.user?.id,
+            role: 'USER',
+            content: optimisticMessage,
+            createdAt: new Date()
+          }]);
+        } else {
+          setMessages(fetchedMessages);
+        }
+      } catch (err: any) {
+        setErrorMessages(err.response?.data?.error || 'Failed to load messages');
       } finally {
         setLoadingMessages(false);
+        setPageLoading(false);
       }
     }
     fetchMessages();
-  }, [params.chatId]);
+  }, [params.chatId, session?.user?.id]);
 
-  // Track if this chat was just created in this session
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    // Check sessionStorage for justCreated flag
-    if (typeof window !== 'undefined') {
-      if (sessionStorage.getItem('justCreatedChatId') === params.chatId) {
-        setJustCreated(true);
-        // Optimistically add the first message if present
-        const optimisticMsg = sessionStorage.getItem('optimisticFirstMessage');
-        if (optimisticMsg) {
-          setMessages([{ role: 'USER', content: optimisticMsg }]);
-          sessionStorage.removeItem('optimisticFirstMessage');
-        }
-        sessionStorage.removeItem('justCreatedChatId');
-      }
+    if (lastMsgRef.current) {
+      lastMsgRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [params.chatId]);
+  }, [messages]);
 
-  // Auto-trigger AI response only if justCreated is true
+  // Auto-trigger AI response for first message if no AI response exists
   useEffect(() => {
     if (
-      justCreated &&
       !loadingMessages &&
+      !loadingMeta &&
       messages.length === 1 &&
       messages[0].role === 'USER' &&
       !loadingAI &&
-      !messages.some(m => m.role === 'ASSISTANT')
+      !messages.some(m => m.role === 'ASSISTANT') &&
+      session?.user?.id // Ensure session is available
     ) {
       (async () => {
         setLoadingAI(true);
         try {
+          console.info('🟦 [chat_ui][INFO] Auto-triggering AI response', {
+            query: messages[0].content,
+            sessionId: params.chatId,
+            userId: session?.user?.id
+          });
+          
           // NOTE: Axios does NOT support streaming responses in the browser.
           // For real-time AI response streaming, we must use fetch here.
           // Use axios for all other API calls in the codebase.
@@ -116,8 +151,19 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           const res = await fetch('/api/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: messages[0].content, sessionId: params.chatId, userId: session?.user?.id })
+            body: JSON.stringify({ 
+              query: messages[0].content, 
+              sessionId: params.chatId, 
+              userId: session?.user?.id 
+            })
           });
+          
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error('🟥 [chat_ui][ERROR] Query API error:', res.status, errorText);
+            throw new Error(`API error: ${res.status} - ${errorText}`);
+          }
+          
           if (!res.body) throw new Error('No response body');
           let aiMsg = { sessionId: params.chatId, userId: 'ai', role: 'ASSISTANT', content: '', createdAt: new Date() };
           setMessages(prev => [...prev, aiMsg]);
@@ -133,47 +179,47 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
               setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? aiMsg : m));
             }
           }
-        } catch (err) {
-          setSendError('Failed to get AI response.');
-        } finally {
           setLoadingAI(false);
-          setJustCreated(false); // Only trigger once
+        } catch (err) {
+          setLoadingAI(false);
+          setSendError('Failed to send message or get AI response.');
         }
       })();
     }
-  }, [justCreated, loadingMessages, messages, loadingAI, params.chatId]);
+  }, [messages, loadingMessages, loadingMeta, loadingAI, session?.user?.id, params.chatId]);
 
-  useEffect(() => {
-    lastMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, loadingAI, regeneratingIdx]);
-
-  // Refactored handleSend to accept a message string
   async function handleSend(message: string) {
-    console.info('🟦 [chat_ui][INFO] handleSend called with input:', message);
+    if (!message.trim() || loadingAI || !session?.user?.id) return;
+    
     setSendError(null);
-    if (!message.trim()) return;
-    if (!session?.user?.id) {
-      signIn();
-      return;
-    }
-    const userId = session.user.id;
-    const newMsg = {
-      sessionId: params.chatId,
-      userId,
-      role: 'USER',
-      content: message,
-    };
+    const userMsg = { sessionId: params.chatId, userId: session.user.id, role: 'USER', content: message, createdAt: new Date() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoadingAI(true);
+    
     try {
-      await axios.post('/api/chat', newMsg);
-      setMessages([...messages, { ...newMsg, createdAt: new Date() }]);
-      setInput('');
-      setLoadingAI(true);
-      // Streaming fetch for AI response
+      console.info('🟦 [chat_ui][INFO] Sending message', {
+        query: message,
+        sessionId: params.chatId,
+        userId: session?.user?.id
+      });
+      
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, sessionId: params.chatId, userId: session?.user?.id })
+        body: JSON.stringify({ 
+          query: message, 
+          sessionId: params.chatId, 
+          userId: session?.user?.id 
+        })
       });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('🟥 [chat_ui][ERROR] Query API error:', res.status, errorText);
+        throw new Error(`API error: ${res.status} - ${errorText}`);
+      }
+      
       if (!res.body) throw new Error('No response body');
       let aiMsg = { sessionId: params.chatId, userId: 'ai', role: 'ASSISTANT', content: '', createdAt: new Date() };
       setMessages(prev => [...prev, aiMsg]);
@@ -196,20 +242,35 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }
 
-  // Feedback UI for each AI message
+  // Handle regenerating state changes
+  const handleRegeneratingChange = (isRegenerating: boolean, messageIndex: number) => {
+    setRegeneratingIdx(isRegenerating ? messageIndex : null);
+  };
 
+  // Handle feedback submission
+  const handleFeedback = (type: 'good' | 'bad', comment?: string, messageIndex?: number) => {
+    if (messageIndex !== undefined) {
+      setFeedback(prev => ({ ...prev, [messageIndex]: type }));
+    }
+    console.info('🟦 [chat_ui][INFO] Feedback submitted:', { type, comment, messageIndex });
+  };
+
+  // Show loading skeleton while page is loading
+  if (pageLoading || loadingMeta || loadingMessages) {
+    return <LoadingSkeleton message="Loading chat..." />;
+  }
 
   return (
     <div className="min-h-screen flex" {...getRootProps()}>
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-black"> 
+      <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-main-bg pb-32"> 
         {/* Chat session metadata */}
         {loadingMeta ? (
-          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate text-white animate-pulse text-sm md:text-base">Loading session info…</div>
+          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-main-bg text-white animate-pulse text-sm md:text-base">Loading session info…</div>
         ) : errorMeta ? (
           <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-red-900 text-red-300 text-sm md:text-base">{errorMeta}</div>
         ) : sessionMeta && (
-          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-slate flex flex-col md:flex-row md:items-center md:justify-between text-white text-sm md:text-base shadow-md border border-gray-700 bg-opacity-80">
+          <div className="max-w-2xl mx-auto mt-4 mb-2 px-4 py-2 rounded bg-main-bg flex flex-col md:flex-row md:items-center md:justify-between text-white text-sm md:text-base shadow-md border border-gray-700 bg-opacity-80">
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-base md:text-lg truncate">Chat with {sessionMeta.user.name}</div>
               <div className="text-xs text-gray-400">Started: {new Date(sessionMeta.createdAt).toLocaleString()}</div>
@@ -220,8 +281,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         {/* Chat history */}
         <div
           ref={chatRef}
-          className="flex-1 overflow-y-auto px-2 md:px-0 py-4 md:py-8 flex flex-col gap-4 md:gap-6 max-w-full w-full mx-auto bg-black"
-          style={{ WebkitOverflowScrolling: 'touch', paddingBottom: '200px' }}
+          className="flex-1 overflow-y-auto px-2 md:px-0 py-4 md:py-8 flex flex-col gap-4 md:gap-6 max-w-full w-full mx-auto bg-main-bg"
+          style={{ WebkitOverflowScrolling: 'touch' }}
           role="log"
           aria-live="polite"
           aria-label="Chat conversation history"
@@ -272,38 +333,56 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                               if (isInline) {
                                 return <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>;
                               }
-                              // Extract language from className (e.g., language-js)
-                              const match = /language-(\w+)/.exec(className || '');
+                              const language = className?.replace('language-', '') || 'text';
                               return (
-                                <SyntaxHighlighter
-                                  style={atomDark}
-                                  language={match ? match[1] : undefined}
-                                  PreTag="div"
-                                  customStyle={{ borderRadius: '0.5rem', fontSize: '0.95em', margin: '0.5em 0' }}
-                                >
-                                  {String(children).replace(/\n$/, '')}
-                                </SyntaxHighlighter>
+                                <div className="my-4">
+                                  <SyntaxHighlighter
+                                    language={language}
+                                    style={atomDark}
+                                    customStyle={{
+                                      margin: 0,
+                                      borderRadius: '8px',
+                                      fontSize: '14px',
+                                      lineHeight: '1.5',
+                                    }}
+                                  >
+                                    {String(children).replace(/\n$/, '')}
+                                  </SyntaxHighlighter>
+                                </div>
                               );
                             },
-                            pre: ({ children }) => <pre className="bg-gray-900 text-gray-200 p-4 rounded-lg text-sm font-mono overflow-x-auto mb-4">{children}</pre>,
                             
                             // Blockquotes
-                            blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-600 pl-4 italic text-gray-300 mb-4">{children}</blockquote>,
-                            
-                            // Links
-                            a: ({ children, href }) => <a href={href} className="text-blue-400 hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer">{children}</a>,
-                            
-                            // Strong and emphasis
-                            strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                            em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-4 border-accent pl-4 py-2 my-4 bg-gray-800/30 rounded-r">
+                                {children}
+                              </blockquote>
+                            ),
                             
                             // Tables
-                            table: ({ children }) => <div className="overflow-x-auto mb-4"><table className="min-w-full border-collapse border border-gray-600">{children}</table></div>,
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-4">
+                                <table className="min-w-full border-collapse border border-gray-600">
+                                  {children}
+                                </table>
+                              </div>
+                            ),
                             thead: ({ children }) => <thead className="bg-gray-800">{children}</thead>,
                             tbody: ({ children }) => <tbody>{children}</tbody>,
                             tr: ({ children }) => <tr className="border-b border-gray-600">{children}</tr>,
-                            th: ({ children }) => <th className="border border-gray-600 px-3 py-2 text-left text-white font-semibold">{children}</th>,
-                            td: ({ children }) => <td className="border border-gray-600 px-3 py-2 text-white">{children}</td>,
+                            th: ({ children }) => <th className="border border-gray-600 px-4 py-2 text-left text-white font-semibold">{children}</th>,
+                            td: ({ children }) => <td className="border border-gray-600 px-4 py-2 text-white">{children}</td>,
+                            
+                            // Links
+                            a: ({ href, children }) => (
+                              <a href={href} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            ),
+                            
+                            // Strong and emphasis
+                            strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                            em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
                             
                             // Horizontal rule
                             hr: () => <hr className="border-gray-600 my-6" />,
@@ -312,87 +391,96 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                           {msg.content}
                         </ReactMarkdown>
                       </div>
-                      <div className="flex items-center gap-2 mt-4">
-                        <AnimatedCopyButton content={msg.content} />
-                        <RegenerateButton
-                          sessionId={params.chatId}
+                      
+                      {/* Action buttons for AI responses */}
+                      <div className="flex items-center justify-between mt-4 pt-2 border-t border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <AnimatedCopyButton content={msg.content} />
+                          <RegenerateButton 
+                            sessionId={params.chatId}
+                            userId={session?.user?.id || ''}
+                            messageIndex={idx}
+                            messages={messages}
+                            onRegenerate={(newContent) => {
+                              setMessages(prev => prev.map((m, i) => 
+                                i === idx ? { ...m, content: newContent } : m
+                              ));
+                            }}
+                            onRegeneratingChange={(isRegenerating) => handleRegeneratingChange(isRegenerating, idx)}
+                          />
+                        </div>
+                        <FeedbackSection 
+                          sessionId={params.chatId} 
                           userId={session?.user?.id || ''}
+                          messageId={msg.id} 
                           messageIndex={idx}
-                          messages={messages}
-                          onRegenerate={(newContent) => {
-                            setMessages(prev => prev.map((m, i) => 
-                              i === idx ? { ...m, content: newContent } : m
-                            ));
-                          }}
-                          onRegeneratingChange={(isRegenerating) => {
-                            setRegeneratingIdx(isRegenerating ? idx : null);
-                          }}
+                          onFeedback={(type, comment) => handleFeedback(type, comment, idx)}
                         />
-                        <FeedbackSection sessionId={params.chatId} userId={session?.user?.id || ''} messageId={msg.id} messageIndex={idx} onFeedback={(type, comment) => setFeedback(f => ({ ...f, [idx]: type }))} />
                       </div>
                     </div>
                   ) : (
-                    <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 flex justify-end">
-                      <div className="rounded-2xl px-3 md:px-4 py-3 max-w-[85%] md:max-w-[80%] whitespace-pre-wrap break-words bg-blue-600 text-white self-end text-sm leading-relaxed">
-                        {msg.content}
+                    <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
+                      <div className="bg-accent/10 border border-accent/20 rounded-lg px-4 py-3">
+                        <p className="text-white text-sm md:text-base leading-relaxed">{msg.content}</p>
                       </div>
                     </div>
                   )}
                 </motion.div>
               ))}
-              {loadingAI && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.2 }}
-                  className="w-full flex justify-start"
-                >
-                  <div className="w-full max-w-2xl mx-auto px-4 md:px-0 py-2">
-                    <div className="text-white opacity-70 animate-pulse flex items-center gap-2">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      </div>
-                      <span className="text-sm">AI is thinking...</span>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
             </AnimatePresence>
           )}
-        </div>
-        {/* Fixed ChatInputBox at bottom */}
-        {/* TODO: make this a component and it is causing the problem */}
-        <div className="fixed bottom-0 left-0 w-full flex flex-col items-center z-30 bg-black shadow-[0_-2px_16px_0_rgba(0,0,0,0.7)]">
-          <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 pb-2 pt-2">
-            <div className="flex items-end bg-[#18181b] rounded-2xl shadow-lg border border-gray-800 px-4 py-2 gap-2">
-              <ChatInput
-                variant="chat"
-                value={input}
-                onChange={setInput}
-                onSend={handleSend}
-                loading={loadingAI}
-                error={sendError}
-                showAttachments={true}
-              />
-            </div>
-            {/* Info message below chatbox */}
-            <div className="w-full flex justify-center mt-3 mb-2">
-              <div className="text-xs text-gray-400 bg-transparent px-2 py-1 rounded text-center">
-                ChatGPT can make mistakes. Check important info. See Cookie Preferences.
+          
+          {/* AI thinking indicator */}
+          {loadingAI && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full flex justify-start mb-4"
+            >
+              <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                  <span className="text-sm">AI is thinking...</span>
+                </div>
               </div>
+            </motion.div>
+          )}
+        </div>
+        
+        {/* Fixed ChatInputBox at bottom, centered and not overlapping sidebar */}
+        <div className={clsx(
+          'fixed bottom-0 left-0 w-full bg-main-bg shadow-[0_-4px_20px_0_rgba(0,0,0,0.3)] py-4 z-30 transition-all',
+          sidebarOpen ? 'md:left-60 md:w-[calc(100vw-15rem)]' : 'md:left-0 md:w-full'
+        )}>
+          <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0">
+            <ChatInput
+              variant="chat"
+              value={input}
+              onChange={setInput}
+              onSend={handleSend}
+              loading={loadingAI}
+              error={sendError}
+              showAttachments={true}
+            />
+          </div>
+          {/* Info message below chatbox */}
+          <div className="w-full flex justify-center mt-3 mb-2">
+            <div className="text-xs text-gray-400 bg-transparent px-2 py-1 rounded text-center">
+              ChatGPT can make mistakes. Check important info. See Cookie Preferences.
             </div>
           </div>
         </div>
-        <input {...getInputProps()} tabIndex={-1} className="hidden" />
-        {isDragActive && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">
-            Drop files to attach
-          </div>
-        )}
       </div>
+      <input {...getInputProps()} tabIndex={-1} className="hidden" />
+      {isDragActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-main-bg/60 text-white text-2xl font-semibold pointer-events-none">
+          Drop files to attach
+        </div>
+      )}
     </div>
   );
 } 

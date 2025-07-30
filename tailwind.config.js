@@ -13,6 +13,8 @@ module.exports = {
         surface: '#1C1C1C',
         slate: '#1F1F1F',
         accent: '#009EFF',
+        'main-bg': '#212121',
+        'sidebar-bg': '#181818',
       },
       animation: {
         'fade-in': 'fadeIn 200ms ease-in-out',
@@ -37,6 +39,11 @@ module.exports = {
       transitionDuration: {
         '300': '300ms',
         '150': '150ms',
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-conic':
+          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
       },
     },
   },

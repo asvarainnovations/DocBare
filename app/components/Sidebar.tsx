@@ -83,8 +83,13 @@ export default function Sidebar({
   return (
     <aside
       className={clsx(
-        "fixed top-0 left-0 min-h-screen h-screen bg-surface border-r border-gray-800 flex flex-col transition-all duration-300 z-20",
-        open ? "w-60 md:w-64" : "w-0 invisible"
+        "fixed top-0 left-0 min-h-screen h-screen bg-sidebar-bg border-r border-gray-800 flex flex-col transition-all duration-300 z-20",
+        // Mobile: full width when open, hidden when closed
+        open ? "w-full sm:w-80" : "w-0 invisible",
+        // Tablet: medium width
+        "md:w-80",
+        // Desktop: larger width
+        "lg:w-64"
       )}
       style={{ transitionProperty: "width, visibility", overflow: "hidden" }}
     >
@@ -97,19 +102,19 @@ export default function Sidebar({
           className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
           aria-label="Create new chat"
         >
-          <PlusIcon className="w-5 h-5" />
-          {open && <span className="hidden sm:inline">New chat</span>}
+          <PlusIcon className="w-5 h-5 flex-shrink-0" />
+          {open && <span className="hidden sm:inline text-sm">New chat</span>}
         </button>
         <button 
           className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
           aria-label="Search chats"
         >
-          <MagnifyingGlassIcon className="w-5 h-5" />
-          {open && <span className="hidden sm:inline">Search chats</span>}
+          <MagnifyingGlassIcon className="w-5 h-5 flex-shrink-0" />
+          {open && <span className="hidden sm:inline text-sm">Search chats</span>}
         </button>
       </div>
       {/* Chats */}
-      <div className="flex-1 overflow-y-auto px-2 pb-48">
+      <div className="flex-1 overflow-y-auto px-2 pb-20 sm:pb-48">
         <div className="text-xs text-gray-400 px-3 py-2 hidden sm:block">Chats</div>
         <ul className="space-y-1">
           {chats.map((chat) => (
@@ -131,22 +136,22 @@ export default function Sidebar({
                 </span>
                 {/* 3-dot menu, only visible on hover */}
                 <div
-                  className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                   onClick={e => { e.stopPropagation(); setMenuOpen(chat.id === menuOpen ? null : chat.id); }}
                 >
                   <EllipsisVerticalIcon className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer" />
                 </div>
                 {/* Dropdown menu */}
                 {menuOpen === chat.id && (
-                  <div ref={menuRef} className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-36 flex flex-col animate-fade-in">
+                  <div ref={menuRef} className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-32 sm:w-36 flex flex-col animate-fade-in">
                     <button
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-gray-700 rounded-t-lg"
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-white hover:bg-gray-700 rounded-t-lg"
                       onClick={e => { e.stopPropagation(); setRenamingId(chat.id); setRenameValue(chat.sessionName || chat.title || ''); setMenuOpen(null); }}
                     >
                       <PencilIcon className="w-4 h-4" /> Rename
                     </button>
                     <button
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-700 rounded-b-lg"
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-400 hover:bg-red-700 rounded-b-lg"
                       onClick={async e => {
                         e.stopPropagation();
                         setMenuOpen(null);

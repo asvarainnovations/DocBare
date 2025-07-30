@@ -98,10 +98,25 @@ export function withRateLimit(
       // Add rate limit headers to response
       const response = await handler(request, ...args);
       
+      // Handle different response types
       if (response instanceof NextResponse) {
         response.headers.set('X-RateLimit-Limit', config.limit.toString());
         response.headers.set('X-RateLimit-Remaining', Math.max(0, config.limit - entry.count).toString());
         response.headers.set('X-RateLimit-Reset', new Date(entry.resetTime).toISOString());
+        return response;
+      } else if (response instanceof Response) {
+        // Handle standard Response objects (like streaming responses)
+        const newResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: {
+            ...Object.fromEntries(response.headers.entries()),
+            'X-RateLimit-Limit': config.limit.toString(),
+            'X-RateLimit-Remaining': Math.max(0, config.limit - entry.count).toString(),
+            'X-RateLimit-Reset': new Date(entry.resetTime).toISOString()
+          }
+        });
+        return newResponse as R;
       }
 
       // Log rate limit info

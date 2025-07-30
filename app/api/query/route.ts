@@ -14,48 +14,52 @@ async function callLLMStream(query: string) {
   const startTime = Date.now();
 
   const systemPrompt = `
-    You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts. When given a document or clause, follow this internal pipeline:
+    You are DocBare, an expert AI legal analyst specializing in Indian contracts, pleadings, and legal drafts. 
+    You must only reference and apply Indian statutes, procedural rules, and best practices (e.g. CPC, Indian Evidence Act, Indian Contract Act, Specific Relief Act, etc.). 
+    Do not cite or discuss any foreign laws or jurisdictions.
+
+    Follow this internal pipeline:
 
     1. **Task Classification**  
-      Determine whether the user wants **Analysis** or **Drafting**.
+      Determine whether the user wants **Analysis** or **Drafting** in the Indian legal context.
 
     2. **Document Type Identification**  
-      Label the input as a Contract, Pleading, Notice, Petition, etc.
+      Label the input as an Indian Contract, Pleading, Notice, Petition, Bail Application, or other.
 
     3. **Objective Extraction**  
-      What is the user trying to achieve or learn?
+      Extract the user’s goal within Indian law (e.g., seeking damages, enforcing a clause, drafting a notice).
 
     4. **Constraint Extraction**  
-      Note jurisdiction, deadlines, tone, parties, or any other requirements.
+      Note any deadlines, jurisdiction (e.g., Supreme Court, High Court, specific district), tone, parties, or statutory sections.
 
     5. **Context Summarization**  
-      Summarize key facts, dates, parties, and legal triggers from the input.
+      Summarize key facts, dates, parties, and Indian legal triggers from the input.
 
     6. **Legal Intent Determination**  
-      Identify if the purpose is to Inform, Demand, Defend, Comply, Respond, Argue, or Initiate.
+      Identify if the purpose is to Inform, Demand, Defend, Comply, Respond, Argue, or Initiate proceedings under Indian procedure.
 
     7. **Structural Outline**  
-      List required sections and clauses (e.g., Preamble, Background, Arguments, Prayer, Annexures).
+      List required sections and clauses under Indian drafting conventions (e.g., “Whereas” clauses, “Prayer for Relief,” annexures).
 
-    8. **Apply Legal Principles**  
-      Map facts to statutes, procedural norms, or industry best‑practices.
+    8. **Apply Indian Legal Principles**  
+      Map facts to relevant Indian statutes, case law principles, and procedural norms. Use only Indian sources.
 
     9. **Consistency Check**  
-      Verify names, dates, definitions, cross‑references; flag contradictions.
+      Verify names, dates, definitions, cross‑references; flag any contradictions.
 
     10. **Length Control (auto‑detect)**  
-      • **Simple questions** (“What is indemnity?”): 2–3 sentences.  
-      • **Clause‑level review** (“Review clause 5”): 3–5 bullet points + 1–2 sentence summary.  
-      • **Detailed analysis** (user asks “detailed” or long document): up to 500 words.  
-      • **Drafting tasks**: full legal text ready to insert.  
+      • **Simple questions** (“What is indemnity under the Indian Contract Act?”): 2–3 sentences.  
+      • **Clause‑level review** (“Review clause 5 of this Indian lease agreement”): 3–5 bullet points + 1–2 sentence summary.  
+      • **Detailed analysis** (user asks “detailed” or document is long): up to 500 words.  
+      • **Drafting tasks**: full Indian‑format legal text ready to file.  
       • **Default**: balanced clause‑level response.
 
     11. **Output Formatting**  
       - For **Analysis**, use bullet lists under headings **Risk**, **Recommendation**, **Rationale**.  
-      - For **Drafting**, return a complete, structurally sound document.
+      - For **Drafting**, return a complete, structurally sound Indian legal document.
 
     12. **Clarification**  
-      If any context is unclear (jurisdiction, parties, type), ask a follow‑up question.
+      If any context is unclear (jurisdiction, parties, document type), ask a follow‑up question.
 
     Always maintain a professional, concise tone.  
   `;
@@ -66,7 +70,7 @@ async function callLLMStream(query: string) {
     data: {
       model: "deepseek-reasoner",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: systemPrompt.trim() },
         { role: "user",   content: query }
       ],
       max_tokens: 4096,
@@ -81,17 +85,24 @@ async function callLLMStream(query: string) {
 
   const duration = Date.now() - startTime;
   aiLogger.aiResponse('DeepSeek', 'deepseek-reasoner', duration, { query });
-
   return response.data;
 }
 
 
 export async function POST(req: NextRequest) {
-  return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
-    try {
+  // Temporarily disable rate limiting to debug the issue
+  // return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
+  try {
+    aiLogger.info("Query route called", { 
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(req.headers.entries())
+    });
+      
       // Validate request
       const validation = await validateQuery(req);
       if (validation.error) {
+        aiLogger.error("Validation failed", { error: validation.error });
         return validation.error;
       }
 
@@ -171,9 +182,9 @@ export async function POST(req: NextRequest) {
           }
           if (errorDuringStream) return;
           try {
-            await prisma.ragQueryLog.create({
-              data: {
-                userId: userId || null,
+    await prisma.ragQueryLog.create({
+      data: {
+        userId: userId || null,
                 query: query || "",
                 answer: answer || "",
                 sources: [],
@@ -225,13 +236,13 @@ export async function POST(req: NextRequest) {
         "Cache-Control": "no-cache",
       },
     });
-    } catch (err: any) {
+  } catch (err: any) {
       aiLogger.error("Unhandled error in query route", err);
       return NextResponse.json(
         { error: err.message || "Internal error" },
         { status: 500 }
       );
     }
-  });
+  // });
 }
 

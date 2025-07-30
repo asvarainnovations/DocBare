@@ -1,18 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
-import firestore from '@/lib/firestore';
 import { prisma } from '@/lib/prisma';
+import firestore from '@/lib/firestore';
+import { apiLogger } from '@/lib/logger';
 
-export async function GET(req: NextRequest, { params }: { params: { sessionId: string } }) {
-  const { sessionId } = params;
-  if (!sessionId) {
-    return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { sessionId: string } }
+) {
+  try {
+    apiLogger.info('Session messages request received', { sessionId: params.sessionId });
+
+    // Try to get messages from Firestore first (primary storage)
+    try {
+      const snapshot = await firestore.collection('chat_messages')
+        .where('sessionId', '==', params.sessionId)
+        .orderBy('createdAt', 'asc')
+        .get();
+      
+      const messages = snapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      apiLogger.info('Session messages retrieved from Firestore', { 
+        sessionId: params.sessionId,
+        messageCount: messages.length 
+      });
+
+      return NextResponse.json({
+        sessionId: params.sessionId,
+        messages,
+      });
+    } catch (firestoreError) {
+      apiLogger.warn('Firestore fetch failed, trying Prisma', { 
+        sessionId: params.sessionId, 
+        error: firestoreError 
+      });
+
+      // Fallback to Prisma if Firestore fails
+      const messages = await prisma.chatMessage.findMany({
+        where: { sessionId: params.sessionId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+      });
+
+      apiLogger.info('Session messages retrieved from Prisma', { 
+        sessionId: params.sessionId,
+        messageCount: messages.length 
+      });
+
+      return NextResponse.json({
+        sessionId: params.sessionId,
+        messages,
+      });
+    }
+  } catch (error) {
+    apiLogger.error('Error fetching session messages', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch session messages' },
+      { status: 500 }
+    );
   }
-  const snapshot = await firestore.collection('chat_messages')
-    .where('sessionId', '==', sessionId)
-    .orderBy('createdAt', 'asc')
-    .get();
-  const messages = snapshot.docs.map((doc: any) => doc.data());
-  return NextResponse.json({ messages });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { sessionId: string } }) {

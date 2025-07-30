@@ -6,6 +6,7 @@ import axios from 'axios';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useDropzone } from 'react-dropzone';
 import ChatInput from './components/ChatInput';
+import LoadingSkeleton from './components/LoadingSkeleton';
 
 export default function Home() {
   const [input, setInput] = useState('');
@@ -21,67 +22,35 @@ export default function Home() {
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!session?.user?.id) return;
     if (acceptedFiles.length === 1) {
-      // Single file upload (backward compatible)
       const file = acceptedFiles[0];
       setUploadedFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('userId', session.user.id);
       try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-        const result = data.results ? data.results[0] : data.document ? { name: file.name, status: 'done', url: data.document.path } : { name: file.name, status: 'error', error: data.error || 'Upload failed' };
-        setUploadedFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === 'uploading'
-            ? result
-            : f
-        ));
-      } catch (err: any) {
-        setUploadedFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === 'uploading'
-            ? { name: file.name, status: 'error', error: err.message || 'Upload failed' }
-            : f
-        ));
-      }
-    } else if (acceptedFiles.length > 1) {
-      // Multiple file upload
-      for (const file of acceptedFiles) {
-        setUploadedFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
-      }
-      const formData = new FormData();
-      for (const file of acceptedFiles) {
-        formData.append('files', file);
-      }
-      formData.append('userId', session.user.id);
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-        if (data.results && Array.isArray(data.results)) {
-          setUploadedFiles(prev => prev.map(f => {
-            const result = data.results.find((r: any) => r.name === f.name);
-            return result ? result : f;
-          }));
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('userId', session.user.id);
+        const res = await axios.post('/api/upload', formData);
+        if (res.data.url) {
+          setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'done', url: res.data.url } : f));
+          setDocActionMsg(`✅ ${file.name} uploaded successfully!`);
         } else {
-          // fallback: mark all as error
-          setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error', error: 'Upload failed' })));
+          setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', error: 'Upload failed' } : f));
+          setDocActionMsg(`❌ Failed to upload ${file.name}`);
         }
-      } catch (err: any) {
-        setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error', error: err.message || 'Upload failed' })));
+      } catch (err) {
+        setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', error: 'Upload failed' } : f));
+        setDocActionMsg(`❌ Failed to upload ${file.name}`);
       }
+    } else {
+      setDocActionMsg('❌ Please upload one file at a time');
     }
   }, [session?.user?.id]);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     noClick: true,
   });
 
-  // Fetch user documents
+  // Fetch documents
   const fetchDocuments = useCallback(async () => {
     if (!session?.user?.id) return;
     setLoadingDocs(true);
@@ -151,20 +120,25 @@ export default function Home() {
     }
   }
 
+  // Show loading skeleton when transitioning
+  if (loadingFirstPrompt) {
+    return <LoadingSkeleton message="Creating your chat..." />;
+  }
+
   return (
-    <div className="flex-1 flex flex-col justify-center items-center min-h-screen">
-      <div className="flex flex-col items-center w-full">
-        <h1 className="text-2xl font-medium text-white mb-6 text-center">What's on your mind today?</h1>
+    <div className="flex-1 flex flex-col justify-center items-center min-h-screen px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center w-full max-w-4xl">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-medium text-white mb-4 sm:mb-6 text-center">What's on your mind today?</h1>
         {/* Attachment pills/cards UI */}
         {uploadedFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4 w-full max-w-2xl justify-start">
             {uploadedFiles.map((file, idx) => (
-              <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-3 py-2 gap-2 shadow border border-gray-700">
+              <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 gap-1.5 sm:gap-2 shadow border border-gray-700">
                 {/* File icon (PDF, etc.) */}
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
+                <span className="inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
                   {file.name.split('.').pop()?.toUpperCase() || 'DOC'}
                 </span>
-                <span className="truncate max-w-[120px] text-xs text-white">{file.name}</span>
+                <span className="truncate max-w-[80px] sm:max-w-[120px] text-xs text-white">{file.name}</span>
                 {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
                 {file.status === 'done' && <span className="text-green-400 text-xs">Uploaded</span>}
                 {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
@@ -180,7 +154,7 @@ export default function Home() {
             ))}
           </div>
         )}
-        <div className="mx-auto max-w-2xl w-full">
+        <div className="mx-auto w-full max-w-2xl">
           <ChatInput 
             variant="home"
             onSend={handleFirstPrompt} 
@@ -191,20 +165,10 @@ export default function Home() {
             onChange={setInput}
           />
         </div>
-        {/* Loading overlay for first prompt */}
-        {loadingFirstPrompt && (
-          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 text-white text-xl font-semibold">
-            <svg className="animate-spin w-10 h-10 mb-4" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#fff" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="#fff" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-            Creating your chat...
-          </div>
-        )}
       </div>
       <input {...getInputProps()} tabIndex={-1} className="hidden" />
       {isDragActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 text-white text-2xl font-semibold pointer-events-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-main-bg/60 text-white text-lg sm:text-2xl font-semibold pointer-events-none">
           Drop files to attach
         </div>
       )}

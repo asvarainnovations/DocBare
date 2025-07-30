@@ -65,3 +65,6 @@ server-logs.txt
 # Playwright test results and reports
 test-results/
 playwright-report/
+
+# Private system architecture diagram
+Docs/SYSTEM_ARCHITECTURE_DIAGRAM.md

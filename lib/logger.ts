@@ -1,32 +1,15 @@
 import pino from 'pino';
 
-// Define log levels with emoji prefixes
-const LOG_LEVELS = {
-  trace: '🔍',
-  debug: '🔧',
-  info: '🟦',
-  warn: '🟡',
-  error: '🟥',
-  fatal: '💀'
-} as const;
-
-
-
-// Create logger instance
+// Create logger instance - Next.js compatible without worker threads
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV === 'development' ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:standard',
-      ignore: 'pid,hostname',
-    },
-  } : undefined,
+  // Remove transport option to avoid worker thread issues in Next.js
   base: {
     env: process.env.NODE_ENV,
     version: process.env.npm_package_version,
   },
+  // Simplified formatting to avoid webpack issues
+  timestamp: () => `,"time":"${new Date().toISOString()}"`,
 });
 
 // Enhanced logger with context

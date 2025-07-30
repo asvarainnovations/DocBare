@@ -148,18 +148,3 @@ For Firestore setup, security rules, and database management, see **[Firestore G
 ## 🚀 Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme).
-
-
-```mermaid
-graph TD
-    A[User Uploads Document] --> B[Document Stored in Firestore]
-    B --> C[User Requests Analysis]
-    C --> D["/api/documents/analyze"]
-    D --> E[Structured Analysis Result]
-    
-    F[User Asks Question] --> G["/api/query"]
-    G --> H[Streaming AI Response]
-    
-    I[User References Document] --> J["/api/query with Document Context"]
-    J --> K[AI Response with Document Knowledge]
-```

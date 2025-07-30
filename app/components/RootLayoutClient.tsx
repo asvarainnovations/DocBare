@@ -1,41 +1,52 @@
 "use client";
 import Sidebar from "./Sidebar";
 import NavBar from "./NavBar";
+import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { useState } from "react";
 import clsx from "clsx";
 
-export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
+  const { sidebarOpen, setSidebarOpen } = useSidebar();
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);
+  
   return (
-    <div className="min-h-screen flex relative" style={{ width: '100vw' }}>
+    <div className="min-h-screen flex relative overflow-x-hidden">
       {/* Sidebar: overlays on mobile, pushes content on desktop */}
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(false)} selectedChatId={selectedChatId} onSelectChat={setSelectedChatId} />
       {/* Overlay for mobile when sidebar is open */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          className="fixed inset-0 z-30 bg-main-bg/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-label="Close sidebar overlay"
         />
       )}
-      {/* Main area: margin left and width on desktop when sidebar is open, no top padding */}
+      {/* Main area: responsive margin and width */}
       <div className={clsx(
-        'flex-1 flex flex-col min-h-screen transition-all',
-        sidebarOpen ? 'md:ml-60 md:w-[calc(100vw-15rem)]' : 'md:ml-0 md:w-full',
-        'relative'
+        'flex-1 flex flex-col min-h-screen transition-all bg-main-bg',
+        // Mobile: full width, no margin
+        'w-full',
+        // Tablet: full width, no margin
+        'md:w-full',
+        // Desktop: margin when sidebar open
+        sidebarOpen ? 'lg:ml-64 lg:w-[calc(100vw-16rem)]' : 'lg:ml-0 lg:w-full',
+        'relative pt-16' // Add top padding for fixed NavBar
       )}>
-        {/* Absolutely positioned NavBar at the top of main content, overlapping content */}
-        <div className="absolute top-0 left-0 w-full z-10 pointer-events-none">
-          <div className="pointer-events-auto">
-            <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen(true)} />
-          </div>
-        </div>
-        {/* Main content with no top padding, so content can go under NavBar */}
+        {/* NavBar at the top of main content */}
+        <NavBar showSidebarToggle={!sidebarOpen} onSidebarToggle={() => setSidebarOpen(true)} />
+        {/* Main content with top padding for NavBar */}
         <div className="flex-1 flex flex-col">
           {children}
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider>
+      <RootLayoutClientInner>{children}</RootLayoutClientInner>
+    </SidebarProvider>
   );
 }

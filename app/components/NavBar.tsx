@@ -25,28 +25,28 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
 
   return (
     <header className={clsx(
-      'flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm',
-      'bg-transparent'
+      'flex items-center justify-between px-3 sm:px-4 py-2 fixed top-0 left-0 right-0 z-40',
+      'bg-main-bg/95 backdrop-blur-sm border-b border-gray-800'
     )}>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {showSidebarToggle && (
           <button
-            className="p-2 rounded hover:bg-slate/40 transition-colors"
+            className="p-1.5 sm:p-2 rounded hover:bg-slate/40 transition-colors"
             onClick={onSidebarToggle}
             aria-label="Open sidebar"
           >
-            <Bars3Icon className="w-6 h-6 text-white" />
+            <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </button>
         )}
         {/* DocBare Text */}
-        <span className="text-3xl font-semibold tracking-tight text-white select-none">DocBare</span>
+        <span className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-white select-none pl-2 sm:pl-4">DocBare</span>
       </div>
       {/* User Avatar and Auth Button */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {status === 'authenticated' ? (
           <div className="relative" ref={dropdownRef}>
             <button
-              className="flex items-center gap-2 p-2 rounded hover:bg-slate/40 transition-colors"
+              className="flex items-center gap-2 p-1.5 sm:p-2 rounded hover:bg-slate/40 transition-colors"
               onClick={() => setDropdownOpen((v) => !v)}
               aria-label="User menu"
             >
@@ -54,36 +54,36 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
                 <img
                   src={session.user.image}
                   alt="Profile"
-                  className="w-8 h-8 rounded-full object-cover border border-gray-600"
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-gray-600"
                   onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/default-avatar.png'; }}
                 />
               ) : (
-                <UserCircleIcon className="w-8 h-8 text-white" />
+                <UserCircleIcon className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
               )}
             </button>
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-slate border border-gray-700 rounded shadow-lg z-30">
+              <div className="absolute right-0 mt-2 w-48 sm:w-52 bg-slate border border-gray-700 rounded shadow-lg z-30">
                 {isGoogleUser ? (
-                  <div className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-400 cursor-default select-text opacity-70">
+                  <div className="flex items-center gap-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-400 cursor-default select-text opacity-70">
                     <UserIcon className="w-4 h-4" />
                     <span className="truncate">{session.user.email}</span>
                   </div>
                 ) : (
-                  <Link href="/profile" className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+                  <Link href="/profile" className="flex items-center gap-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm hover:bg-gray-700 text-white">
                     <UserIcon className="w-4 h-4" /> Profile
                   </Link>
                 )}
-                <Link href="/settings" className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-white">
+                <Link href="/settings" className="flex items-center gap-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm hover:bg-gray-700 text-white">
                   <Cog6ToothIcon className="w-4 h-4" /> Settings
                 </Link>
-                <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-700 text-red-400" onClick={() => signOut({ callbackUrl: '/' })}>
+                <button className="flex items-center gap-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm hover:bg-gray-700 text-red-400" onClick={() => signOut({ callbackUrl: '/' })}>
                   <ArrowRightOnRectangleIcon className="w-4 h-4" /> Logout
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <button onClick={() => signIn()} className="text-white bg-accent px-4 py-2 rounded">Login</button>
+          <button onClick={() => signIn()} className="text-white bg-accent px-3 sm:px-4 py-1.5 sm:py-2 rounded text-sm">Login</button>
         )}
       </div>
     </header>
