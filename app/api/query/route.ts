@@ -1,68 +1,77 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { prisma } from "@/lib/prisma";
-import firestore from "@/lib/firestore";
-import { validateQuery } from "@/lib/validation";
-import { withRateLimit, rateLimitConfigs } from "@/lib/rateLimit";
 import { aiLogger } from "@/lib/logger";
+import { validateQuery } from "@/lib/validation";
+import { memoryManager } from "@/lib/memory";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 
-// Call DeepSeek LLM for answer (streaming)
-async function callLLMStream(query: string) {
-  aiLogger.aiRequest('DeepSeek', 'deepseek-reasoner', { query });
+async function callLLMStream(query: string, memoryContext: string = '') {
   const startTime = Date.now();
-
+  
   const systemPrompt = `
-    You are DocBare, an expert AI legal analyst specializing in Indian contracts, pleadings, and legal drafts. 
-    You must only reference and apply Indian statutes, procedural rules, and best practices (e.g. CPC, Indian Evidence Act, Indian Contract Act, Specific Relief Act, etc.). 
-    Do not cite or discuss any foreign laws or jurisdictions.
+    You are DocBare, an advanced legal AI assistant specializing in document analysis, legal research, and drafting.
 
-    Follow this internal pipeline:
+    **Core Capabilities:**
+    1. **Document Analysis** - Analyze legal documents, contracts, and agreements
+    2. **Legal Research** - Provide accurate legal information and precedents
+    3. **Document Drafting** - Help create legal documents and contracts
+    4. **Compliance Guidance** - Ensure legal compliance and best practices
+    5. **Risk Assessment** - Identify potential legal risks and issues
 
-    1. **Task Classification**  
-      Determine whether the user wants **Analysis** or **Drafting** in the Indian legal context.
+    **Response Guidelines:**
+    1. **Accuracy** - Provide precise, legally sound information
+    2. **Clarity** - Use clear, professional language
+    3. **Context** - Reference relevant laws, regulations, or precedents
+    4. **Practicality** - Offer actionable advice and next steps
+    5. **Completeness** - Address all aspects of the query thoroughly
+    6. **Reasoning** - Explain your thought process and legal basis
 
-    2. **Document Type Identification**  
-      Label the input as an Indian Contract, Pleading, Notice, Petition, Bail Application, or other.
+    **Document Analysis Process:**
+    1. **Review** - Examine document structure and key provisions
+    2. **Identify** - Highlight important clauses, risks, and opportunities
+    3. **Analyze** - Assess legal implications and compliance requirements
+    4. **Recommend** - Suggest improvements or alternative approaches
+    5. **Summarize** - Provide executive summary of findings
 
-    3. **Objective Extraction**  
-      Extract the user’s goal within Indian law (e.g., seeking damages, enforcing a clause, drafting a notice).
+    **Legal Research Approach:**
+    1. **Jurisdiction** - Consider applicable laws and regulations
+    2. **Precedents** - Reference relevant case law and legal principles
+    3. **Current Status** - Provide up-to-date legal information
+    4. **Practical Impact** - Explain real-world implications
+    5. **Next Steps** - Recommend appropriate actions or further research
 
-    4. **Constraint Extraction**  
-      Note any deadlines, jurisdiction (e.g., Supreme Court, High Court, specific district), tone, parties, or statutory sections.
+    **Document Drafting Principles:**
+    1. **Structure** - Use clear, logical document organization
+    2. **Language** - Employ precise, unambiguous legal terminology
+    3. **Compliance** - Ensure adherence to relevant legal requirements
+    4. **Protection** - Include appropriate safeguards and provisions
+    5. **Clarity** - Make complex legal concepts accessible
 
-    5. **Context Summarization**  
-      Summarize key facts, dates, parties, and Indian legal triggers from the input.
+    **Response Format:**
+    - Use markdown formatting for better readability
+    - Include relevant legal citations when applicable
+    - Provide structured analysis with clear sections
+    - Offer practical recommendations and next steps
+    - Maintain professional, authoritative tone
 
-    6. **Legal Intent Determination**  
-      Identify if the purpose is to Inform, Demand, Defend, Comply, Respond, Argue, or Initiate proceedings under Indian procedure.
+    **Important Notes:**
+    - Always clarify jurisdiction if not specified
+    - Recommend consulting qualified legal counsel for complex matters
+    - Highlight any limitations or disclaimers as appropriate
+    - Provide context for legal recommendations
+    - Suggest additional research or documentation as needed
 
-    7. **Structural Outline**  
-      List required sections and clauses under Indian drafting conventions (e.g., “Whereas” clauses, “Prayer for Relief,” annexures).
-
-    8. **Apply Indian Legal Principles**  
-      Map facts to relevant Indian statutes, case law principles, and procedural norms. Use only Indian sources.
-
-    9. **Consistency Check**  
-      Verify names, dates, definitions, cross‑references; flag any contradictions.
-
-    10. **Length Control (auto‑detect)**  
-      • **Simple questions** (“What is indemnity under the Indian Contract Act?”): 2–3 sentences.  
-      • **Clause‑level review** (“Review clause 5 of this Indian lease agreement”): 3–5 bullet points + 1–2 sentence summary.  
-      • **Detailed analysis** (user asks “detailed” or document is long): up to 500 words.  
-      • **Drafting tasks**: full Indian‑format legal text ready to file.  
-      • **Default**: balanced clause‑level response.
-
-    11. **Output Formatting**  
-      - For **Analysis**, use bullet lists under headings **Risk**, **Recommendation**, **Rationale**.  
-      - For **Drafting**, return a complete, structurally sound Indian legal document.
-
-    12. **Clarification**  
+    **Clarification**  
       If any context is unclear (jurisdiction, parties, document type), ask a follow‑up question.
 
-    Always maintain a professional, concise tone.  
+    Always maintain a professional, concise tone.
   `;
+
+  // Combine system prompt with memory context
+  const enhancedSystemPrompt = memoryContext 
+    ? `${systemPrompt}\n\n## Memory Context:${memoryContext}`
+    : systemPrompt;
 
   const response = await axios({
     method: "post",
@@ -70,7 +79,7 @@ async function callLLMStream(query: string) {
     data: {
       model: "deepseek-reasoner",
       messages: [
-        { role: "system", content: systemPrompt.trim() },
+        { role: "system", content: enhancedSystemPrompt.trim() },
         { role: "user",   content: query }
       ],
       max_tokens: 4096,
@@ -87,7 +96,6 @@ async function callLLMStream(query: string) {
   aiLogger.aiResponse('DeepSeek', 'deepseek-reasoner', duration, { query });
   return response.data;
 }
-
 
 export async function POST(req: NextRequest) {
   // Temporarily disable rate limiting to debug the issue
@@ -114,13 +122,28 @@ export async function POST(req: NextRequest) {
         sessionId,
       });
 
+      // Generate memory context if sessionId is provided
+      let memoryContext = '';
+      if (sessionId) {
+        try {
+          memoryContext = await memoryManager.generateMemoryContext(sessionId, userId, query);
+          aiLogger.info("Memory context generated", { 
+            sessionId, 
+            contextLength: memoryContext.length 
+          });
+        } catch (error) {
+          aiLogger.error("Failed to generate memory context", { error, sessionId });
+          // Continue without memory context if it fails
+        }
+      }
+
     // 1. Call DeepSeek (streaming)
     let answer = "";
     let errorDuringStream: any = null;
     let chunks = [];
     let stream;
     try {
-      stream = await callLLMStream(query);
+      stream = await callLLMStream(query, memoryContext);
     } catch (llmErr: any) {
       const apiError = llmErr?.response?.data?.error;
       if (apiError && apiError.message === "Insufficient Balance") {
@@ -164,85 +187,87 @@ export async function POST(req: NextRequest) {
               }
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (content) {
+                if (parsed.choices && parsed.choices[0]?.delta?.content) {
+                  const content = parsed.choices[0].delta.content;
                   answer += content;
+                  chunks.push(content);
                   controller.enqueue(encoder.encode(content));
                 }
               } catch (e) {
-                // Ignore malformed lines
+                // Ignore parsing errors for incomplete JSON
               }
             }
           }
         });
-        stream.on("end", async () => {
+
+        stream.on("end", () => {
           if (!closed) {
             closed = true;
             controller.close();
           }
-          if (errorDuringStream) return;
-          try {
-    await prisma.ragQueryLog.create({
-      data: {
-        userId: userId || null,
-                query: query || "",
-                answer: answer || "",
-                sources: [],
-              },
-            });
-            aiLogger.success("Logged to Prisma ragQueryLog", { userId, sessionId });
-          } catch (prismaErr: any) {
-            aiLogger.error("Prisma log error", prismaErr);
-          }
-          try {
-            await firestore.collection("docbare_rag_logs").add({
-              userId: userId || null,
-              query: query || "",
-              answer: answer || "",
-              sessionId: sessionId || null,
-              sources: [],
-              createdAt: new Date(),
-            });
-            aiLogger.success("Logged to Firestore docbare_rag_logs", { userId, sessionId });
-          } catch (fsErr: any) {
-            aiLogger.error("Firestore log error", fsErr);
-          }
-          try {
-            await firestore.collection("chat_messages").add({
-              sessionId: sessionId || null,
-              userId: "ai",
-              role: "ASSISTANT",
-              content: answer || "",
-              createdAt: new Date(),
-            });
-            aiLogger.success("Saved assistant message to chat_messages", { userId, sessionId });
-          } catch (msgErr: any) {
-            aiLogger.error("Failed to save assistant message", msgErr);
-          }
         });
-        stream.on("error", async (err: any) => {
-          errorDuringStream = err;
-          aiLogger.error("Stream error during AI response", err);
-          controller.error(err);
+
+        stream.on("error", (error) => {
+          errorDuringStream = error;
+          if (!closed) {
+            closed = true;
+            controller.error(error);
+          }
         });
       },
     });
 
-    // 4. Return streaming response
+    // 3. Store memories if sessionId is provided
+    if (sessionId && !errorDuringStream) {
+      try {
+        // Store user query as conversation memory
+        await memoryManager.storeConversationMemory(sessionId, userId, 'user', query);
+        
+        // Store AI response as conversation memory
+        await memoryManager.storeConversationMemory(sessionId, userId, 'assistant', answer);
+        
+        // Extract and store reasoning from the response
+        const reasoningMatch = answer.match(/## Reasoning:(.*?)(?=##|$)/s);
+        if (reasoningMatch) {
+          await memoryManager.storeReasoningMemory(
+            sessionId, 
+            userId, 
+            reasoningMatch[1].trim(),
+            { source: 'response_analysis' }
+          );
+        }
+        
+        aiLogger.info("Memories stored successfully", { sessionId, userId });
+      } catch (error) {
+        aiLogger.error("Failed to store memories", { error, sessionId, userId });
+        // Don't fail the request if memory storage fails
+      }
+    }
+
+    // 4. Log the complete interaction
+    aiLogger.info("AI query completed", {
+      query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
+      answerLength: answer.length,
+      sessionId,
+      userId,
+      memoryContextLength: memoryContext.length,
+      chunksCount: chunks.length,
+    });
+
     return new NextResponse(readable, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
       },
     });
-  } catch (err: any) {
-      aiLogger.error("Unhandled error in query route", err);
-      return NextResponse.json(
-        { error: err.message || "Internal error" },
-        { status: 500 }
-      );
-    }
+  } catch (error: any) {
+    aiLogger.error("Query route error", { error: error.message, stack: error.stack });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
   // });
 }
 

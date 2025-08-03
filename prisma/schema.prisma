@@ -286,3 +286,19 @@ model DocumentChunkMetadata {
   fileName     String?
   createdAt    DateTime @default(now())
 }
+
+model AgentMemory {
+  id           String   @id @default(uuid())
+  sessionId    String
+  userId       String
+  type         String   // 'conversation' | 'reasoning' | 'decision' | 'context' | 'insight'
+  content      String   @db.Text
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  accessedAt   DateTime @default(now())
+  accessCount  Int      @default(1)
+  
+  @@index([sessionId, userId])
+  @@index([type])
+  @@index([accessedAt])
+}

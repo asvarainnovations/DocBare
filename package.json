@@ -16,7 +16,19 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run test && npm run test:e2e",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:backup": "pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql",
+    "db:reset": "prisma migrate reset --force",
+    "db:migrate": "prisma migrate dev --create-only",
+    "db:deploy": "prisma migrate deploy",
+    "safe-migration": "ts-node --project tsconfig.scripts.json scripts/safe-migration.ts",
+    "test:memory": "ts-node --project tsconfig.scripts.json scripts/test-memory-system.ts",
+    "test:migration": "ts-node --project tsconfig.scripts.json scripts/test-database-migration.ts",
+    "test:api": "ts-node --project tsconfig.scripts.json scripts/test-api-endpoints.ts",
+    "test:all-scripts": "npm run test:memory && npm run test:migration && npm run test:api"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "^4.3.0",
