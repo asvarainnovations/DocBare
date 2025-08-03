@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
     let errorDuringStream: any = null;
     let chunks = [];
     let stream;
+    let finalAnswer = ""; // Store the final answer for memory storage
     try {
       stream = await callLLMStream(query, memoryContext);
     } catch (llmErr: any) {
@@ -203,11 +204,12 @@ export async function POST(req: NextRequest) {
         stream.on("end", () => {
           if (!closed) {
             closed = true;
+            finalAnswer = answer; // Store the final answer
             controller.close();
           }
         });
 
-        stream.on("error", (error) => {
+        stream.on("error", (error: any) => {
           errorDuringStream = error;
           if (!closed) {
             closed = true;
@@ -224,10 +226,10 @@ export async function POST(req: NextRequest) {
         await memoryManager.storeConversationMemory(sessionId, userId, 'user', query);
         
         // Store AI response as conversation memory
-        await memoryManager.storeConversationMemory(sessionId, userId, 'assistant', answer);
+        await memoryManager.storeConversationMemory(sessionId, userId, 'assistant', finalAnswer);
         
         // Extract and store reasoning from the response
-        const reasoningMatch = answer.match(/## Reasoning:(.*?)(?=##|$)/s);
+        const reasoningMatch = finalAnswer.match(/## Reasoning:([\s\S]*?)(?=##|$)/);
         if (reasoningMatch) {
           await memoryManager.storeReasoningMemory(
             sessionId, 
@@ -247,7 +249,7 @@ export async function POST(req: NextRequest) {
     // 4. Log the complete interaction
     aiLogger.info("AI query completed", {
       query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
-      answerLength: answer.length,
+      answerLength: finalAnswer.length,
       sessionId,
       userId,
       memoryContextLength: memoryContext.length,

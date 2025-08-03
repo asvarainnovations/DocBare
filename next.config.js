@@ -43,7 +43,13 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    domains: ['localhost'],
+    domains: [
+      'localhost',
+      'lh3.googleusercontent.com', // Google OAuth profile images
+      'lh4.googleusercontent.com', // Alternative Google image domain
+      'lh5.googleusercontent.com', // Alternative Google image domain
+      'lh6.googleusercontent.com', // Alternative Google image domain
+    ],
     formats: ['image/webp', 'image/avif'],
   },
 

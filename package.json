@@ -28,7 +28,8 @@
     "test:memory": "ts-node --project tsconfig.scripts.json scripts/test-memory-system.ts",
     "test:migration": "ts-node --project tsconfig.scripts.json scripts/test-database-migration.ts",
     "test:api": "ts-node --project tsconfig.scripts.json scripts/test-api-endpoints.ts",
-    "test:all-scripts": "npm run test:memory && npm run test:migration && npm run test:api"
+    "test:continuity": "ts-node --project tsconfig.scripts.json scripts/test-conversation-continuity.ts",
+    "test:all-scripts": "npm run test:memory && npm run test:migration && npm run test:api && npm run test:continuity"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "^4.3.0",

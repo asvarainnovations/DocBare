@@ -21,6 +21,11 @@ import { toast } from 'sonner';
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { sidebarOpen } = useSidebar();
   const [input, setInput] = useState('');
+  
+  // Debug logging for input state
+  useEffect(() => {
+    console.log('🟦 [chat_ui][INFO] Input state changed:', input);
+  }, [input]);
   const [messages, setMessages] = useState<any[]>([]);
   const [sessionMeta, setSessionMeta] = useState<any>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -176,12 +181,17 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   }, [isDragActive]);
 
   async function handleSend(message: string) {
+    console.log('🟦 [chat_ui][INFO] handleSend called with message:', message);
+    
     if (!session?.user?.id) {
       toast.error('Please log in to send messages');
       return;
     }
 
-    if (!message.trim()) return;
+    if (!message.trim()) {
+      console.log('🟦 [chat_ui][INFO] Message is empty, returning');
+      return;
+    }
 
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -199,6 +209,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     let aiMessage: any = null;
 
     try {
+      console.log('🟦 [chat_ui][INFO] Sending message to API:', { message: message.trim(), sessionId: params.chatId, userId: session.user.id });
+      
       // Send message to API
       const response = await fetch('/api/query', {
         method: 'POST',
@@ -206,20 +218,26 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: message.trim(),
+          query: message.trim(),
           sessionId: params.chatId,
           userId: session.user.id,
         }),
       });
 
+      console.log('🟦 [chat_ui][INFO] API response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('🟥 [chat_ui][ERROR] API error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         throw new Error('No response body');
       }
+
+      console.log('🟦 [chat_ui][INFO] Starting to read response stream');
 
       let aiResponse = '';
       aiMessage = {
@@ -244,32 +262,17 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         }
 
         const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              closed = true;
-              break;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.choices?.[0]?.delta?.content) {
-                aiResponse += parsed.choices[0].delta.content;
-                setMessages(prev => prev.map(msg => 
-                  msg.id === aiMessage.id 
-                    ? { ...msg, content: aiResponse }
-                    : msg
-                ));
-              }
-            } catch (e) {
-              // Ignore parsing errors for incomplete JSON
-            }
-          }
-        }
+        console.log('🟦 [chat_ui][INFO] Received chunk:', chunk);
+        // The API returns plain text content directly
+        aiResponse += chunk;
+        setMessages(prev => prev.map(msg => 
+          msg.id === aiMessage.id 
+            ? { ...msg, content: aiResponse }
+            : msg
+        ));
       }
 
+      console.log('🟦 [chat_ui][INFO] Stream completed, final response length:', aiResponse.length);
       reader.releaseLock();
     } catch (error: any) {
       console.error('🟥 [chat_ui][ERROR] Failed to send message:', error);
@@ -512,7 +515,10 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             error={sendError}
             showAttachments={true}
             value={input}
-            onChange={setInput}
+            onChange={(value) => {
+              console.log('🟦 [chat_ui][INFO] Input onChange:', value);
+              setInput(value);
+            }}
             userId={session?.user?.id}
           />
         </div>

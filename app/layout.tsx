@@ -3,10 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { SessionProvider } from "next-auth/react";
 import RootLayoutClient from "./components/RootLayoutClient";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { Toaster } from 'sonner';
+import Providers from "./components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,18 +25,11 @@ export default async function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ErrorBoundary>
-          <SessionProvider session={session}>
+          <Providers session={session}>
             <RootLayoutClient>
               {children}
             </RootLayoutClient>
-            <Toaster 
-              position="top-right"
-              richColors
-              closeButton
-              duration={4000}
-              theme="dark"
-            />
-          </SessionProvider>
+          </Providers>
         </ErrorBoundary>
       </body>
     </html>

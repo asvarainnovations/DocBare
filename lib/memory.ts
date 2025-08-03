@@ -143,6 +143,91 @@ export class MemoryManager {
   }
 
   /**
+   * Retrieve user-level memories across all sessions
+   */
+  async retrieveUserMemories(
+    userId: string,
+    context: string,
+    limit: number = 15,
+    types?: MemoryEntry['type'][],
+    excludeSessionId?: string
+  ): Promise<MemoryEntry[]> {
+    try {
+      let query = firestore.collection('agent_memory')
+        .where('userId', '==', userId)
+        .orderBy('accessedAt', 'desc')
+        .limit(limit * 2); // Get more to filter by relevance
+
+      if (types && types.length > 0) {
+        query = query.where('type', 'in', types);
+      }
+
+      const snapshot = await query.get();
+      let memories: MemoryEntry[] = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        // Exclude current session if specified
+        if (excludeSessionId && data.sessionId === excludeSessionId) {
+          return;
+        }
+        
+        memories.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt.toDate(),
+          accessedAt: data.accessedAt.toDate()
+        } as MemoryEntry);
+      });
+
+      // Filter by relevance to current context
+      if (context.trim()) {
+        memories = this.filterByRelevance(memories, context, limit);
+      } else {
+        memories = memories.slice(0, limit);
+      }
+
+      // Update access count and timestamp for retrieved memories
+      if (memories.length > 0) {
+        await this.updateMemoryAccess(memories.map(m => m.id));
+      }
+
+      aiLogger.info('User memories retrieved', { 
+        userId, 
+        count: memories.length,
+        types: types || 'all',
+        contextLength: context.length
+      });
+
+      return memories;
+    } catch (error) {
+      aiLogger.error('Failed to retrieve user memories', { error, userId });
+      return [];
+    }
+  }
+
+  /**
+   * Filter memories by relevance to current context
+   */
+  private filterByRelevance(memories: MemoryEntry[], context: string, limit: number): MemoryEntry[] {
+    const contextWords = context.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+    
+    return memories
+      .map(memory => {
+        const contentWords = memory.content.toLowerCase().split(/\s+/);
+        const relevanceScore = contextWords.reduce((score, contextWord) => {
+          const matches = contentWords.filter(word => word.includes(contextWord) || contextWord.includes(word));
+          return score + matches.length;
+        }, 0);
+        
+        return { ...memory, relevanceScore };
+      })
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+      .slice(0, limit)
+      .map(({ relevanceScore, ...memory }) => memory);
+  }
+
+  /**
    * Get conversation history for context
    */
   async getConversationHistory(sessionId: string, limit: number = 20): Promise<MemoryEntry[]> {
@@ -163,6 +248,20 @@ export class MemoryManager {
     // For now, return recent context memories
     // TODO: Implement semantic search for better relevance
     return this.retrieveMemories(sessionId, '', query, limit, ['context']);
+  }
+
+  /**
+   * Get user-level conversation history across all sessions
+   */
+  async getUserConversationHistory(userId: string, context: string, limit: number = 10): Promise<MemoryEntry[]> {
+    return this.retrieveUserMemories(userId, context, limit, ['conversation']);
+  }
+
+  /**
+   * Get user-level reasoning chain across all sessions
+   */
+  async getUserReasoningChain(userId: string, context: string, limit: number = 5): Promise<MemoryEntry[]> {
+    return this.retrieveUserMemories(userId, context, limit, ['reasoning']);
   }
 
   /**
@@ -187,53 +286,78 @@ export class MemoryManager {
   }
 
   /**
-   * Generate memory-enhanced context for AI
+   * Generate memory-enhanced context for AI (Enhanced with user-level memories)
    */
   async generateMemoryContext(sessionId: string, userId: string, currentQuery: string): Promise<string> {
     try {
-      const [conversationHistory, reasoningChain, relevantContext] = await Promise.all([
+      // Get session-specific memories
+      const [sessionConversationHistory, sessionReasoningChain, sessionRelevantContext] = await Promise.all([
         this.getConversationHistory(sessionId, 5),
         this.getReasoningChain(sessionId, 3),
         this.getRelevantContext(sessionId, currentQuery, 3)
       ]);
 
+      // Get user-level memories from other sessions
+      const [userConversationHistory, userReasoningChain] = await Promise.all([
+        this.getUserConversationHistory(userId, currentQuery, 5),
+        this.getUserReasoningChain(userId, currentQuery, 3)
+      ]);
+
       let context = '';
 
-      // Add conversation history
-      if (conversationHistory.length > 0) {
-        context += '\n\n## Previous Conversation:\n';
-        conversationHistory.forEach(memory => {
+      // Add current session conversation history
+      if (sessionConversationHistory.length > 0) {
+        context += '\n\n## Current Session Conversation:\n';
+        sessionConversationHistory.forEach(memory => {
           context += `- ${memory.content}\n`;
         });
       }
 
-      // Add reasoning chain
-      if (reasoningChain.length > 0) {
-        context += '\n\n## Previous Reasoning:\n';
-        reasoningChain.forEach(memory => {
+      // Add current session reasoning chain
+      if (sessionReasoningChain.length > 0) {
+        context += '\n\n## Current Session Reasoning:\n';
+        sessionReasoningChain.forEach(memory => {
           context += `- ${memory.content}\n`;
         });
       }
 
-      // Add relevant context
-      if (relevantContext.length > 0) {
-        context += '\n\n## Relevant Context:\n';
-        relevantContext.forEach(memory => {
+      // Add current session relevant context
+      if (sessionRelevantContext.length > 0) {
+        context += '\n\n## Current Session Context:\n';
+        sessionRelevantContext.forEach(memory => {
           context += `- ${memory.content}\n`;
         });
       }
 
-      aiLogger.info('Memory context generated', { 
+      // Add user-level conversation history from other sessions
+      if (userConversationHistory.length > 0) {
+        context += '\n\n## Previous Conversations (Other Sessions):\n';
+        userConversationHistory.forEach(memory => {
+          context += `- [Session: ${memory.sessionId.substring(0, 8)}...] ${memory.content}\n`;
+        });
+      }
+
+      // Add user-level reasoning from other sessions
+      if (userReasoningChain.length > 0) {
+        context += '\n\n## Previous Reasoning (Other Sessions):\n';
+        userReasoningChain.forEach(memory => {
+          context += `- [Session: ${memory.sessionId.substring(0, 8)}...] ${memory.content}\n`;
+        });
+      }
+
+      aiLogger.info('Enhanced memory context generated', { 
         sessionId, 
         contextLength: context.length,
-        conversationCount: conversationHistory.length,
-        reasoningCount: reasoningChain.length,
-        contextCount: relevantContext.length
+        sessionConversationCount: sessionConversationHistory.length,
+        sessionReasoningCount: sessionReasoningChain.length,
+        sessionContextCount: sessionRelevantContext.length,
+        userConversationCount: userConversationHistory.length,
+        userReasoningCount: userReasoningChain.length
       });
 
       return context;
     } catch (error) {
-      aiLogger.error('Failed to generate memory context', { error, sessionId, userId });
+      aiLogger.error('Failed to generate enhanced memory context', { error, sessionId, userId });
       return '';
     }
   }
