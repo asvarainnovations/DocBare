@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
-import crypto from 'crypto';
-
-// Helper function to generate random token
-function generateInviteCode(): string {
-  return crypto.randomBytes(16).toString('hex');
-}
+import { requireAdmin, generateInviteCode } from '@/lib/adminUtils';
 
 // Helper function to add hours to current time
 function addHours(date: Date, hours: number): Date {
@@ -18,27 +11,8 @@ function addHours(date: Date, hours: number): Date {
 
 export async function POST(req: NextRequest) {
   try {
-    // Check if user is authenticated and is an admin
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is an admin
-    const admin = await prisma.admin.findUnique({
-      where: { userId: session.user.id },
-      include: { user: true }
-    });
-
-    if (!admin || !admin.active) {
-      return NextResponse.json(
-        { error: 'Admin access required' },
-        { status: 403 }
-      );
-    }
+    // Check admin access
+    const { admin } = await requireAdmin();
 
     const { email } = await req.json();
     
@@ -79,7 +53,7 @@ export async function POST(req: NextRequest) {
     console.info('🟩 [admin_invite][SUCCESS] Admin invite created:', { 
       code, 
       email, 
-      invitedBy: admin.user.email,
+      invitedBy: admin.user?.email || 'Unknown',
       expiresAt 
     });
 
@@ -108,26 +82,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    // Check if user is authenticated and is an admin
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is an admin
-    const admin = await prisma.admin.findUnique({
-      where: { userId: session.user.id }
-    });
-
-    if (!admin || !admin.active) {
-      return NextResponse.json(
-        { error: 'Admin access required' },
-        { status: 403 }
-      );
-    }
+    // Check admin access
+    await requireAdmin();
 
     // Get all pending invites
     const invites = await prisma.adminInvite.findMany({

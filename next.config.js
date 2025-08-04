@@ -12,23 +12,42 @@ const nextConfig = {
 
   // Webpack configuration for better code splitting
   webpack: (config, { dev, isServer }) => {
-    // Optimize bundle splitting
-    config.optimization.splitChunks = {
-      chunks: 'all',
-      cacheGroups: {
-        vendor: {
-          test: /[\\/]node_modules[\\/]/,
-          name: 'vendors',
-          chunks: 'all',
-        },
-        common: {
-          name: 'common',
-          minChunks: 2,
-          chunks: 'all',
-          enforce: true,
-        },
-      },
+    // Fix module compatibility issues
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
     };
+
+    // Handle problematic modules
+    config.module.rules.push({
+      test: /\.m?js$/,
+      type: 'javascript/auto',
+      resolve: {
+        fullySpecified: false,
+      },
+    });
+
+    // Optimize bundle splitting (only in production)
+    if (!dev) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+          common: {
+            name: 'common',
+            minChunks: 2,
+            chunks: 'all',
+            enforce: true,
+          },
+        },
+      };
+    }
 
     // Dynamic imports for heavy components
     if (!isServer) {
@@ -43,12 +62,27 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    domains: [
-      'localhost',
-      'lh3.googleusercontent.com', // Google OAuth profile images
-      'lh4.googleusercontent.com', // Alternative Google image domain
-      'lh5.googleusercontent.com', // Alternative Google image domain
-      'lh6.googleusercontent.com', // Alternative Google image domain
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'localhost',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com', // Google OAuth profile images
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh4.googleusercontent.com', // Alternative Google image domain
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh5.googleusercontent.com', // Alternative Google image domain
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh6.googleusercontent.com', // Alternative Google image domain
+      },
     ],
     formats: ['image/webp', 'image/avif'],
   },

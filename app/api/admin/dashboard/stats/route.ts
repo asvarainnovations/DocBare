@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/adminUtils';
 
 export async function GET(req: NextRequest) {
   try {
+    // Check admin access
+    await requireAdmin();
     // Get total feedbacks
     const totalFeedbacks = await prisma.feedback.count();
 

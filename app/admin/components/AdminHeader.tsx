@@ -1,10 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { MagnifyingGlassIcon, BellIcon } from '@heroicons/react/24/outline';
 
 export default function AdminHeader() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { data: session } = useSession();
+
+  // Get user info from session
+  const userName = session?.user?.name || 'Admin User';
+  const userEmail = session?.user?.email || 'admin@asvara.com';
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <header className="bg-gray-800 border-b border-gray-700 h-16 flex items-center justify-between px-6">
@@ -32,11 +39,11 @@ export default function AdminHeader() {
         {/* User Profile */}
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium text-white">A</span>
+            <span className="text-sm font-medium text-white">{userInitial}</span>
           </div>
           <div className="hidden md:block">
-            <p className="text-sm font-medium text-white">Admin User</p>
-            <p className="text-xs text-gray-400">admin@asvara.com</p>
+            <p className="text-sm font-medium text-white">{userName}</p>
+            <p className="text-xs text-gray-400">{userEmail}</p>
           </div>
         </div>
       </div>

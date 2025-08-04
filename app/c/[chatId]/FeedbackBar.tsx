@@ -14,10 +14,13 @@ export default function FeedbackBar({ sessionId, userId }: { sessionId: string; 
     setError(null);
     
     try {
+      // Convert numeric rating to string format
+      const ratingString = rating > 0 ? 'good' : 'bad';
+      
       await axios.post('/api/feedback', {
         sessionId,
         userId,
-        rating,
+        rating: ratingString,
         comments: comment,
       });
       setSubmitted(true);

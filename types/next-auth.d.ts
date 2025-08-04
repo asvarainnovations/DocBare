@@ -10,6 +10,15 @@ declare module 'next-auth' {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      isAdmin?: boolean;
+      adminId?: string;
     };
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    isAdmin?: boolean;
+    adminId?: string;
   }
 } 

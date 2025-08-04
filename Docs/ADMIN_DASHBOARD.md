@@ -76,10 +76,6 @@ model Feedback {
   rating       String   // 'good' | 'bad'
   comments     String?
   createdAt    DateTime @default(now())
-  isResolved   Boolean  @default(false)
-  resolvedAt   DateTime?
-  resolvedBy   String?
-  adminNotes   String?
   
   user         User     @relation(fields: [userId], references: [id])
   session      ChatSession @relation(fields: [sessionId], references: [id])
@@ -87,6 +83,7 @@ model Feedback {
   @@index([userId])
   @@index([sessionId])
   @@index([createdAt])
+  @@unique([userId, sessionId, messageIndex]) // Prevent duplicate feedback for same message
 }
 ```
 

@@ -33,7 +33,7 @@ export default function FeedbackSection({
       await axios.post('/api/feedback', {
         sessionId,
         userId,
-        rating: 1,
+        rating: 'good',
         messageIndex,
         messageId,
       });
@@ -60,7 +60,7 @@ export default function FeedbackSection({
       await axios.post('/api/feedback', {
         sessionId,
         userId,
-        rating: -1,
+        rating: 'bad',
         messageIndex,
         messageId,
         comments: comment,

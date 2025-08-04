@@ -58,6 +58,23 @@ export const authOptions: AuthOptions = {
       if (user) {
         token.id = user.id;
         token.picture = user.image || ((profile as any)?.picture);
+        
+        // Check if user is an admin and add to token
+        try {
+          const admin = await prisma.admin.findUnique({
+            where: { 
+              userId: user.id,
+              active: true 
+            }
+          });
+          token.isAdmin = !!admin;
+          if (admin) {
+            token.adminId = admin.id;
+          }
+        } catch (error) {
+          console.error('Error checking admin status in JWT callback:', error);
+          token.isAdmin = false;
+        }
       }
       return token;
     },
@@ -65,6 +82,11 @@ export const authOptions: AuthOptions = {
       if (session.user && token?.id) {
         session.user.id = token.id as string;
         session.user.image = token.picture;
+        // Add admin status from token to session
+        session.user.isAdmin = token.isAdmin as boolean;
+        if (token.adminId) {
+          session.user.adminId = token.adminId as string;
+        }
       }
       return session;
     },

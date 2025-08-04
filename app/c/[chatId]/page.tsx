@@ -470,7 +470,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       await axios.post('/api/feedback', {
         sessionId: params.chatId,
         userId: session?.user?.id,
-        rating: type === 'good' ? 5 : 1,
+        rating: type,
         comments: comment || `User marked message ${messageIndex} as ${type}`,
         messageIndex,
         feedbackType: type

@@ -4,10 +4,20 @@ import NavBar from "./NavBar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { useState } from "react";
 import clsx from "clsx";
+import { usePathname } from "next/navigation";
 
 function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);
+  const pathname = usePathname();
+  
+  // Check if current page is an admin page
+  const isAdminPage = pathname?.startsWith('/admin');
+  
+  // If it's an admin page, render children directly without global navigation
+  if (isAdminPage) {
+    return <>{children}</>;
+  }
   
   return (
     <div className="min-h-screen flex relative overflow-x-hidden">
