@@ -28,6 +28,7 @@ Welcome to the DocBare documentation! This directory contains comprehensive docu
 
 ### **Database & Storage**
 - **[🔥 Firestore Guide](FIRESTORE_GUIDE.md)** - Database setup, security rules, and management
+- **[📊 Firestore Indexes Setup](FIRESTORE_INDEXES_SETUP.md)** - Index configuration and deployment
 - **[📊 Codebase Analysis](CODEBASE_ANALYSIS.md)** - Detailed assessment of current codebase structure
 
 ### **Development & Planning**

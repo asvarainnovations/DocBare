@@ -29,6 +29,24 @@ model User {
   sessions      Session[]
   subscriptions Subscription[]
   chatSessions  ChatSession[]
+  feedbacks     Feedback[]
+  admin         Admin?
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  createdBy String?  // References another admin who invited them
+  active    Boolean  @default(true)
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdByAdmin Admin? @relation("AdminInvites", fields: [createdBy], references: [id])
+  invitedAdmins Admin[] @relation("AdminInvites")
+  invites   AdminInvite[]
+  
+  @@index([userId])
+  @@index([createdBy])
 }
 
 model Service {
@@ -241,6 +259,7 @@ model ChatSession {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   messages  ChatMessage[]
+  feedbacks Feedback[]
   user      User        @relation(fields: [userId], references: [id])
 }
 
@@ -301,4 +320,40 @@ model AgentMemory {
   @@index([sessionId, userId])
   @@index([type])
   @@index([accessedAt])
+}
+
+model AdminInvite {
+  code        String   @id // Random 32-char token
+  email       String
+  invitedBy   String?  // References admin who created the invite
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  redeemed    Boolean  @default(false)
+  redeemedAt  DateTime?
+  
+  invitedByAdmin Admin? @relation(fields: [invitedBy], references: [id])
+  
+  @@index([email])
+  @@index([code])
+}
+
+model Feedback {
+  id           String   @id @default(uuid())
+  userId       String
+  sessionId    String
+  messageIndex Int?
+  rating       String   // 'good' | 'bad'
+  comments     String?
+  createdAt    DateTime @default(now())
+  isResolved   Boolean  @default(false)
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  adminNotes   String?
+  
+  user         User     @relation(fields: [userId], references: [id])
+  session      ChatSession @relation(fields: [sessionId], references: [id])
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([createdAt])
 }

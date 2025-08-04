@@ -3,23 +3,29 @@ import { prisma } from '@/lib/prisma';
 import firestore from '@/lib/firestore';
 import axios from 'axios';
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
 async function generateChatTitle(prompt: string) {
   const response = await axios.post(
-    'https://api.deepseek.com/v1/chat/completions',
+    'https://api.openai.com/v1/chat/completions',
     {
-      model: 'deepseek-reasoner',
+      model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: `Summarize this user query in 5 words or less for a chat title: ${prompt}` }
+        { 
+          role: 'system', 
+          content: `You are a legal assistant. Create a concise, professional chat title (3-8 words) for this legal query. The title should be descriptive, clear, and relevant to the legal context. Return only the title, no quotes or extra text.`
+        },
+        { 
+          role: 'user', 
+          content: `Create a chat title for this legal query: "${prompt}"` 
+        }
       ],
-      max_tokens: 16,
-      temperature: 0.5,
+      max_tokens: 20,
+      temperature: 0.3,
     },
-    { headers: { 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` } }
+    { headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` } }
   );
-  return response.data.choices[0].message.content.trim().replace(/^"|"$/g, '');
+  return response.data.choices[0].message.content.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
 }
 
 export async function POST(req: NextRequest) {

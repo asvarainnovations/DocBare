@@ -8,6 +8,11 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        'legal': ['Inter', 'system-ui', 'sans-serif'],
+        'legal-content': ['Source Sans Pro', 'Inter', 'system-ui', 'sans-serif'],
+        'legal-mono': ['JetBrains Mono', 'Monaco', 'Menlo', 'monospace'],
+      },
       colors: {
         background: '#111111',
         surface: '#1C1C1C',

@@ -5,27 +5,24 @@ import clsx from 'clsx';
 import axios from 'axios';
 import { useSession, signIn } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useDropzone } from 'react-dropzone';
-import AnimatedCopyButton from '../../components/AnimatedCopyButton';
-import FeedbackSection from '../../components/FeedbackSection';
-import RegenerateButton from '../../components/RegenerateButton';
+
+import AnimatedCopyButton from '@/app/components/AnimatedCopyButton';
+import FeedbackSection from '@/app/components/FeedbackSection';
+import RegenerateButton from '@/app/components/RegenerateButton';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useRouter } from 'next/navigation';
-import ChatInput from '../../components/ChatInput';
-import { useSidebar } from '../../components/SidebarContext';
-import LoadingSkeleton from '../../components/LoadingSkeleton';
+import ChatInput from '@/app/components/ChatInput';
+import { useSidebar } from '@/app/components/SidebarContext';
+import LoadingSkeleton from '@/app/components/LoadingSkeleton';
 import { toast } from 'sonner';
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { sidebarOpen } = useSidebar();
   const [input, setInput] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }[]>([]);
   
-  // Debug logging for input state
-  useEffect(() => {
-    console.log('🟦 [chat_ui][INFO] Input state changed:', input);
-  }, [input]);
   const [messages, setMessages] = useState<any[]>([]);
   const [sessionMeta, setSessionMeta] = useState<any>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -38,59 +35,48 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [errorMeta, setErrorMeta] = useState<string | null>(null);
   const [errorMessages, setErrorMessages] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ [idx: number]: 'good' | 'bad' | undefined }>({});
+  const autoResponseGeneratedRef = useRef(false);
+
+  // Debug logging for input state
+  useEffect(() => {
+    console.log('🟦 [chat_ui][INFO] Input state changed:', input);
+  }, [input]);
+
+  // Debug logging for session and component state
+  useEffect(() => {
+    console.log('🟦 [chat_ui][INFO] Chat page mounted/updated:', {
+      chatId: params.chatId,
+      sessionStatus: status,
+      sessionExists: !!session,
+      userId: session?.user?.id,
+      messagesCount: messages.length,
+      loadingAI,
+      loadingMeta,
+      loadingMessages
+    });
+    
+    // Reset auto-response flag when chat ID changes
+    autoResponseGeneratedRef.current = false;
+  }, [params.chatId, status, session, messages.length, loadingAI, loadingMeta, loadingMessages]);
   
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    console.info('🟦 [chat_ui][INFO] Files dropped:', acceptedFiles);
-    
-    if (!acceptedFiles.length || !session?.user?.id) return;
-    
-    try {
-      // Handle file upload logic
-      const formData = new FormData();
-      formData.append('file', acceptedFiles[0]);
-      formData.append('userId', session.user.id);
-      
-      const response = await axios.post('/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-          console.info('🟦 [chat_ui][INFO] Upload progress:', percentCompleted + '%');
-        },
-      });
-      
-      console.info('🟦 [chat_ui][SUCCESS] File uploaded successfully:', response.data);
-      toast.success(`File "${acceptedFiles[0].name}" uploaded successfully!`);
-      
-      // Trigger document ingestion
-      if (response.data.url) {
-        try {
-          await axios.post('/api/ingest', {
-            documentId: response.data.documentId,
-            userId: session.user.id,
-          });
-          console.info('🟦 [chat_ui][SUCCESS] Document ingestion started');
-          toast.success('Document processing started');
-        } catch (ingestError) {
-          console.error('🟥 [chat_ui][ERROR] Failed to start ingestion:', ingestError);
-          toast.error('Failed to start document processing');
-        }
+  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }) => {
+    setUploadedFiles(prev => {
+      const existingIndex = prev.findIndex(f => f.name === file.name);
+      if (existingIndex >= 0) {
+        // Update existing file
+        const updated = [...prev];
+        updated[existingIndex] = file;
+        return updated;
+      } else {
+        // Add new file
+        return [...prev, file];
       }
-      
-    } catch (error: any) {
-      console.error('🟥 [chat_ui][ERROR] File upload failed:', error);
-      toast.error(error.response?.data?.error || 'Failed to upload file');
-    }
-  }, [session?.user?.id]);
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    noClick: true,
-  });
+    });
+  }, []);
+
 
   // Check for optimistic first message from sessionStorage
   useEffect(() => {
@@ -168,6 +154,180 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     fetchMessages();
   }, [params.chatId, session?.user?.id]);
 
+  // Function to generate AI response (separate from handleSend to avoid dependency issues)
+  const generateAIResponse = async (message: string) => {
+    if (!session?.user?.id) {
+      console.error('🟥 [chat_ui][ERROR] No session or user ID');
+      return;
+    }
+
+    setLoadingAI(true);
+    let aiMessage: any = null;
+
+    try {
+      const requestBody = {
+        query: message.trim(),
+        sessionId: params.chatId,
+        userId: session.user.id,
+      };
+      
+      const response = await fetch('/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🟥 [chat_ui][ERROR] Auto-response API error:', errorText);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        console.error('🟥 [chat_ui][ERROR] No response body reader for auto-response');
+        return;
+      }
+
+      let aiResponse = '';
+      aiMessage = {
+        id: `ai-auto-${Date.now()}`,
+        sessionId: params.chatId,
+        userId: session.user.id,
+        role: 'ASSISTANT',
+        content: '',
+        createdAt: new Date()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+
+      const decoder = new TextDecoder();
+      let closed = false;
+
+      while (!closed) {
+        const { done, value } = await reader.read();
+        if (done) {
+          closed = true;
+          break;
+        }
+
+        const chunk = decoder.decode(value);
+        aiResponse += chunk;
+        setMessages(prev => prev.map(msg => 
+          msg.id === aiMessage.id 
+            ? { ...msg, content: aiResponse }
+            : msg
+        ));
+      }
+
+      reader.releaseLock();
+
+      // Save the AI message to the database
+      if (aiResponse.trim()) {
+        try {
+          await axios.post('/api/chat', {
+            sessionId: params.chatId,
+            userId: session.user.id,
+            role: 'ASSISTANT',
+            content: aiResponse.trim()
+          });
+          console.info('🟩 [chat_ui][SUCCESS] Auto AI message saved to database');
+        } catch (saveError) {
+          console.error('🟥 [chat_ui][ERROR] Failed to save auto AI message:', saveError);
+          // Don't fail the entire request if saving fails
+        }
+      }
+    } catch (error: any) {
+      console.error('🟥 [chat_ui][ERROR] Failed to generate auto AI response:', error.message);
+      
+      // Remove the AI message if it was added
+      if (aiMessage) {
+        setMessages(prev => prev.filter(msg => msg.id !== aiMessage.id));
+      }
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  // Auto-generate AI response for first message if it's a new chat
+  useEffect(() => {
+    const shouldGenerateFirstResponse = async () => {
+      // Don't proceed if we're still loading or if we've already generated a response
+      if (!params.chatId || !session?.user?.id || loadingMessages || loadingMeta || autoResponseGeneratedRef.current || loadingAI) {
+        console.info('🟦 [chat_ui][INFO] Auto-response check skipped:', {
+          hasChatId: !!params.chatId,
+          hasUserId: !!session?.user?.id,
+          loadingMessages,
+          loadingMeta,
+          autoResponseGenerated: autoResponseGeneratedRef.current,
+          loadingAI
+        });
+        return;
+      }
+      
+      // Wait for both messages and metadata to be fully loaded
+      if (loadingMessages || loadingMeta) {
+        console.info('🟦 [chat_ui][INFO] Waiting for data to load:', { loadingMessages, loadingMeta });
+        return;
+      }
+      
+      // Check if this is a new chat with only one user message
+      const userMessages = messages.filter(msg => msg.role === 'USER');
+      const aiMessages = messages.filter(msg => msg.role === 'ASSISTANT');
+      
+      console.info('🟦 [chat_ui][INFO] Auto-response check:', {
+        userMessages: userMessages.length,
+        aiMessages: aiMessages.length,
+        totalMessages: messages.length
+      });
+      
+      // Safety check: if we already have AI messages, don't generate more
+      if (aiMessages.length > 0) {
+        autoResponseGeneratedRef.current = true;
+        console.info('🟦 [chat_ui][INFO] AI messages already exist, skipping auto-response');
+        return;
+      }
+      
+      // Only generate auto-response if:
+      // 1. There's exactly one user message
+      // 2. No AI messages exist
+      // 3. This appears to be a new chat (not an existing one being loaded)
+      if (userMessages.length === 1 && aiMessages.length === 0) {
+        const firstUserMessage = userMessages[0];
+        
+        // Check if this is a new chat by looking at session metadata
+        const sessionAge = sessionMeta?.createdAt ? Date.now() - new Date(sessionMeta.createdAt).getTime() : 0;
+        const isNewSession = sessionAge < 120000; // Within the last 2 minutes
+        
+        // Also check message age as a backup
+        const messageAge = Date.now() - new Date(firstUserMessage.createdAt).getTime();
+        const isRecentMessage = messageAge < 120000; // Within the last 2 minutes
+        
+        console.info('🟦 [chat_ui][INFO] Auto-response decision:', {
+          sessionAge: Math.round(sessionAge / 1000) + 's',
+          messageAge: Math.round(messageAge / 1000) + 's',
+          isNewSession,
+          isRecentMessage,
+          shouldGenerate: isNewSession && isRecentMessage
+        });
+        
+        if (isNewSession && isRecentMessage) {
+          autoResponseGeneratedRef.current = true; // Prevent multiple auto-responses
+          console.info('🟦 [chat_ui][INFO] Auto-generating AI response for new chat');
+          await generateAIResponse(firstUserMessage.content);
+        } else {
+          // This is an existing chat - don't auto-generate
+          autoResponseGeneratedRef.current = true;
+          console.info('🟦 [chat_ui][INFO] Existing chat detected, skipping auto-response');
+        }
+      }
+    };
+
+    shouldGenerateFirstResponse();
+  }, [params.chatId, session?.user?.id, loadingMessages, loadingMeta, loadingAI, messages.length, sessionMeta]); // Added sessionMeta to dependencies
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (lastMsgRef.current) {
@@ -175,21 +335,16 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [messages]);
 
-  // Handle drag and drop visual feedback
-  useEffect(() => {
-    setIsDragging(isDragActive);
-  }, [isDragActive]);
 
-  async function handleSend(message: string) {
-    console.log('🟦 [chat_ui][INFO] handleSend called with message:', message);
-    
+
+    async function handleSend(message: string) {
     if (!session?.user?.id) {
+      console.error('🟥 [chat_ui][ERROR] No session or user ID');
       toast.error('Please log in to send messages');
       return;
     }
 
     if (!message.trim()) {
-      console.log('🟦 [chat_ui][INFO] Message is empty, returning');
       return;
     }
 
@@ -209,7 +364,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     let aiMessage: any = null;
 
     try {
-      console.log('🟦 [chat_ui][INFO] Sending message to API:', { message: message.trim(), sessionId: params.chatId, userId: session.user.id });
+      const requestBody = {
+        query: message.trim(),
+          sessionId: params.chatId,
+        userId: session.user.id,
+      };
       
       // Send message to API
       const response = await fetch('/api/query', {
@@ -217,14 +376,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          query: message.trim(),
-          sessionId: params.chatId,
-          userId: session.user.id,
-        }),
+        body: JSON.stringify(requestBody),
       });
-
-      console.log('🟦 [chat_ui][INFO] API response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -236,8 +389,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       if (!reader) {
         throw new Error('No response body');
       }
-
-      console.log('🟦 [chat_ui][INFO] Starting to read response stream');
 
       let aiResponse = '';
       aiMessage = {
@@ -262,7 +413,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         }
 
         const chunk = decoder.decode(value);
-        console.log('🟦 [chat_ui][INFO] Received chunk:', chunk);
         // The API returns plain text content directly
         aiResponse += chunk;
         setMessages(prev => prev.map(msg => 
@@ -272,10 +422,25 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         ));
       }
 
-      console.log('🟦 [chat_ui][INFO] Stream completed, final response length:', aiResponse.length);
       reader.releaseLock();
+
+      // Save the AI message to the database
+      if (aiResponse.trim()) {
+        try {
+          await axios.post('/api/chat', {
+            sessionId: params.chatId,
+            userId: session.user.id,
+            role: 'ASSISTANT',
+            content: aiResponse.trim()
+          });
+          console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
+        } catch (saveError) {
+          console.error('🟥 [chat_ui][ERROR] Failed to save AI message:', saveError);
+          // Don't fail the entire request if saving fails
+        }
+      }
     } catch (error: any) {
-      console.error('🟥 [chat_ui][ERROR] Failed to send message:', error);
+      console.error('🟥 [chat_ui][ERROR] Failed to send message:', error.message);
       const errorMessage = error.message || 'Failed to send message';
       setSendError(errorMessage);
       toast.error(errorMessage);
@@ -325,7 +490,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   }
 
   return (
-    <div className="min-h-screen flex" {...getRootProps()}>
+    <div className="min-h-screen flex">
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-main-bg pb-32"> 
         {/* Chat session metadata */}
@@ -384,18 +549,18 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                             h4: ({ children }) => <h4 className="text-sm font-semibold text-white mb-2 mt-3 first:mt-0">{children}</h4>,
                             
                             // Paragraphs
-                            p: ({ children }) => <p className="text-white mb-3 leading-relaxed last:mb-0">{children}</p>,
+                            p: ({ children }) => <p className="text-white mb-3 leading-relaxed last:mb-0 font-legal-content text-base">{children}</p>,
                             
                             // Lists
-                            ul: ({ children }) => <ul className="text-white mb-4 space-y-1 list-disc list-inside">{children}</ul>,
-                            ol: ({ children }) => <ol className="text-white mb-4 space-y-1 list-decimal list-inside">{children}</ol>,
-                            li: ({ children }) => <li className="text-white leading-relaxed">{children}</li>,
+                            ul: ({ children }) => <ul className="text-white mb-4 space-y-1 list-disc list-inside font-legal-content">{children}</ul>,
+                            ol: ({ children }) => <ol className="text-white mb-4 space-y-1 list-decimal list-inside font-legal-content">{children}</ol>,
+                            li: ({ children }) => <li className="text-white leading-relaxed font-legal-content">{children}</li>,
                             
                             // Code blocks
                             code: ({ children, className }) => {
                               const isInline = !className;
                               if (isInline) {
-                                return <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>;
+                                return <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-legal-mono">{children}</code>;
                               }
                               const language = className?.replace('language-', '') || 'text';
                               return (
@@ -407,6 +572,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                                       margin: 0,
                                       borderRadius: '0.5rem',
                                       fontSize: '0.875rem',
+                                      fontFamily: 'JetBrains Mono, Monaco, Menlo, monospace',
                                     }}
                                   >
                                     {String(children).replace(/\n$/, '')}
@@ -474,7 +640,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ) : (
                     <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
                       <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md max-w-full">
-                        <p className="text-sm md:text-base leading-relaxed break-words">
+                        <p className="text-sm md:text-base leading-relaxed break-words font-legal-content">
                           {msg.content}
                         </p>
                       </div>
@@ -486,10 +652,10 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           )}
           
           {/* Loading indicator for AI response */}
-          {loadingAI && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              {loadingAI && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
               className="w-full flex justify-start mb-4"
             >
               <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
@@ -500,10 +666,65 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   </div>
                 </div>
               </div>
-            </motion.div>
+                </motion.div>
           )}
         </div>
       </div>
+
+      {/* Uploaded Files Display */}
+      {uploadedFiles.length > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 z-20 bg-main-bg">
+          <div className="max-w-4xl mx-auto px-4 py-2">
+            <div className="flex flex-wrap gap-2">
+              {uploadedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className={clsx(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm",
+                    file.status === 'uploading' && "bg-gray-800 border-gray-600 text-gray-300",
+                    file.status === 'done' && "bg-green-900 border-green-600 text-green-300",
+                    file.status === 'error' && "bg-red-900 border-red-600 text-red-300"
+                  )}
+                >
+                  {/* File Icon */}
+                  <div className="flex-shrink-0">
+                    {file.status === 'uploading' ? (
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : file.status === 'done' ? (
+                      <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  
+                  {/* File Name */}
+                  <span className="truncate max-w-32">{file.name}</span>
+                  
+                  {/* File Type */}
+                  <span className="text-xs opacity-70">
+                    {file.name.split('.').pop()?.toUpperCase()}
+                  </span>
+                  
+                  {/* Remove Button */}
+                  <button
+                    onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== index))}
+                    className="ml-2 text-gray-400 hover:text-white transition-colors"
+                    aria-label="Remove file"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fixed ChatInput at bottom */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-main-bg shadow-[0_-4px_20px_0_rgba(0,0,0,0.3)]">
@@ -520,16 +741,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
               setInput(value);
             }}
             userId={session?.user?.id}
+            onFileUpload={handleFileUpload}
           />
         </div>
       </div>
 
-      {/* Drag and drop overlay */}
-      {isDragging && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-main-bg/80 text-white text-lg sm:text-2xl font-semibold pointer-events-none">
-          Drop files to attach
-        </div>
-      )}
+
 
       {/* Screen reader announcements */}
       <div ref={liveRegionRef} className="sr-only" aria-live="polite" aria-atomic="true" />

@@ -1,0 +1,174 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import crypto from 'crypto';
+
+// Helper function to generate random token
+function generateInviteCode(): string {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+// Helper function to add hours to current time
+function addHours(date: Date, hours: number): Date {
+  const result = new Date(date);
+  result.setHours(result.getHours() + hours);
+  return result;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    // Check if user is authenticated and is an admin
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Check if user is an admin
+    const admin = await prisma.admin.findUnique({
+      where: { userId: session.user.id },
+      include: { user: true }
+    });
+
+    if (!admin || !admin.active) {
+      return NextResponse.json(
+        { error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const { email } = await req.json();
+    
+    if (!email) {
+      return NextResponse.json(
+        { error: 'Email is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user already exists and is an admin
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: { admin: true }
+    });
+
+    if (existingUser?.admin) {
+      return NextResponse.json(
+        { error: 'User is already an admin' },
+        { status: 400 }
+      );
+    }
+
+    // Generate invite code
+    const code = generateInviteCode();
+    const expiresAt = addHours(new Date(), 24); // 24 hours from now
+
+    // Create invite
+    const invite = await prisma.adminInvite.create({
+      data: {
+        code,
+        email,
+        invitedBy: admin.id,
+        expiresAt
+      }
+    });
+
+    console.info('🟩 [admin_invite][SUCCESS] Admin invite created:', { 
+      code, 
+      email, 
+      invitedBy: admin.user.email,
+      expiresAt 
+    });
+
+    // In a real implementation, you would send an email here
+    // For now, we'll return the invite URL
+    const inviteUrl = `${req.nextUrl.origin}/admin/signup?invite=${code}`;
+
+    return NextResponse.json({
+      success: true,
+      invite: {
+        code,
+        email,
+        expiresAt: expiresAt.toISOString(),
+        inviteUrl
+      }
+    });
+
+  } catch (error) {
+    console.error('🟥 [admin_invite][ERROR] Failed to create admin invite:', error);
+    return NextResponse.json(
+      { error: 'Failed to create admin invite' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    // Check if user is authenticated and is an admin
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Check if user is an admin
+    const admin = await prisma.admin.findUnique({
+      where: { userId: session.user.id }
+    });
+
+    if (!admin || !admin.active) {
+      return NextResponse.json(
+        { error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
+    // Get all pending invites
+    const invites = await prisma.adminInvite.findMany({
+      where: {
+        redeemed: false,
+        expiresAt: {
+          gt: new Date()
+        }
+      },
+      include: {
+        invitedByAdmin: {
+          include: {
+            user: {
+              select: {
+                email: true,
+                fullName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return NextResponse.json({
+      invites: invites.map(invite => ({
+        code: invite.code,
+        email: invite.email,
+        createdAt: invite.createdAt.toISOString(),
+        expiresAt: invite.expiresAt.toISOString(),
+        invitedBy: invite.invitedByAdmin?.user.email || 'System'
+      }))
+    });
+
+  } catch (error) {
+    console.error('🟥 [admin_invite][ERROR] Failed to fetch admin invites:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch admin invites' },
+      { status: 500 }
+    );
+  }
+} 

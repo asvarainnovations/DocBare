@@ -37,9 +37,18 @@ header {
   box-shadow: 0 -4px 20px 0 rgba(0, 0, 0, 0.3);
 }
 
+/* Legal Typography */
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 /* Markdown content styling */
 .markdown-content {
   line-height: 1.6;
+  font-family: 'Source Sans Pro', 'Inter', system-ui, sans-serif;
 }
 
 .markdown-content h1,
@@ -77,6 +86,9 @@ header {
 .markdown-content p {
   margin-bottom: 1rem;
   line-height: 1.7;
+  font-family: 'Source Sans Pro', 'Inter', system-ui, sans-serif;
+  font-size: 1rem;
+  color: #ffffff;
 }
 
 .markdown-content ul,
@@ -103,7 +115,7 @@ header {
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: 'JetBrains Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
 .markdown-content pre {

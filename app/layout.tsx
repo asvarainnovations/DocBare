@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Source_Sans_3, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
@@ -7,7 +7,23 @@ import RootLayoutClient from "./components/RootLayoutClient";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Providers from "./components/Providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const sourceSans = Source_Sans_3({ 
+  subsets: ["latin"],
+  variable: '--font-source-sans',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({ 
+  subsets: ["latin"],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: "DocBare - Legal AI Platform",
@@ -23,7 +39,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${sourceSans.variable} ${jetbrainsMono.variable} font-legal`}>
         <ErrorBoundary>
           <Providers session={session}>
             <RootLayoutClient>

@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
+import ConfirmationDialog from './ConfirmationDialog';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -54,6 +55,9 @@ export default function Sidebar({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +93,44 @@ export default function Sidebar({
     } catch (err) {}
   }
 
-  // Rename and delete logic would require backend endpoints; for now, just disable them
+  // Handle rename functionality
+  const handleRename = async (chatId: string, newTitle: string) => {
+    try {
+      await axios.patch(`/api/sessions/${chatId}/rename`, { title: newTitle });
+      // Update the chat in the local state
+      setChats(prev => prev.map(chat => 
+        chat.id === chatId 
+          ? { ...chat, sessionName: newTitle }
+          : chat
+      ));
+      setRenamingId(null);
+      setRenameValue("");
+    } catch (error) {
+      console.error('Failed to rename chat:', error);
+      alert('Failed to rename chat.');
+    }
+  };
+
+  // Handle delete functionality
+  const handleDelete = async () => {
+    if (!chatToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await axios.delete(`/api/sessions/${chatToDelete.id}`);
+      setChats(prev => prev.filter(c => c.id !== chatToDelete.id));
+      if (selectedChatId === chatToDelete.id && onSelectChat) {
+        onSelectChat('');
+      }
+      setDeleteDialogOpen(false);
+      setChatToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      alert('Failed to delete chat.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const isGoogleUser = !!session?.user?.image;
 
@@ -204,48 +245,97 @@ export default function Sidebar({
                     >
                       <EllipsisVerticalIcon className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer" />
                     </div>
-                    {/* Dropdown menu */}
-                    {menuOpen === chat.id && (
-                      <motion.div 
-                        ref={menuRef} 
-                        className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-32 sm:w-36 flex flex-col"
-                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        <button
-                          className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-white hover:bg-gray-700 rounded-t-lg"
-                          onClick={e => { e.stopPropagation(); setRenamingId(chat.id); setRenameValue(chat.sessionName || chat.title || ''); setMenuOpen(null); }}
-                        >
-                          <PencilIcon className="w-4 h-4" /> Rename
-                        </button>
-                        <button
-                          className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-400 hover:bg-red-700 rounded-b-lg"
-                          onClick={async e => {
-                            e.stopPropagation();
-                            setMenuOpen(null);
-                            if (!window.confirm('Are you sure you want to delete this chat?')) return;
-                            try {
-                              await axios.delete(`/api/sessions/${chat.id}`);
-                              setChats(prev => prev.filter(c => c.id !== chat.id));
-                              if (selectedChatId === chat.id && onSelectChat) {
-                                onSelectChat('');
-                              }
-                            } catch (err) {
-                              alert('Failed to delete chat.');
-                            }
-                          }}
-                        >
-                          <TrashIcon className="w-4 h-4" /> Delete
-                        </button>
-                      </motion.div>
-                    )}
-                  </div>
-                </motion.li>
-              ))}
-            </ul>
-          </motion.div>
+                                         {/* Dropdown menu */}
+                     {menuOpen === chat.id && (
+                       <motion.div 
+                         ref={menuRef} 
+                         className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-32 sm:w-36 flex flex-col"
+                         initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                         animate={{ opacity: 1, scale: 1, y: 0 }}
+                         exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                         transition={{ duration: 0.15 }}
+                       >
+                         <button
+                           className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-white hover:bg-gray-700 hover:text-gray-100 transition-all duration-200 rounded-t-lg group"
+                           onClick={e => { 
+                             e.stopPropagation(); 
+                             setRenamingId(chat.id); 
+                             setRenameValue(chat.sessionName || chat.title || ''); 
+                             setMenuOpen(null); 
+                           }}
+                         >
+                           <PencilIcon className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" /> 
+                           Rename
+                         </button>
+                         <button
+                           className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-400 hover:bg-red-600 hover:text-white transition-all duration-200 rounded-b-lg group"
+                           onClick={e => {
+                             e.stopPropagation();
+                             setMenuOpen(null);
+                             setChatToDelete(chat);
+                             setDeleteDialogOpen(true);
+                           }}
+                         >
+                           <TrashIcon className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" /> 
+                           Delete
+                         </button>
+                       </motion.div>
+                     )}
+                                     </div>
+                 </motion.li>
+               ))}
+             </ul>
+           </motion.div>
+
+           {/* Rename Input Modal */}
+           {renamingId && (
+             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+               <motion.div
+                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                 animate={{ opacity: 1, scale: 1, y: 0 }}
+                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                 className="bg-[#1e1e1e] border border-gray-700 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
+               >
+                 <div className="p-6">
+                   <h3 className="text-lg font-semibold text-white mb-4">Rename Chat</h3>
+                   <input
+                     type="text"
+                     value={renameValue}
+                     onChange={(e) => setRenameValue(e.target.value)}
+                     onKeyDown={(e) => {
+                       if (e.key === 'Enter') {
+                         handleRename(renamingId, renameValue);
+                       } else if (e.key === 'Escape') {
+                         setRenamingId(null);
+                         setRenameValue("");
+                       }
+                     }}
+                     className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                     placeholder="Enter new chat name..."
+                     autoFocus
+                   />
+                   <div className="flex gap-3 mt-4">
+                     <button
+                       onClick={() => {
+                         setRenamingId(null);
+                         setRenameValue("");
+                       }}
+                       className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                     >
+                       Cancel
+                     </button>
+                     <button
+                       onClick={() => handleRename(renamingId, renameValue)}
+                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                     >
+                       Rename
+                     </button>
+                   </div>
+                 </div>
+               </motion.div>
+             </div>
+           )}
 
           {/* User Profile Section (Mobile/Tablet) - Similar to ChatGPT */}
           <motion.div 
@@ -326,9 +416,25 @@ export default function Sidebar({
                 Login
               </button>
             )}
-          </motion.div>
-        </motion.aside>
-      )}
-    </AnimatePresence>
-  );
-}
+                     </motion.div>
+         </motion.aside>
+       )}
+
+       {/* Confirmation Dialog */}
+       <ConfirmationDialog
+         isOpen={deleteDialogOpen}
+         onClose={() => {
+           setDeleteDialogOpen(false);
+           setChatToDelete(null);
+         }}
+         onConfirm={handleDelete}
+         title="Delete Chat"
+         message={`Are you sure you want to delete "${chatToDelete?.sessionName || chatToDelete?.title || 'this chat'}"? This action cannot be undone.`}
+         confirmText="Delete"
+         cancelText="Cancel"
+         variant="danger"
+         isLoading={isDeleting}
+       />
+     </AnimatePresence>
+   );
+ }

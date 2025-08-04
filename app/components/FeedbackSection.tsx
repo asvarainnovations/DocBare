@@ -4,6 +4,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import axios from 'axios';
 import { HandThumbUpIcon, HandThumbDownIcon, CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import FeedbackDialog from './FeedbackDialog';
 
 interface FeedbackSectionProps {
   sessionId: string;
@@ -20,9 +21,8 @@ export default function FeedbackSection({
   messageIndex,
   onFeedback,
 }: FeedbackSectionProps) {
-  const [state, setState] = useState<'init' | 'good' | 'bad' | 'badDialog' | 'done'>('init');
-  const [comment, setComment] = useState('');
-  const [commentError, setCommentError] = useState('');
+  const [state, setState] = useState<'init' | 'good' | 'bad' | 'done'>('init');
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Good feedback
@@ -50,14 +50,10 @@ export default function FeedbackSection({
 
   // Bad feedback
   const handleBad = () => {
-    setState('badDialog');
+    setShowFeedbackDialog(true);
   };
 
-  const handleBadSubmit = async () => {
-    if (!comment.trim()) {
-      setCommentError('Comment is required');
-      return;
-    }
+  const handleBadSubmit = async (comment: string) => {
     setSubmitting(true);
     try {
       console.info('🟦 [feedback][INFO] Submitting bad feedback for message:', messageId);
@@ -75,6 +71,7 @@ export default function FeedbackSection({
       setTimeout(() => setState('done'), 1200);
     } catch (err) {
       console.error('🟥 [feedback][ERROR] Failed to submit bad feedback:', err);
+      throw err; // Re-throw to let the dialog handle the error
     } finally {
       setSubmitting(false);
     }
@@ -96,37 +93,51 @@ export default function FeedbackSection({
     );
   }
 
-  if (state === 'badDialog') {
+  // Render the feedback dialog
+  if (showFeedbackDialog) {
     return (
-      <div className="flex flex-col gap-2 mt-2 bg-gray-900 p-3 rounded-lg border border-gray-700 max-w-xs animate-fade-in">
-        <div className="text-sm text-red-300 font-semibold">Please tell us what was wrong:</div>
-        <textarea
-          className="bg-black/30 text-white rounded p-2 mt-1 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="Your comment (required)"
-          value={comment}
-          onChange={e => { setComment(e.target.value); setCommentError(''); }}
-          rows={2}
-          disabled={submitting}
+      <>
+        <FeedbackDialog
+          isOpen={showFeedbackDialog}
+          onClose={() => setShowFeedbackDialog(false)}
+          onSubmit={handleBadSubmit}
+          title="Help us improve this response"
+          placeholder="Please tell us what was wrong with this response..."
         />
-        {commentError && <div className="text-xs text-red-400">{commentError}</div>}
-        <div className="flex gap-2 justify-end">
+        {/* Keep the buttons visible while dialog is open */}
+        <div className="flex items-center gap-2 mt-2">
           <button
-            className="px-3 py-1 rounded bg-gray-700 text-white text-sm hover:bg-gray-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            onClick={() => setState('init')}
-            type="button"
+            className={clsx(
+              'p-1 rounded',
+              'hover:bg-gray-700 text-gray-300',
+              'transition-colors duration-150',
+              'focus:outline-none focus:ring-2 focus:ring-blue-400',
+              submitting && 'opacity-50 pointer-events-none'
+            )}
+            onClick={handleGood}
             disabled={submitting}
+            title="Good response"
+            aria-label="Mark as good response"
           >
-            Cancel
+            <HandThumbUpIcon className="w-5 h-5" />
           </button>
           <button
-            className="px-3 py-1 rounded bg-accent text-white text-sm disabled:opacity-50 hover:bg-accent/80 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            onClick={handleBadSubmit}
+            className={clsx(
+              'p-1 rounded',
+              'hover:bg-gray-700 text-gray-300',
+              'transition-colors duration-150',
+              'focus:outline-none focus:ring-2 focus:ring-blue-400',
+              submitting && 'opacity-50 pointer-events-none'
+            )}
+            onClick={handleBad}
             disabled={submitting}
+            title="Bad response"
+            aria-label="Mark as bad response"
           >
-            Submit
+            <HandThumbDownIcon className="w-5 h-5" />
           </button>
         </div>
-      </div>
+      </>
     );
   }
 

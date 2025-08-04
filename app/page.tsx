@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { useDropzone } from 'react-dropzone';
+
 import ChatInput from './components/ChatInput';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import { toast } from 'sonner';
@@ -20,40 +20,20 @@ export default function Home() {
   const [loadingFirstPrompt, setLoadingFirstPrompt] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!session?.user?.id) return;
-    if (acceptedFiles.length === 1) {
-      const file = acceptedFiles[0];
-      setUploadedFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('userId', session.user.id);
-        const res = await axios.post('/api/upload', formData);
-        if (res.data.url) {
-          setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'done', url: res.data.url } : f));
-          setDocActionMsg(`✅ ${file.name} uploaded successfully!`);
-          toast.success(`${file.name} uploaded successfully!`);
-        } else {
-          setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', error: 'Upload failed' } : f));
-          setDocActionMsg(`❌ Failed to upload ${file.name}`);
-          toast.error(`Failed to upload ${file.name}`);
-        }
-      } catch (err: any) {
-        setUploadedFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', error: 'Upload failed' } : f));
-        setDocActionMsg(`❌ Failed to upload ${file.name}`);
-        toast.error(err.response?.data?.error || `Failed to upload ${file.name}`);
+  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }) => {
+    setUploadedFiles(prev => {
+      const existingIndex = prev.findIndex(f => f.name === file.name);
+      if (existingIndex >= 0) {
+        // Update existing file
+        const updated = [...prev];
+        updated[existingIndex] = file;
+        return updated;
+      } else {
+        // Add new file
+        return [...prev, file];
       }
-    } else {
-      setDocActionMsg('❌ Please upload one file at a time');
-      toast.error('Please upload one file at a time');
-    }
-  }, [session?.user?.id]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    noClick: true,
-  });
+    });
+  }, []);
 
   // Fetch documents
   const fetchDocuments = useCallback(async () => {
@@ -174,6 +154,7 @@ export default function Home() {
               value={input}
               onChange={setInput}
               userId={session?.user?.id}
+              onFileUpload={handleFileUpload}
             />
           </div>
         </div>
@@ -225,16 +206,12 @@ export default function Home() {
             value={input}
             onChange={setInput}
             userId={session?.user?.id}
+            onFileUpload={handleFileUpload}
           />
         </div>
       </div>
 
-      <input {...getInputProps()} tabIndex={-1} className="hidden" />
-      {isDragActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-main-bg/60 text-white text-lg sm:text-2xl font-semibold pointer-events-none">
-          Drop files to attach
-        </div>
-      )}
+
     </div>
   );
 }

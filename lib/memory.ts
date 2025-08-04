@@ -129,15 +129,8 @@ export class MemoryManager {
       // Update access count and timestamp for retrieved memories
       await this.updateMemoryAccess(memories.map(m => m.id));
 
-      aiLogger.info('Memories retrieved', { 
-        sessionId, 
-        count: memories.length,
-        types: types || 'all'
-      });
-
       return memories;
     } catch (error) {
-      aiLogger.error('Failed to retrieve memories', { error, sessionId, userId });
       return [];
     }
   }
@@ -192,16 +185,8 @@ export class MemoryManager {
         await this.updateMemoryAccess(memories.map(m => m.id));
       }
 
-      aiLogger.info('User memories retrieved', { 
-        userId, 
-        count: memories.length,
-        types: types || 'all',
-        contextLength: context.length
-      });
-
       return memories;
     } catch (error) {
-      aiLogger.error('Failed to retrieve user memories', { error, userId });
       return [];
     }
   }

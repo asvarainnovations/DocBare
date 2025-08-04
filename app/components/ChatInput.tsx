@@ -23,6 +23,7 @@ interface ChatInputProps {
   value?: string;
   onChange?: (value: string) => void;
   userId?: string; // Add userId prop
+  onFileUpload?: (file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }) => void;
 }
 
 export default function ChatInput({
@@ -37,6 +38,7 @@ export default function ChatInput({
   value: controlledValue,
   onChange: controlledOnChange,
   userId,
+  onFileUpload,
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [showError, setShowError] = useState(false);
@@ -151,12 +153,19 @@ export default function ChatInput({
         return;
       }
 
+      const file = acceptedFiles[0];
+      
+      // Notify parent component about file upload start
+      if (onFileUpload) {
+        onFileUpload({ name: file.name, status: 'uploading' });
+      }
+
       setUploading(true);
 
       try {
         // Handle file upload logic
         const formData = new FormData();
-        formData.append("file", acceptedFiles[0]);
+        formData.append("file", file);
         formData.append("userId", userId);
 
         const response = await axios.post("/api/upload", formData, {
@@ -178,13 +187,23 @@ export default function ChatInput({
           "🟦 [chat_input][SUCCESS] File uploaded successfully:",
           response.data
         );
-        toast.success(`File "${acceptedFiles[0].name}" uploaded successfully!`);
+        toast.success(`File "${file.name}" uploaded successfully!`);
+
+        // Notify parent component about successful upload
+        if (onFileUpload && response.data.results && response.data.results.length > 0) {
+          const result = response.data.results[0];
+          onFileUpload({ 
+            name: file.name, 
+            status: 'done', 
+            url: result.url 
+          });
+        }
 
         // Optionally trigger document ingestion
-        if (response.data.url) {
+        if (response.data.results && response.data.results.length > 0 && response.data.results[0].url) {
           try {
             await axios.post("/api/ingest", {
-              documentId: response.data.documentId,
+              documentId: response.data.results[0].document?.id,
               userId: userId,
             });
             console.info("🟦 [chat_input][SUCCESS] Document ingestion started");
@@ -200,11 +219,20 @@ export default function ChatInput({
       } catch (error: any) {
         console.error("🟥 [chat_input][ERROR] File upload failed:", error);
         toast.error(error.response?.data?.error || "Failed to upload file");
+        
+        // Notify parent component about upload failure
+        if (onFileUpload) {
+          onFileUpload({ 
+            name: file.name, 
+            status: 'error', 
+            error: error.response?.data?.error || "Failed to upload file" 
+          });
+        }
       } finally {
         setUploading(false);
       }
     },
-    [userId]
+    [userId, onFileUpload]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -264,7 +292,7 @@ export default function ChatInput({
               padding: 0,
               margin: 0,
               lineHeight: "1.5",
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "Inter, system-ui, sans-serif",
             }}
             value={displayValue}
             onChange={(e) => {

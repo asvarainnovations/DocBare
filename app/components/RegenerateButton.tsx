@@ -64,6 +64,22 @@ export default function RegenerateButton({
         onRegenerate(accumulatedContent);
       }
 
+      // Save the regenerated AI message to the database
+      if (accumulatedContent.trim()) {
+        try {
+          await axios.post('/api/chat', {
+            sessionId,
+            userId,
+            role: 'ASSISTANT',
+            content: accumulatedContent.trim()
+          });
+          console.info('🟩 [regenerate][SUCCESS] Regenerated AI message saved to database');
+        } catch (saveError) {
+          console.error('🟥 [regenerate][ERROR] Failed to save regenerated AI message:', saveError);
+          // Don't fail the entire request if saving fails
+        }
+      }
+
       console.info('🟩 [regenerate][SUCCESS] Response regenerated successfully');
     } catch (error: any) {
       console.error('🟥 [regenerate][ERROR] Failed to regenerate response:', error);

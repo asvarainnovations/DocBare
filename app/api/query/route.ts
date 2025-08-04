@@ -97,6 +97,20 @@ async function callLLMStream(query: string, memoryContext: string = '') {
   return response.data;
 }
 
+export async function GET(req: NextRequest) {
+  aiLogger.info("Query route GET method called", { 
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries())
+  });
+  
+  return NextResponse.json({ 
+    status: "Query API is working", 
+    timestamp: new Date().toISOString(),
+    method: "GET"
+  });
+}
+
 export async function POST(req: NextRequest) {
   // Temporarily disable rate limiting to debug the issue
   // return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
@@ -116,23 +130,14 @@ export async function POST(req: NextRequest) {
 
       const { query, userId, sessionId } = validation.data;
       
-      aiLogger.info("Received AI query request", {
-        query: query.substring(0, 100) + (query.length > 100 ? '...' : ''),
-        userId,
-        sessionId,
-      });
+      // AI query request received
 
       // Generate memory context if sessionId is provided
       let memoryContext = '';
       if (sessionId) {
         try {
           memoryContext = await memoryManager.generateMemoryContext(sessionId, userId, query);
-          aiLogger.info("Memory context generated", { 
-            sessionId, 
-            contextLength: memoryContext.length 
-          });
         } catch (error) {
-          aiLogger.error("Failed to generate memory context", { error, sessionId });
           // Continue without memory context if it fails
         }
       }
@@ -164,18 +169,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Stream response to client and collect answer for logging
+        // 2. Stream response to client and collect answer for logging
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
         let buffer = "";
         let closed = false;
+        
         stream.on("data", (chunk: Buffer) => {
           const str = chunk.toString();
           buffer += str;
+          
           // DeepSeek streams OpenAI-style data: lines starting with 'data: '
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
+          
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               const data = line.replace("data: ", "").trim();
@@ -194,7 +202,7 @@ export async function POST(req: NextRequest) {
                   chunks.push(content);
                   controller.enqueue(encoder.encode(content));
                 }
-              } catch (e) {
+              } catch (e: any) {
                 // Ignore parsing errors for incomplete JSON
               }
             }
@@ -210,6 +218,7 @@ export async function POST(req: NextRequest) {
         });
 
         stream.on("error", (error: any) => {
+          aiLogger.error("Stream error", { error: error.message });
           errorDuringStream = error;
           if (!closed) {
             closed = true;
@@ -238,23 +247,20 @@ export async function POST(req: NextRequest) {
             { source: 'response_analysis' }
           );
         }
-        
-        aiLogger.info("Memories stored successfully", { sessionId, userId });
       } catch (error) {
-        aiLogger.error("Failed to store memories", { error, sessionId, userId });
         // Don't fail the request if memory storage fails
       }
     }
 
     // 4. Log the complete interaction
-    aiLogger.info("AI query completed", {
-      query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
-      answerLength: finalAnswer.length,
-      sessionId,
-      userId,
-      memoryContextLength: memoryContext.length,
-      chunksCount: chunks.length,
-    });
+    // aiLogger.info("AI query completed", {
+    //   query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
+    //   answerLength: finalAnswer.length,
+    //   sessionId,
+    //   userId,
+    //   memoryContextLength: memoryContext.length,
+    //   chunksCount: chunks.length,
+    // });
 
     return new NextResponse(readable, {
       headers: {
