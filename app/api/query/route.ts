@@ -3,6 +3,8 @@ import axios from "axios";
 import { aiLogger } from "@/lib/logger";
 import { validateQuery } from "@/lib/validation";
 import { memoryManager } from "@/lib/memory";
+import { StreamingOrchestrator } from "@/lib/streamingOrchestrator";
+import { USE_MULTI_AGENT } from "@/lib/config";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 
@@ -10,62 +12,50 @@ async function callLLMStream(query: string, memoryContext: string = '') {
   const startTime = Date.now();
   
   const systemPrompt = `
-    You are DocBare, an advanced legal AI assistant specializing in document analysis, legal research, and drafting.
+    You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts. When given a document or clause, follow this internal pipeline:
 
-    **Core Capabilities:**
-    1. **Document Analysis** - Analyze legal documents, contracts, and agreements
-    2. **Legal Research** - Provide accurate legal information and precedents
-    3. **Document Drafting** - Help create legal documents and contracts
-    4. **Compliance Guidance** - Ensure legal compliance and best practices
-    5. **Risk Assessment** - Identify potential legal risks and issues
+    1. **Task Classification**  
+      Determine whether the user wants **Analysis** or **Drafting**.
 
-    **Response Guidelines:**
-    1. **Accuracy** - Provide precise, legally sound information
-    2. **Clarity** - Use clear, professional language
-    3. **Context** - Reference relevant laws, regulations, or precedents
-    4. **Practicality** - Offer actionable advice and next steps
-    5. **Completeness** - Address all aspects of the query thoroughly
-    6. **Reasoning** - Explain your thought process and legal basis
+    2. **Document Type Identification**  
+      Label the input as a Contract, Pleading, Notice, Petition, etc.
 
-    **Document Analysis Process:**
-    1. **Review** - Examine document structure and key provisions
-    2. **Identify** - Highlight important clauses, risks, and opportunities
-    3. **Analyze** - Assess legal implications and compliance requirements
-    4. **Recommend** - Suggest improvements or alternative approaches
-    5. **Summarize** - Provide executive summary of findings
+    3. **Objective Extraction**  
+      What is the user trying to achieve or learn?
 
-    **Legal Research Approach:**
-    1. **Jurisdiction** - Consider applicable laws and regulations
-    2. **Precedents** - Reference relevant case law and legal principles
-    3. **Current Status** - Provide up-to-date legal information
-    4. **Practical Impact** - Explain real-world implications
-    5. **Next Steps** - Recommend appropriate actions or further research
+    4. **Constraint Extraction**  
+      Note jurisdiction, deadlines, tone, parties, or any other requirements.
 
-    **Document Drafting Principles:**
-    1. **Structure** - Use clear, logical document organization
-    2. **Language** - Employ precise, unambiguous legal terminology
-    3. **Compliance** - Ensure adherence to relevant legal requirements
-    4. **Protection** - Include appropriate safeguards and provisions
-    5. **Clarity** - Make complex legal concepts accessible
+    5. **Context Summarization**  
+      Summarize key facts, dates, parties, and legal triggers from the input.
 
-    **Response Format:**
-    - Use markdown formatting for better readability
-    - Include relevant legal citations when applicable
-    - Provide structured analysis with clear sections
-    - Offer practical recommendations and next steps
-    - Maintain professional, authoritative tone
+    6. **Legal Intent Determination**  
+      Identify if the purpose is to Inform, Demand, Defend, Comply, Respond, Argue, or Initiate.
 
-    **Important Notes:**
-    - Always clarify jurisdiction if not specified
-    - Recommend consulting qualified legal counsel for complex matters
-    - Highlight any limitations or disclaimers as appropriate
-    - Provide context for legal recommendations
-    - Suggest additional research or documentation as needed
+    7. **Structural Outline**  
+      List required sections and clauses (e.g., Preamble, Background, Arguments, Prayer, Annexures).
 
-    **Clarification**  
-      If any context is unclear (jurisdiction, parties, document type), ask a follow‑up question.
+    8. **Apply Legal Principles**  
+      Map facts to statutes, procedural norms, or industry best‑practices.
 
-    Always maintain a professional, concise tone.
+    9. **Consistency Check**  
+      Verify names, dates, definitions, cross‑references; flag contradictions.
+
+    10. **Length Control (auto‑detect)**  
+      • **Simple questions** (“What is indemnity?”): 2–3 sentences.  
+      • **Clause‑level review** (“Review clause 5”): 3–5 bullet points + 1–2 sentence summary.  
+      • **Detailed analysis** (user asks “detailed” or long document): up to 500 words.  
+      • **Drafting tasks**: full legal text ready to insert.  
+      • **Default**: balanced clause‑level response.
+
+    11. **Output Formatting**  
+      - For **Analysis**, use bullet lists under headings **Risk**, **Recommendation**, **Rationale**.  
+      - For **Drafting**, return a complete, structurally sound document.
+
+    12. **Clarification**  
+      If any context is unclear (jurisdiction, parties, type), ask a follow‑up question.
+
+    Always maintain a professional, concise tone.  
   `;
 
   // Combine system prompt with memory context
@@ -132,6 +122,14 @@ export async function POST(req: NextRequest) {
       
       // AI query request received
 
+      // Log the current mode
+      aiLogger.info("Processing query", { 
+        mode: USE_MULTI_AGENT ? 'Multi-Agent' : 'Single-Agent',
+        sessionId,
+        userId,
+        queryLength: query.length
+      });
+
       // Generate memory context if sessionId is provided
       let memoryContext = '';
       if (sessionId) {
@@ -142,91 +140,69 @@ export async function POST(req: NextRequest) {
         }
       }
 
-    // 1. Call DeepSeek (streaming)
-    let answer = "";
-    let errorDuringStream: any = null;
-    let chunks = [];
-    let stream;
-    let finalAnswer = ""; // Store the final answer for memory storage
-    try {
-      stream = await callLLMStream(query, memoryContext);
-    } catch (llmErr: any) {
-      const apiError = llmErr?.response?.data?.error;
-      if (apiError && apiError.message === "Insufficient Balance") {
-        aiLogger.error("DeepSeek API insufficient balance", llmErr);
+      // Use the streaming orchestrator to handle both single-agent and multi-agent modes
+      let stream;
+      let finalAnswer = ""; // Store the final answer for memory storage
+      
+      try {
+        const streamingContext = {
+          query,
+          sessionId: sessionId || '',
+          userId,
+          documentContent: '', // Will be enhanced later to support document uploads
+          documentName: ''
+        };
+        
+        stream = await StreamingOrchestrator.streamResponse(streamingContext);
+      } catch (llmErr: any) {
+        const apiError = llmErr?.response?.data?.error;
+        if (apiError && apiError.message === "Insufficient Balance") {
+          aiLogger.error("DeepSeek API insufficient balance", llmErr);
+          return NextResponse.json(
+            {
+              error:
+                "DeepSeek API: Insufficient balance. Please check your account credits.",
+            },
+            { status: 402 }
+          );
+        }
+        aiLogger.error("Streaming orchestrator error", llmErr);
         return NextResponse.json(
-          {
-            error:
-              "DeepSeek API: Insufficient balance. Please check your account credits.",
-          },
-          { status: 402 }
+          { error: "Failed to get response from AI system." },
+          { status: 500 }
         );
       }
-      aiLogger.error("DeepSeek API error", llmErr);
-      return NextResponse.json(
-        { error: "Failed to get response from DeepSeek AI." },
-        { status: 500 }
-      );
-    }
 
         // 2. Stream response to client and collect answer for logging
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-      async start(controller) {
-        let buffer = "";
-        let closed = false;
-        
-        stream.on("data", (chunk: Buffer) => {
-          const str = chunk.toString();
-          buffer += str;
-          
-          // DeepSeek streams OpenAI-style data: lines starting with 'data: '
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.replace("data: ", "").trim();
-              if (data === "[DONE]") {
-                if (!closed) {
-                  closed = true;
-                  controller.close();
-                }
-                return;
+        const encoder = new TextEncoder();
+        let errorDuringStream: any = null;
+        const readable = new ReadableStream({
+          async start(controller) {
+            let answer = "";
+            
+            try {
+              const reader = stream.getReader();
+              const decoder = new TextDecoder();
+              
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                answer += chunk;
+                finalAnswer = answer; // Update final answer as we receive chunks
+                
+                controller.enqueue(encoder.encode(chunk));
               }
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.choices && parsed.choices[0]?.delta?.content) {
-                  const content = parsed.choices[0].delta.content;
-                  answer += content;
-                  chunks.push(content);
-                  controller.enqueue(encoder.encode(content));
-                }
-              } catch (e: any) {
-                // Ignore parsing errors for incomplete JSON
-              }
+              
+              controller.close();
+            } catch (error: any) {
+              aiLogger.error("Stream error", { error: error.message });
+              errorDuringStream = error;
+              controller.error(error);
             }
-          }
+          },
         });
-
-        stream.on("end", () => {
-          if (!closed) {
-            closed = true;
-            finalAnswer = answer; // Store the final answer
-            controller.close();
-          }
-        });
-
-        stream.on("error", (error: any) => {
-          aiLogger.error("Stream error", { error: error.message });
-          errorDuringStream = error;
-          if (!closed) {
-            closed = true;
-            controller.error(error);
-          }
-        });
-      },
-    });
 
     // 3. Store memories if sessionId is provided
     if (sessionId && !errorDuringStream) {
