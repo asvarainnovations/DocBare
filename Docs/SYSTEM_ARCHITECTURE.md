@@ -47,7 +47,13 @@ flowchart TD
   subgraph Feedback
     G1["Feedback UI"]
     G2["Feedback API (/api/feedback)"]
-    G3["Firestore (feedback)"]
+    G3["Prisma (feedback)"]
+  end
+
+  subgraph Admin
+    H1["Admin Dashboard UI"]
+    H2["Admin API (/api/admin/*)"]
+    H3["Prisma (Admin, AdminInvite)"]
   end
 
   %% Auth Flow
@@ -89,6 +95,11 @@ flowchart TD
   E4 -- "Submit Feedback" --> G1
   G1 -- "Send" --> G2
   G2 -- "Store" --> G3
+
+  %% Admin
+  H1 -- "View Feedbacks" --> H2
+  H2 -- "Query" --> G3
+  H2 -- "Admin Data" --> H3
 ```
 
 ## Document Management UI
@@ -96,6 +107,15 @@ flowchart TD
 - The main page supports file upload with progress and error feedback.
 - A document dashboard lists uploaded documents, allows download (via signed URL), and delete.
 - All actions are per-user and require authentication.
+
+## Admin Dashboard
+
+- **Feedback Management**: View all user feedback with filtering and pagination
+- **Admin Authentication**: Secure invitation-based admin system with audit trail
+- **User Analytics**: Dashboard statistics and user activity monitoring
+- **Admin Invitations**: Create and manage admin user invitations
+- **Session Viewing**: View chat sessions to understand feedback context
+- **Database Integration**: PostgreSQL-based storage with proper relations and constraints
 
 ## Test Scripts
 

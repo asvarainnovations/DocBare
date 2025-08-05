@@ -40,9 +40,13 @@ Below are the main API endpoints for DocBare. All endpoints are under `/api/`.
 
 ## Feedback
 - **POST /api/feedback**: Submit feedback for a message or session
-  - Request: `{ sessionId, userId, rating, comments? }`
+  - Request: `{ sessionId, userId, rating, messageIndex?, comments? }`
+  - Response: `{ success: true, feedbackId: string }`
 - **GET /api/feedback/[sessionId]**: Get all feedback for a session
-  - Response: `{ feedback: Array<{ userId, rating, comments, ... }> }`
+  - Response: `{ feedbacks: Array<{ id, userId, rating, messageIndex, comments, createdAt, user, session }> }`
+- **GET /api/feedback**: Get feedbacks with optional filtering
+  - Query params: `sessionId?`, `userId?`
+  - Response: `{ feedbacks: Array<{ id, userId, rating, messageIndex, comments, createdAt, user, session }> }`
 
 ## RAG Sessions
 - **POST /api/rag_session**: Create a new RAG session
@@ -54,6 +58,20 @@ Below are the main API endpoints for DocBare. All endpoints are under `/api/`.
 
 ## Account
 - **GET /api/account/providers**: List linked auth providers
+
+## Admin (Admin Access Required)
+- **GET /api/admin/dashboard/stats**: Get dashboard statistics
+  - Response: `{ totalFeedbacks, goodFeedbacks, badFeedbacks, activeUsers }`
+- **GET /api/admin/feedbacks**: Get all feedbacks with pagination and filtering
+  - Query params: `page?`, `limit?`, `rating?` (good/bad)
+  - Response: `{ feedbacks: Array<{ id, userId, rating, messageIndex, comments, createdAt, user, session }>, pagination: { page, limit, total, totalPages, hasNextPage, hasPrevPage } }`
+- **POST /api/admin/invites**: Create admin invitation
+  - Request: `{ email: string }`
+  - Response: `{ inviteCode: string, inviteUrl: string }`
+- **GET /api/admin/invites**: List pending invitations
+  - Response: `{ invites: Array<{ code, email, createdAt, expiresAt, redeemed }> }`
+- **GET /api/admin/invites/validate?code=...**: Validate invite code
+  - Response: `{ valid: boolean, email?: string, expired?: boolean }`
 
 ---
 
