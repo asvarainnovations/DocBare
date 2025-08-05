@@ -64,6 +64,13 @@
 - [LangChain JS](https://js.langchain.com/docs/)
 - [NextAuth.js](https://next-auth.js.org/)
 
+## DocBare Documentation
+
+- [Model Usage Guide](./MODEL_USAGE.md) - Comprehensive guide to all AI models used in the platform
+- [Multi-Agent System](./MULTI_AGENT_SYSTEM.md) - Detailed documentation of the multi-agent architecture
+- [System Architecture](./SYSTEM_ARCHITECTURE_DIAGRAM.md) - Complete system architecture diagram
+- [Progress Status](./PROGRESS_STATUS.md) - Current development status and roadmap
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme). 

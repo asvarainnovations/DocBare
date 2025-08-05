@@ -136,7 +136,9 @@ export const ERROR_MESSAGES = {
   ANALYSIS_FAILURE: 'Document analysis failed, proceeding with drafting only',
   DRAFTING_FAILURE: 'Legal drafting failed, falling back to standard mode',
   ORCHESTRATION_FAILURE: 'Multi-agent orchestration failed, using single agent',
-  MEMORY_FAILURE: 'Memory context loading failed, proceeding without context'
+  MEMORY_FAILURE: 'Memory context loading failed, proceeding without context',
+  JSON_PARSING_FAILURE: 'JSON response parsing failed, using fallback logic',
+  INVALID_ANALYSIS_STRUCTURE: 'Analysis response structure invalid, using fallback format'
 };
 
 // Logging prefixes

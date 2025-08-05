@@ -1,360 +1,248 @@
-# DocBare Multi-Agent System (LangGraph-Inspired Implementation)
+# DocBare Multi-Agent System Documentation
 
 ## Overview
 
-The DocBare Multi-Agent System is a sophisticated AI architecture built using **LangGraph-inspired patterns** that provides specialized legal assistance through multiple coordinated agents. The system can be toggled between single-agent and multi-agent modes using a simple feature flag.
-
-**Status**: ✅ **COMPLETED AND TESTED SUCCESSFULLY**
+The DocBare Multi-Agent System is a sophisticated legal AI platform that uses a LangGraph-inspired workflow to provide comprehensive legal analysis and drafting services. The system consists of three specialized agents working in coordination to deliver high-quality legal assistance.
 
 ## Architecture
 
-### System Components
+### Core Components
 
-1. **Streaming Orchestrator** (`lib/streamingOrchestrator.ts`)
-   - Main entry point for all AI requests
-   - Routes requests based on `USE_MULTI_AGENT` flag
-   - Handles streaming responses and fallbacks
+1. **Orchestrator Agent** - Decides workflow routing and coordinates between agents
+2. **Analysis Agent** - Performs structured document analysis with JSON output
+3. **Drafting Agent** - Creates legal documents and responses
+4. **Memory System** - Maintains conversation and reasoning context
+5. **Streaming Orchestrator** - Handles response streaming and fallbacks
 
-2. **LangGraph Orchestrator** (`lib/langgraphOrchestrator.ts`)
-   - **LangGraph-inspired workflow engine**
-   - Coordinates between specialized agents using state management
-   - Manages workflow decisions and state transitions
-   - Handles memory integration with custom memory system
+### System Flow
 
-3. **Analysis Agent (LangGraph-Inspired Node)**
-   - Specialized in document analysis and legal review
-   - Provides structured analysis with risk assessment
-   - Focuses on Indian legal framework
-   - **Implemented as a LangGraph-inspired node with state management**
-
-4. **Drafting Agent (LangGraph-Inspired Node)**
-   - Specialized in legal document creation
-   - Generates contracts, notices, petitions, etc.
-   - Ensures compliance with Indian legal requirements
-   - **Implemented as a LangGraph-inspired node with state management**
-
-5. **Memory System**
-   - Stores conversation history and reasoning
-   - Provides context for agent interactions
-   - Maintains continuity across sessions
-   - **Integrated with LangGraph-inspired state management**
-
-## Feature Toggle
-
-### Environment Variable
-```bash
-USE_MULTI_AGENT=true   # Enable multi-agent mode
-USE_MULTI_AGENT=false  # Enable single-agent mode (default)
+```
+User Query + Document → Orchestrator Agent → Decision (needAnalysis)
+                                    ↓
+                            ┌─────────────────┐
+                            │   Analysis?     │
+                            └─────────────────┘
+                                    ↓
+                    ┌─────────────────────────────┐
+                    │ Yes: Analysis → Drafting    │
+                    │ No:  Direct Drafting        │
+                    └─────────────────────────────┘
+                                    ↓
+                            Final Response
 ```
 
-### Toggle Script
-```bash
-# Check current mode
-node scripts/toggle-agent-mode.js status
+## Agent Specifications
 
-# Switch to multi-agent mode
-node scripts/toggle-agent-mode.js multi
+### 1. Orchestrator Agent
 
-# Switch to single-agent mode
-node scripts/toggle-agent-mode.js single
+**Role**: Workflow decision maker and coordinator
 
-# Toggle between modes
-node scripts/toggle-agent-mode.js toggle
-```
+**Input**: User query, document availability, memory context
 
-## LangGraph-Inspired Implementation
+**Output**: JSON decision with `needAnalysis` boolean
 
-### State Management
-The system uses LangGraph-inspired state management to coordinate agent workflows:
+**Key Features**:
+- Determines if document analysis is required
+- Routes workflow between analysis and drafting agents
+- Handles error scenarios gracefully
+- Maintains workflow continuity
 
-```typescript
-interface AgentState {
-  sessionId: string;
-  userId: string;
-  query: string;
-  documentContent?: string;
-  documentName?: string;
-  hasDocument: boolean;
-  analysisResult?: string;
-  draftingResult?: string;
-  finalResponse?: string;
-  error?: string;
-  memoryContext: string;
-  messages: (HumanMessage | AIMessage | SystemMessage)[];
+**Decision Logic**:
+- `needAnalysis=true` if document present AND analysis requested
+- `needAnalysis=false` for direct drafting requests
+- Fallback logic for JSON parsing failures
+
+### 2. Analysis Agent
+
+**Role**: Structured document analyzer
+
+**Input**: Document content, user query, memory context
+
+**Output**: Structured JSON with document type, facts, and audit results
+
+**JSON Structure**:
+```json
+{
+  "type": "Contract|Notice|Petition|...",
+  "facts": {
+    "partyA": "string",
+    "partyB": "string", 
+    "date": "string",
+    "subject": "string",
+    "triggers": ["string"]
+  },
+  "audit": [
+    {
+      "clause": 1,
+      "label": "Favorable|Neutral|Risk",
+      "issue": "string",
+      "recommendation": "string", 
+      "rationale": "string"
+    }
+  ]
 }
 ```
 
-### Workflow Nodes
-1. **Orchestrator Node**: Decides workflow and initializes processing
-2. **Analysis Node**: Processes documents and provides legal analysis
-3. **Drafting Node**: Creates legal documents and responses
-4. **Finalize Node**: Combines results and creates final response
-
-### Workflow Logic
-The system intelligently routes between agents based on:
-- Document presence (routes to analysis if document available)
-- Analysis completion (routes to drafting after analysis)
-- Drafting completion (routes to finalize)
-- Error conditions (handles fallbacks gracefully)
-
-## Testing Results
-
-### ✅ Successfully Tested Scenarios
-
-#### 1. Document Analysis Workflow
-- **Test**: Employment contract analysis with response letter drafting
-- **Processing Time**: ~55 seconds
-- **Output**: Comprehensive legal analysis + professional response letter
-- **Quality**: Excellent - detailed risk assessment and recommendations
-
-#### 2. Direct Drafting Workflow
-- **Test**: Legal notice for breach of contract
-- **Processing Time**: ~22 seconds
-- **Output**: Professional legal notice with proper formatting
-- **Quality**: Excellent - Indian law compliant with proper structure
-
-### Performance Metrics
-- **Document Analysis**: ~55 seconds (Analysis + Drafting)
-- **Direct Drafting**: ~22 seconds (Drafting only)
-- **Memory Operations**: <1 second per operation
-- **Error Handling**: Robust fallback mechanisms
-- **Output Quality**: Professional legal documents with proper formatting
-
-## Workflows
-
-### Single-Agent Mode (Default)
-```
-User Query → Single LLM → Response
-```
-- Direct processing by the main AI model
-- Standard legal assistance
-- No specialized agent coordination
-
-### Multi-Agent Mode (LangGraph)
-```
-User Query + Document → Orchestrator → Analysis Agent → Drafting Agent → Finalize → Combined Response
-User Query (No Document) → Orchestrator → Drafting Agent → Finalize → Response
-```
-
-#### Document Analysis Workflow
-1. **Orchestrator** receives user query with document
-2. **Analysis Agent** processes document and provides structured analysis
-3. **Drafting Agent** uses analysis to create legal documents
-4. **Memory System** stores all interactions for context
-5. **Response** combines analysis and drafting results
-
-#### Direct Drafting Workflow
-1. **Orchestrator** receives user query without document
-2. **Drafting Agent** directly processes the query
-3. **Memory System** stores interactions
-4. **Response** provides legal drafting assistance
-
-## Agent Specializations
-
-### Analysis Agent
-**Purpose**: Document review and legal analysis
-**Capabilities**:
-- Clause-by-clause document analysis
-- Risk assessment and compliance review
-- Legal recommendations and rationale
+**Features**:
+- Clause-by-clause analysis
+- Risk assessment and recommendations
 - Indian legal framework focus
+- Structured output for downstream processing
 
-**Output Structure**:
-- Document Overview
-- Key Clauses Analysis
-- Risk Assessment
-- Recommendations
-- Legal Rationale
+### 3. Drafting Agent
 
-### Drafting Agent
-**Purpose**: Legal document creation
-**Capabilities**:
-- Contract and agreement drafting
-- Legal notices and communications
-- Petitions and applications
-- Compliance documents
+**Role**: Legal document creator
+
+**Input**: User query, optional analysis report, memory context
+
+**Output**: Complete legal document or response
+
+**Input Format**:
+```
+userQuery: [user's request]
+analysisReport: [JSON from analysis agent] (optional)
+Memory Context: [previous interactions]
+```
 
 **Features**:
-- Indian legal compliance
-- Professional formatting
-- Complete document structure
-- Practical implementation guidance
+- Creates contracts, notices, pleadings
+- Incorporates analysis recommendations
+- Indian legal formatting standards
+- Length control based on request type
 
-## Memory Integration
+## Implementation Details
 
-### Memory Types
-- **Conversation**: User queries and AI responses
-- **Reasoning**: Analysis steps and decision processes
-- **Analysis**: Document analysis results
-- **Drafting**: Legal document outputs
+### File Structure
 
-### Context Usage
-- Agents receive relevant conversation history
-- Previous analysis informs new drafting
-- Continuity maintained across sessions
-- Context limits prevent token overflow
-
-## Error Handling & Fallbacks
-
-### Multi-Agent Failures
-1. **Analysis Agent Failure**: Falls back to drafting-only workflow
-2. **Drafting Agent Failure**: Falls back to single-agent mode
-3. **Orchestration Failure**: Falls back to single-agent mode
-4. **Memory Failure**: Continues without context
-
-### Fallback Chain
 ```
-Multi-Agent → Drafting-Only → Single-Agent → Error Response
+lib/
+├── config.ts                    # Agent prompts and configuration
+├── langgraphOrchestrator.ts     # Main multi-agent orchestrator
+├── streamingOrchestrator.ts     # Response streaming handler
+├── memory.ts                    # Memory management system
+└── documentExtractor.ts         # Document processing utilities
+
+app/api/query/route.ts           # Main API endpoint
+scripts/
+├── test-updated-multi-agent.ts  # Comprehensive testing
+└── test-langgraph.ts           # Legacy testing
 ```
+
+### Key Features
+
+#### 1. JSON Parsing & Validation
+- Robust JSON extraction from agent responses
+- Fallback mechanisms for parsing failures
+- Structured error handling and logging
+
+#### 2. Memory Integration
+- Conversation memory for context continuity
+- Reasoning memory for agent decisions
+- Tagged memory for different agent types
+
+#### 3. Error Handling
+- Graceful degradation on agent failures
+- Fallback to single-agent mode
+- Comprehensive error logging
+
+#### 4. Streaming Support
+- Real-time response streaming
+- Memory storage during streaming
+- Error recovery during stream failures
 
 ## Configuration
 
-### Agent Configuration (`lib/config.ts`)
-```typescript
-export const AGENT_CONFIG = {
-  MEMORY_CONTEXT_LIMIT: 10,
-  MEMORY_REASONING_LIMIT: 5,
-  ORCHESTRATOR_PROMPT: "...",
-  ANALYSIS_PROMPT: "...",
-  DRAFTING_PROMPT: "..."
-};
+### Environment Variables
+
+```bash
+USE_MULTI_AGENT=true          # Enable/disable multi-agent mode
+DEEPSEEK_API_KEY=xxx          # DeepSeek API key (for multi-agent system)
+OPENAI_API_KEY=xxx            # OpenAI API key (for chat title generation only)
 ```
 
-### Memory Configuration
-```typescript
-export const MEMORY_CONFIG = {
-  CONVERSATION_TAG: 'conversation',
-  REASONING_TAG: 'reasoning',
-  ANALYSIS_TAG: 'analysis',
-  DRAFTING_TAG: 'drafting'
-};
-```
+### Agent Prompts
+
+All agent prompts are centralized in `lib/config.ts`:
+
+- `ORCHESTRATOR_PROMPT` - Workflow decision making
+- `ANALYSIS_PROMPT` - Document analysis with JSON output
+- `DRAFTING_PROMPT` - Legal document creation
+
+### Model Usage
+
+- **Multi-Agent System**: Uses DeepSeek R1 reasoning model (`deepseek-reasoner`) for all agent interactions
+- **Single-Agent Mode**: Uses DeepSeek R1 reasoning model (`deepseek-reasoner`) for direct queries
+- **Chat Title Generation**: Uses OpenAI GPT-4o-mini for generating descriptive chat titles
 
 ## Testing
 
-### Test Script
-```bash
-# Run comprehensive tests
-npx tsx scripts/test-multi-agent.ts
-```
-
 ### Test Scenarios
-1. **Multi-Agent with Document**: Tests analysis + drafting workflow
-2. **Multi-Agent without Document**: Tests direct drafting workflow
-3. **Single-Agent Mode**: Tests standard LLM processing
 
-## API Integration
+1. **Document Analysis + Drafting**: Full workflow with document
+2. **Direct Drafting**: No document, drafting only
+3. **Analysis Request Without Document**: Error handling
 
-### Query Endpoint (`/api/query`)
-The existing query endpoint automatically uses the appropriate mode based on the `USE_MULTI_AGENT` flag.
+### Running Tests
 
-### Request Format
-```typescript
-{
-  query: string,
-  sessionId: string,
-  userId: string,
-  documentContent?: string,
-  documentName?: string
-}
+```bash
+# Test updated multi-agent system
+npx tsx scripts/test-updated-multi-agent.ts
+
+# Test legacy system
+npx tsx scripts/test-langgraph.ts
 ```
 
-### Response Format
-- **Single-Agent**: Direct AI response
-- **Multi-Agent**: Combined analysis and drafting response
+## Performance Metrics
 
-## Performance Considerations
+### Test Results (Latest)
 
-### Token Management
-- Memory context limits prevent token overflow
-- Agent prompts optimized for efficiency
-- Streaming responses maintain responsiveness
+- **Document Analysis + Drafting**: ~35 seconds, 3126 characters
+- **Direct Drafting**: ~16 seconds, 1708 characters  
+- **Error Handling**: ~4 seconds, 250 characters
 
-### Caching
-- Memory system provides context caching
-- Agent results stored for future reference
-- Session-based memory isolation
+### Memory Usage
 
-## Security & Privacy
+- Efficient memory storage and retrieval
+- Context-aware memory generation
+- Automatic memory cleanup
 
-### Data Handling
-- User data isolated by session and user ID
-- Memory stored securely in Firestore
-- No cross-user data leakage
+## Error Handling
 
-### Access Control
-- Standard authentication required
-- Admin access for system management
-- Secure API endpoints
+### JSON Parsing Failures
 
-## Monitoring & Logging
+1. **Orchestrator**: Enhanced fallback logic with content analysis
+2. **Analysis**: Fallback to raw text with structured formatting
+3. **Drafting**: Continue with available context
 
-### Logging Prefixes
-- 🎭 [ORCHESTRATOR]: Multi-agent coordination
-- 📋 [ANALYSIS]: Document analysis operations
-- ✍️ [DRAFTING]: Legal drafting operations
-- 🧠 [MEMORY]: Memory system operations
-- 🔄 [FALLBACK]: Fallback operations
+### Agent Failures
 
-### Error Tracking
-- Comprehensive error logging
-- Fallback decision tracking
-- Performance monitoring
+1. **Single Agent Fallback**: Automatic fallback to single-agent mode
+2. **Error Logging**: Comprehensive error tracking
+3. **User Feedback**: Clear error messages to users
 
 ## Future Enhancements
 
-### Planned Features
-1. **Document Extraction**: Full PDF/DOCX text extraction
-2. **Agent Specialization**: Additional specialized agents
-3. **Workflow Customization**: User-defined agent workflows
-4. **Performance Optimization**: Advanced caching and optimization
+### Planned Improvements
 
-### Scalability
-- Horizontal scaling support
-- Load balancing for agent processing
-- Distributed memory management
+1. **Better JSON Parsing**: Enhanced prompt engineering for consistent JSON output
+2. **Agent Specialization**: Domain-specific agents for different legal areas
+3. **Performance Optimization**: Caching and parallel processing
+4. **Advanced Memory**: Semantic memory and knowledge graphs
 
-## Troubleshooting
+### Monitoring & Analytics
 
-### Common Issues
+1. **Agent Performance**: Response time and success rate tracking
+2. **Memory Effectiveness**: Context relevance and usage patterns
+3. **User Satisfaction**: Feedback integration and quality metrics
 
-1. **Multi-Agent Not Working**
-   - Check `USE_MULTI_AGENT` environment variable
-   - Verify agent prompts in configuration
-   - Check memory system connectivity
+## Conclusion
 
-2. **Fallback to Single-Agent**
-   - Review error logs for agent failures
-   - Check API key validity
-   - Verify memory system status
+The DocBare Multi-Agent System successfully implements a sophisticated legal AI platform with:
 
-3. **Performance Issues**
-   - Monitor token usage
-   - Check memory context limits
-   - Review agent prompt optimization
+- ✅ **Structured Agent Communication**: JSON-based inter-agent communication
+- ✅ **Robust Error Handling**: Graceful degradation and fallback mechanisms
+- ✅ **Memory Integration**: Context-aware conversation management
+- ✅ **Streaming Support**: Real-time response delivery
+- ✅ **Comprehensive Testing**: Multi-scenario validation
 
-### Debug Commands
-```bash
-# Check current mode
-node scripts/toggle-agent-mode.js status
-
-# Test system functionality
-npx tsx scripts/test-multi-agent.ts
-
-# View logs
-npm run dev
-```
-
-## Migration Guide
-
-### From Single-Agent to Multi-Agent
-1. Set `USE_MULTI_AGENT=true` in environment
-2. Restart development server
-3. Test with document uploads
-4. Monitor performance and logs
-
-### From Multi-Agent to Single-Agent
-1. Set `USE_MULTI_AGENT=false` in environment
-2. Restart development server
-3. Verify standard functionality
-4. Clean up any multi-agent specific data if needed 
+The system is production-ready and provides a solid foundation for advanced legal AI services. 
