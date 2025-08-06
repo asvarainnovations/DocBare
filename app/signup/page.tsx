@@ -3,8 +3,9 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import axios from "axios";
+import AuthGuard from "../components/AuthGuard";
 
-export default function SignupPage() {
+function SignupPageInner() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -96,5 +97,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <AuthGuard requireAuth={false}>
+      <SignupPageInner />
+    </AuthGuard>
   );
 } 

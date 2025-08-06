@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import AuthGuard from "../components/AuthGuard";
 
 function LoginPageInner() {
   const [email, setEmail] = useState("");
@@ -111,8 +112,10 @@ function LoginPageInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
-      <LoginPageInner />
-    </Suspense>
+    <AuthGuard requireAuth={false}>
+      <Suspense fallback={null}>
+        <LoginPageInner />
+      </Suspense>
+    </AuthGuard>
   );
 } 
