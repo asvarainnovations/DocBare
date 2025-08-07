@@ -13,6 +13,7 @@ import {
 } from "./config";
 import { aiLogger } from "./logger";
 import axios from "axios";
+import { retrieveFromKB } from "./vertexTool";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 
@@ -32,6 +33,7 @@ export interface AgentState {
   finalResponse?: string;
   error?: string;
   memoryContext: string;
+  knowledgeBaseContext?: string; // New: Knowledge base context
   messages: (HumanMessage | AIMessage | SystemMessage)[];
 }
 
@@ -103,6 +105,10 @@ export class LangGraphOrchestrator {
         query
       );
 
+      // 1. Retrieve knowledge base context once for all agents
+      const kbChunks = await retrieveFromKB(query, 5);
+      const knowledgeBaseContext = kbChunks.join("\n\n---\n\n");
+      
       // Initialize state
       const state: AgentState = {
         sessionId,
@@ -112,6 +118,7 @@ export class LangGraphOrchestrator {
         documentName: documentName || "",
         hasDocument: !!documentContent,
         memoryContext,
+        knowledgeBaseContext,
         messages: [],
       };
 
@@ -203,8 +210,19 @@ export class LangGraphOrchestrator {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
+      // Enhance orchestrator prompt with knowledge base context
+      const enhancedOrchestratorPrompt = state.knowledgeBaseContext 
+        ? AGENT_CONFIG.ORCHESTRATOR_PROMPT.replace(
+            '{knowledgeBaseContext}',
+            `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to make informed decisions about routing and analysis.`
+          )
+        : AGENT_CONFIG.ORCHESTRATOR_PROMPT.replace(
+            '{knowledgeBaseContext}',
+            ''
+          );
+
       const response = await callDeepSeekLLM(
-        AGENT_CONFIG.ORCHESTRATOR_PROMPT,
+        enhancedOrchestratorPrompt,
         `Query: ${state.query}\n\nDocument Available: ${
           state.hasDocument ? "Yes" : "No"
         }${
@@ -324,8 +342,13 @@ export class LangGraphOrchestrator {
   // Analysis Node - Analyzes documents
   private async analysisNode(state: AgentState): Promise<Partial<AgentState>> {
     try {
+      // Enhance analysis prompt with knowledge base context
+      const enhancedAnalysisPrompt = state.knowledgeBaseContext 
+        ? AGENT_CONFIG.ANALYSIS_PROMPT + `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your analysis and provide more accurate legal insights.`
+        : AGENT_CONFIG.ANALYSIS_PROMPT;
+
       const response = await callDeepSeekLLM(
-        AGENT_CONFIG.ANALYSIS_PROMPT,
+        enhancedAnalysisPrompt,
         `Document Content:\n${state.documentContent}\n\nQuery: ${state.query}\n\nMemory Context: ${state.memoryContext}`
       );
       const analysisText = response as string;
@@ -468,8 +491,13 @@ export class LangGraphOrchestrator {
           Memory Context: ${state.memoryContext}`;
       }
 
+      // Enhance drafting prompt with knowledge base context
+      const enhancedDraftingPrompt = state.knowledgeBaseContext 
+        ? AGENT_CONFIG.DRAFTING_PROMPT + `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your drafting with relevant legal precedents and templates.`
+        : AGENT_CONFIG.DRAFTING_PROMPT;
+
       const response = await callDeepSeekLLM(
-        AGENT_CONFIG.DRAFTING_PROMPT,
+        enhancedDraftingPrompt,
         userMessageContent
       );
       const draftingResult = response as string;
