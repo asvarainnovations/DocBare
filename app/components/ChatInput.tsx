@@ -23,7 +23,7 @@ interface ChatInputProps {
   value?: string;
   onChange?: (value: string) => void;
   userId?: string; // Add userId prop
-  onFileUpload?: (file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }) => void;
+  onFileUpload?: (file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => void;
 }
 
 export default function ChatInput({
@@ -45,6 +45,7 @@ export default function ChatInput({
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isHomeVariant = variant === "home";
 
@@ -155,9 +156,12 @@ export default function ChatInput({
 
       const file = acceptedFiles[0];
       
-      // Notify parent component about file upload start
+      // Create AbortController for this upload
+      const abortController = new AbortController();
+      
+      // Notify parent component about file upload start with abort controller
       if (onFileUpload) {
-        onFileUpload({ name: file.name, status: 'uploading' });
+        onFileUpload({ name: file.name, status: 'uploading', abortController });
       }
 
       setUploading(true);
@@ -172,6 +176,7 @@ export default function ChatInput({
           headers: {
             "Content-Type": "multipart/form-data",
           },
+          signal: abortController.signal,
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / (progressEvent.total || 1)
@@ -195,7 +200,10 @@ export default function ChatInput({
           onFileUpload({ 
             name: file.name, 
             status: 'done', 
-            url: result.url 
+            url: result.url,
+            prismaId: result.document?.id,
+            firestoreId: result.firestoreId,
+            abortController
           });
         }
 
@@ -205,10 +213,16 @@ export default function ChatInput({
             await axios.post("/api/ingest", {
               documentId: response.data.results[0].document?.id,
               userId: userId,
+            }, {
+              signal: abortController.signal,
             });
             console.info("🟦 [chat_input][SUCCESS] Document ingestion started");
             toast.success("Document processing started");
-          } catch (ingestError) {
+          } catch (ingestError: any) {
+            if (ingestError.name === 'AbortError') {
+              console.info("🟦 [chat_input][INFO] Document ingestion aborted");
+              return;
+            }
             console.error(
               "🟥 [chat_input][ERROR] Failed to start ingestion:",
               ingestError
@@ -217,6 +231,12 @@ export default function ChatInput({
           }
         }
       } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.info("🟦 [chat_input][INFO] File upload aborted");
+          toast.info("File upload cancelled");
+          return;
+        }
+
         console.error("🟥 [chat_input][ERROR] File upload failed:", error);
         toast.error(error.response?.data?.error || "Failed to upload file");
         
@@ -225,7 +245,8 @@ export default function ChatInput({
           onFileUpload({ 
             name: file.name, 
             status: 'error', 
-            error: error.response?.data?.error || "Failed to upload file" 
+            error: error.response?.data?.error || "Failed to upload file",
+            abortController
           });
         }
       } finally {
@@ -239,6 +260,24 @@ export default function ChatInput({
     onDrop,
     noClick: true,
   });
+
+  // Handle manual file selection via button click
+  const handleFileButtonClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // Use the same onDrop logic for manually selected files
+      const fileArray = Array.from(files);
+      onDrop(fileArray);
+    }
+    // Reset the input value so the same file can be selected again
+    event.target.value = '';
+  };
 
   const containerClasses = clsx(
     "w-full",
@@ -329,17 +368,21 @@ export default function ChatInput({
                 <button
                   type="button"
                   tabIndex={-1}
+                  onClick={handleFileButtonClick}
                   className="p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors"
                   aria-label="Upload document or image"
+                  disabled={uploading}
                 >
-                  {isHomeVariant ? (
+                  {uploading ? (
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  ) : isHomeVariant ? (
                     <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   ) : (
                     <PaperClipIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   )}
                 </button>
                 <span className="absolute left-1/2 -translate-x-1/2 -top-8 bg-gray-900 text-xs text-white rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
-                  Upload document or image
+                  {uploading ? "Uploading..." : "Upload document or image"}
                 </span>
               </div>
             )}
@@ -408,6 +451,17 @@ export default function ChatInput({
 
           {/* Hidden input for dropzone */}
           <input {...getInputProps()} tabIndex={-1} className="hidden" />
+          
+          {/* Manual file input for button clicks */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.txt,.md"
+            onChange={handleFileInputChange}
+            tabIndex={-1}
+            className="hidden"
+          />
         </form>
 
         {isDragActive && (

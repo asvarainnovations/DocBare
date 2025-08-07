@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function Home() {
   const [input, setInput] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docActionMsg, setDocActionMsg] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export default function Home() {
   const [loadingFirstPrompt, setLoadingFirstPrompt] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string }) => {
+  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => {
     setUploadedFiles(prev => {
       const existingIndex = prev.findIndex(f => f.name === file.name);
       if (existingIndex >= 0) {
@@ -34,6 +34,50 @@ export default function Home() {
       }
     });
   }, []);
+
+  // Handle file removal with backend cleanup
+  const handleFileRemove = useCallback(async (index: number) => {
+    const fileToRemove = uploadedFiles[index];
+    if (!fileToRemove) return;
+
+    // Remove from UI immediately
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+
+    try {
+      // Cancel ongoing upload/processing if it exists
+      if (fileToRemove.abortController) {
+        fileToRemove.abortController.abort();
+        console.info('🟦 [file_removal][INFO] Aborted ongoing upload/processing for:', fileToRemove.name);
+      }
+
+      // Delete from backend if the file was successfully uploaded
+      if (fileToRemove.status === 'done' && fileToRemove.prismaId && session?.user?.id) {
+        console.info('🟦 [file_removal][INFO] Deleting file from backend:', fileToRemove.name);
+        
+        await axios.delete('/api/documents/delete', {
+          params: {
+            userId: session.user.id,
+            documentId: fileToRemove.prismaId,
+          },
+        });
+        
+        console.info('🟦 [file_removal][SUCCESS] File deleted from backend:', fileToRemove.name);
+        toast.success(`File "${fileToRemove.name}" removed successfully`);
+      } else if (fileToRemove.status === 'uploading') {
+        toast.info(`Upload cancelled for "${fileToRemove.name}"`);
+      } else {
+        toast.info(`File "${fileToRemove.name}" removed from list`);
+      }
+    } catch (error: any) {
+      console.error('🟥 [file_removal][ERROR] Failed to delete file from backend:', error);
+      
+      // Still show success since file is removed from UI
+      // Backend cleanup can be handled later if needed
+      if (fileToRemove.status === 'done') {
+        toast.warning(`File removed from list but may need manual cleanup`);
+      }
+    }
+  }, [uploadedFiles, session?.user?.id]);
 
   // Fetch documents
   const fetchDocuments = useCallback(async () => {
@@ -88,16 +132,12 @@ export default function Home() {
     setLoadingFirstPrompt(true);
     setSendError(null); // Clear previous errors
     try {
-      // Optimistically store the first message for the chat page
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('optimisticFirstMessage', msg);
-      }
+      // Create the chat session
       const sessionRes = await axios.post('/api/create_chat_session', { firstMessage: msg, userId: session.user.id });
       const { chatId } = sessionRes.data;
-      // Mark this chat as just created for the chat page
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('justCreatedChatId', chatId);
-      }
+      
+      // Navigate to the chat page immediately after creating the session
+      // The AI response will be generated on the chat page with proper streaming
       router.push(`/c/${chatId}`);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.message || 'Failed to create chat session';
@@ -134,7 +174,7 @@ export default function Home() {
                   {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
-                    onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
+                    onClick={() => handleFileRemove(idx)}
                     aria-label="Remove attachment"
                     type="button"
                   >
@@ -183,7 +223,7 @@ export default function Home() {
                   {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
-                    onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
+                    onClick={() => handleFileRemove(idx)}
                     aria-label="Remove attachment"
                     type="button"
                   >
