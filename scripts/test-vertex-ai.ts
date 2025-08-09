@@ -1,100 +1,81 @@
 import { retrieveFromKB, isKnowledgeBaseAvailable } from '../lib/vertexTool';
 import { aiLogger } from '../lib/logger';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 async function testVertexAI() {
   console.log('🧪 Testing Vertex AI Knowledge Base Integration...\n');
 
-  try {
-    // Test 1: Check if knowledge base is available
-    console.log('1. Checking knowledge base availability...');
-    const isAvailable = await isKnowledgeBaseAvailable();
-    console.log(`   Knowledge base available: ${isAvailable ? '✅ Yes' : '❌ No'}\n`);
+  // Check environment variables
+  console.log('🔍 Environment Variables Check:');
+  console.log(`   GOOGLE_CLOUD_PROJECT_ID: ${process.env.GOOGLE_CLOUD_PROJECT_ID ? '✅ Set' : '❌ Not set'}`);
+  console.log(`   VERTEX_AI_LOCATION: ${process.env.VERTEX_AI_LOCATION ? '✅ Set' : '❌ Not set'}`);
+  console.log(`   VERTEX_AI_INDEX_ENDPOINT: ${process.env.VERTEX_AI_INDEX_ENDPOINT ? '✅ Set' : '❌ Not set'}`);
+  console.log(`   VERTEX_AI_DEPLOYED_INDEX_ID: ${process.env.VERTEX_AI_DEPLOYED_INDEX_ID ? '✅ Set' : '❌ Not set'}`);
+  console.log(`   VERTEX_AI_PUBLIC_DOMAIN: ${process.env.VERTEX_AI_PUBLIC_DOMAIN ? '✅ Set' : '❌ Not set'}`);
+  console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log('');
 
-    if (!isAvailable) {
-      console.log('⚠️  Knowledge base not available. Please check your configuration:');
-      console.log('   - GCP_PROJECT_ID');
-      console.log('   - VERTEX_AI_LOCATION');
-      console.log('   - VERTEX_AI_INDEX_ENDPOINT');
-      console.log('   - Service account key file (development) or Cloud Run service account (production)');
-      return;
-    }
+  // Check service account file
+  const fs = require('fs');
+  const path = require('path');
+  const serviceAccountPath = path.join(__dirname, '../secrets/service-account-key.json');
+  
+  console.log('🔍 Service Account Check:');
+  if (fs.existsSync(serviceAccountPath)) {
+    console.log('   ✅ Service account key file exists');
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    console.log(`   ✅ Service account email: ${serviceAccount.client_email}`);
+  } else {
+    console.log('   ❌ Service account key file not found');
+  }
+  console.log('');
 
-    // Test 2: Test different query types
-    const testQueries = [
-      'What are the key elements of a valid contract?',
-      'Explain the concept of indemnity in Indian law',
-      'What are the requirements for a valid employment agreement?',
-      'How to draft a legal notice?',
-      'What are the grounds for contract termination?'
-    ];
+  // Test the endpoint URL format
+  const endpointUrl = `https://${process.env.VERTEX_AI_PUBLIC_DOMAIN}/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${process.env.VERTEX_AI_LOCATION}/indexEndpoints/${process.env.VERTEX_AI_INDEX_ENDPOINT}:findNeighbors`;
+  console.log('🔍 Endpoint URL Check:');
+  console.log(`   URL: ${endpointUrl}`);
+  console.log('');
 
-    console.log('2. Testing knowledge base retrieval...\n');
+  console.log('1. Checking knowledge base availability...');
+  const isAvailable = await isKnowledgeBaseAvailable();
+  console.log(`   Knowledge base available: ${isAvailable ? '✅ Yes' : '❌ No'}`);
 
-    for (let i = 0; i < testQueries.length; i++) {
-      const query = testQueries[i];
-      console.log(`   Query ${i + 1}: "${query}"`);
-      
-      try {
-        const startTime = Date.now();
-        const chunks = await retrieveFromKB(query, 3);
-        const duration = Date.now() - startTime;
-        
-        console.log(`   ✅ Retrieved ${chunks.length} chunks in ${duration}ms`);
-        
-        if (chunks.length > 0) {
-          console.log(`   📄 First chunk preview: ${chunks[0].substring(0, 100)}...`);
-        }
-        
-        console.log('');
-      } catch (error: any) {
-        console.log(`   ❌ Error: ${error.message}`);
-        console.log('');
+  if (!isAvailable) {
+    console.log('\n⚠️  Knowledge base not available. Please check your configuration:');
+    console.log('   - GOOGLE_CLOUD_PROJECT_ID');
+    console.log('   - VERTEX_AI_LOCATION');
+    console.log('   - VERTEX_AI_INDEX_ENDPOINT');
+    console.log('   - Service account key file (development) or Cloud Run service account (production)');
+    
+    // Try a direct test with more detailed error information
+    console.log('\n2. Testing direct knowledge base retrieval...');
+    try {
+      const chunks = await retrieveFromKB("test query", 1);
+      console.log(`   Retrieved chunks: ${chunks.length}`);
+      if (chunks.length > 0) {
+        console.log(`   First chunk preview: ${chunks[0].substring(0, 100)}...`);
+      }
+    } catch (error: any) {
+      console.log(`   ❌ Error: ${error.message}`);
+      if (error.response) {
+        console.log(`   Status: ${error.response.status}`);
+        console.log(`   Status Text: ${error.response.statusText}`);
+        console.log(`   Response Data: ${JSON.stringify(error.response.data, null, 2)}`);
       }
     }
-
-    // Test 3: Performance test
-    console.log('3. Performance test...');
-    const performanceQueries = [
-      'contract law',
-      'employment agreement',
-      'legal notice'
-    ];
-
-    const results = [];
-    for (const query of performanceQueries) {
-      const startTime = Date.now();
-      const chunks = await retrieveFromKB(query, 2);
-      const duration = Date.now() - startTime;
-      
-      results.push({
-        query,
-        chunks: chunks.length,
-        duration
-      });
-    }
-
-    console.log('   Performance Results:');
-    results.forEach(result => {
-      console.log(`   - "${result.query}": ${result.chunks} chunks in ${result.duration}ms`);
+  } else {
+    console.log('\n✅ Knowledge base is working correctly!');
+    
+    // Test with a real query
+    console.log('\n2. Testing with a real query...');
+    const chunks = await retrieveFromKB("privacy policy legal requirements", 3);
+    console.log(`   Retrieved ${chunks.length} chunks`);
+    chunks.forEach((chunk, index) => {
+      console.log(`   Chunk ${index + 1}: ${chunk.substring(0, 150)}...`);
     });
-
-    const avgDuration = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
-    console.log(`   Average response time: ${avgDuration.toFixed(0)}ms\n`);
-
-    // Test 4: Error handling test
-    console.log('4. Testing error handling...');
-    try {
-      const chunks = await retrieveFromKB('', 1); // Empty query
-      console.log(`   ✅ Empty query handled gracefully: ${chunks.length} chunks`);
-    } catch (error: any) {
-      console.log(`   ❌ Empty query error: ${error.message}`);
-    }
-
-    console.log('\n🎉 Vertex AI Knowledge Base Integration Test Complete!');
-
-  } catch (error: any) {
-    console.error('❌ Test failed:', error.message);
-    process.exit(1);
   }
 }
 

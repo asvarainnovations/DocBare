@@ -1,6 +1,7 @@
 import axios from "axios";
 import { aiLogger } from "./logger";
 import { GoogleAuth } from 'google-auth-library';
+import { getQueryEmbedding } from "./embeddings";
 
 /**
  * Retrieve relevant legal knowledge from Vertex AI Vector Search
@@ -18,7 +19,7 @@ export async function retrieveFromKB(query: string, topK: number = 5): Promise<s
     });
 
     // Check if Vertex AI is configured
-    if (!process.env.GCP_PROJECT_ID || !process.env.VERTEX_AI_LOCATION || !process.env.VERTEX_AI_INDEX_ENDPOINT) {
+    if (!process.env.GOOGLE_CLOUD_PROJECT_ID || !process.env.VERTEX_AI_LOCATION || !process.env.VERTEX_AI_INDEX_ENDPOINT || !process.env.VERTEX_AI_DEPLOYED_INDEX_ID || !process.env.VERTEX_AI_PUBLIC_DOMAIN) {
       aiLogger.warn("🟨 [vertex][WARN] Vertex AI not configured, skipping knowledge base retrieval");
       return [];
     }
@@ -56,11 +57,24 @@ export async function retrieveFromKB(query: string, topK: number = 5): Promise<s
       return [];
     }
 
+    // Generate embedding for the query
+    const queryEmbedding = await getQueryEmbedding(query);
+    
+    // Use the correct endpoint URL format based on the public domain name
+    const endpointUrl = `https://${process.env.VERTEX_AI_PUBLIC_DOMAIN}/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${process.env.VERTEX_AI_LOCATION}/indexEndpoints/${process.env.VERTEX_AI_INDEX_ENDPOINT}:findNeighbors`;
+    
     const response = await axios.post(
-      `https://${process.env.VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GCP_PROJECT_ID}/locations/${process.env.VERTEX_AI_LOCATION}/indexEndpoints/${process.env.VERTEX_AI_INDEX_ENDPOINT}:predict`,
+      endpointUrl,
       {
-        instances: [{ content: query }],
-        parameters: { topK },
+        deployedIndexId: process.env.VERTEX_AI_DEPLOYED_INDEX_ID,
+        queries: [{
+          datapoint: {
+            datapointId: "query",
+            featureVector: queryEmbedding
+          },
+          neighborCount: topK
+        }],
+        returnFullDatapoint: false
       },
       { 
         headers: { 
@@ -71,7 +85,9 @@ export async function retrieveFromKB(query: string, topK: number = 5): Promise<s
       }
     );
 
-    const chunks = response.data.predictions?.map((p: any) => p.content) || [];
+    // Extract the neighbor results
+    const neighbors = response.data.nearestNeighbors?.[0]?.neighbors || [];
+    const chunks = neighbors.map((neighbor: any) => neighbor.datapoint?.datapointId || '').filter(Boolean);
     
     // Calculate detailed metrics for retrieved chunks
     const totalCharacters = chunks.reduce((sum: number, chunk: string) => sum + chunk.length, 0);
