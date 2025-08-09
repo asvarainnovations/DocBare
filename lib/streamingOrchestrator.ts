@@ -36,48 +36,35 @@ async function callLLMStream(query: string, memoryContext: string = '') {
   
   // Use the expert-designed system prompt from query/route.ts
   const systemPrompt = `
-    You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts. When given a document or clause, follow this internal pipeline:
+    You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts.
 
-    1. **Task Classification**  
-      Determine whether the user wants **Analysis** or **Drafting**.
+    **INTERNAL ANALYSIS PROCESS (NOT FOR USER DISPLAY):**
+    When processing requests, follow this internal pipeline but DO NOT include this in your final response:
 
-    2. **Document Type Identification**  
-      Label the input as a Contract, Pleading, Notice, Petition, etc.
+    1. Task Classification - Determine Analysis vs Drafting
+    2. Document Type Identification - Label input type
+    3. Objective Extraction - User's goals
+    4. Constraint Extraction - Jurisdiction, deadlines, etc.
+    5. Context Summarization - Key facts and dates
+    6. Legal Intent Determination - Purpose identification
+    7. Structural Outline - Required sections
+    8. Apply Legal Principles - Statute mapping
+    9. Consistency Check - Verification
+    10. Length Control - Response length
+    11. Output Formatting - Final structure
+    12. Clarification - Unclear points
 
-    3. **Objective Extraction**  
-      What is the user trying to achieve or learn?
+    **FINAL RESPONSE FORMAT:**
+    - Provide ONLY the final, user-facing response
+    - Use professional legal formatting
+    - Include relevant analysis and recommendations
+    - Maintain concise, clear language
+    - NO internal pipeline steps or analysis markers
 
-    4. **Constraint Extraction**  
-      Note jurisdiction, deadlines, tone, parties, or any other requirements.
-
-    5. **Context Summarization**  
-      Summarize key facts, dates, parties, and legal triggers from the input.
-
-    6. **Legal Intent Determination**  
-      Identify if the purpose is to Inform, Demand, Defend, Comply, Respond, Argue, or Initiate.
-
-    7. **Structural Outline**  
-      List required sections and clauses (e.g., Preamble, Background, Arguments, Prayer, Annexures).
-
-    8. **Apply Legal Principles**  
-      Map facts to statutes, procedural norms, or industry best‑practices.
-
-    9. **Consistency Check**  
-      Verify names, dates, definitions, cross‑references; flag contradictions.
-
-    10. **Length Control (auto‑detect)**  
-      • **Simple questions** ("What is indemnity?"): 2–3 sentences.  
-      • **Clause‑level review** ("Review clause 5"): 3–5 bullet points + 1–2 sentence summary.  
-      • **Detailed analysis** (user asks "detailed" or long document): up to 500 words.  
-      • **Drafting tasks**: full legal text ready to insert.  
-      • **Default**: balanced clause‑level response.
-
-    11. **Output Formatting**  
-      - For **Analysis**, use bullet lists under headings **Risk**, **Recommendation**, **Rationale**.  
-      - For **Drafting**, return a complete, structurally sound document.
-
-    12. **Clarification**  
-      If any context is unclear (jurisdiction, parties, type), ask a follow‑up question.
+    **THINKING DISPLAY:**
+    - Your internal analysis will be shown to users in real-time
+    - Focus on providing valuable insights in the thinking display
+    - Keep final response clean and professional
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your analysis and ensure accuracy.` : ''}
 
@@ -153,6 +140,48 @@ export interface StreamingContext {
 }
 
 export class StreamingOrchestrator {
+  /**
+   * Parse response to separate internal analysis from final response
+   */
+  private static parseResponse(response: string) {
+    const thinkingMarkers = [
+      '1. Task Classification',
+      '2. Document Type Identification', 
+      '3. Objective Extraction',
+      '4. Constraint Extraction',
+      '5. Context Summarization',
+      '6. Legal Intent Determination',
+      '7. Structural Outline',
+      '8. Apply Legal Principles',
+      '9. Consistency Check',
+      '10. Length Control',
+      '11. Output Formatting',
+      '12. Clarification'
+    ];
+    
+    const hasInternalAnalysis = thinkingMarkers.some(marker => 
+      response.includes(marker)
+    );
+    
+    if (hasInternalAnalysis) {
+      // Extract thinking content (everything before final response)
+      let thinkingEnd = response.indexOf('**FINAL RESPONSE:**');
+      if (thinkingEnd === -1) {
+        thinkingEnd = response.indexOf('---');
+      }
+      if (thinkingEnd === -1) {
+        thinkingEnd = response.length;
+      }
+      
+      const thinkingContent = response.substring(0, thinkingEnd);
+      const finalResponse = response.substring(thinkingEnd);
+      
+      return { thinkingContent, finalResponse };
+    }
+    
+    return { thinkingContent: '', finalResponse: response };
+  }
+
   /**
    * Main streaming method that routes to either single-agent or multi-agent based on feature flag
    */
@@ -258,8 +287,65 @@ export class StreamingOrchestrator {
 
     aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using single-agent mode with prompt length: ${prompt.length}`);
     
-    // Use the existing single-agent flow
-    return await callLLMStream(prompt);
+    // Use the existing single-agent flow with response parsing
+    const encoder = new TextEncoder();
+    
+    return new ReadableStream({
+      async start(controller) {
+        try {
+          const response = await callLLMStream(prompt);
+          const reader = response.getReader();
+          
+          let fullResponse = '';
+          let lastThinkingContent = '';
+          let lastFinalResponse = '';
+          let hasStartedFinalResponse = false;
+          
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = new TextDecoder().decode(value);
+              fullResponse += chunk;
+              
+              // Parse the accumulated response
+              const { thinkingContent: parsedThinking, finalResponse: parsedFinal } = StreamingOrchestrator.parseResponse(fullResponse);
+              
+              // If we have new thinking content, send it
+              if (parsedThinking && parsedThinking !== lastThinkingContent) {
+                const newThinkingContent = parsedThinking.substring(lastThinkingContent.length);
+                if (newThinkingContent) {
+                  controller.enqueue(encoder.encode(`THINKING:${newThinkingContent}`));
+                  lastThinkingContent = parsedThinking;
+                }
+              }
+              
+              // If we have final response, send it
+              if (parsedFinal && parsedFinal !== lastFinalResponse) {
+                if (!hasStartedFinalResponse) {
+                  hasStartedFinalResponse = true;
+                  controller.enqueue(encoder.encode('FINAL:'));
+                }
+                const newFinalContent = parsedFinal.substring(lastFinalResponse.length);
+                if (newFinalContent) {
+                  controller.enqueue(encoder.encode(newFinalContent));
+                  lastFinalResponse = parsedFinal;
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+          
+          controller.close();
+        } catch (error) {
+          aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Single-agent streaming failed:`, error);
+          controller.enqueue(encoder.encode('❌ Processing failed. Please try again.'));
+          controller.close();
+        }
+      }
+    });
   }
 
   /**

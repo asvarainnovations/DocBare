@@ -14,6 +14,8 @@ interface Message {
 export function useChatAI(chatId: string, userId?: string) {
   const [loadingAI, setLoadingAI] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingContent, setThinkingContent] = useState('');
   const autoResponseGeneratedRef = useRef(false);
 
   // Generate AI response with proper streaming display
@@ -24,6 +26,8 @@ export function useChatAI(chatId: string, userId?: string) {
     }
 
     setLoadingAI(true);
+    setIsThinking(true);
+    setThinkingContent('');
     let aiMessage: Message | null = null;
 
     try {
@@ -79,38 +83,51 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
-        // Handle both JSON streaming format and plain text format
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            // Handle JSON streaming format (single-agent mode)
-            try {
-              const jsonStr = line.slice(6); // Remove 'data: ' prefix
-              if (jsonStr.trim() === '[DONE]') continue;
-              
-              const jsonData = JSON.parse(jsonStr);
-              if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
-                const content = jsonData.choices[0].delta.content;
-                aiResponse += content;
-                hasStartedStreaming = true;
-                // Update the message with streaming content
-                updateMessage(aiMessage.id, { content: aiResponse });
+        // Handle thinking and final response separation
+        if (chunk.startsWith('THINKING:')) {
+          const thinkingData = chunk.replace('THINKING:', '');
+          setThinkingContent(prev => prev + thinkingData);
+        } else if (chunk.startsWith('FINAL:')) {
+          setIsThinking(false);
+          const finalData = chunk.replace('FINAL:', '');
+          aiResponse += finalData;
+          hasStartedStreaming = true;
+          updateMessage(aiMessage.id, { content: aiResponse });
+        } else {
+          // Handle both JSON streaming format and plain text format
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              // Handle JSON streaming format (single-agent mode)
+              try {
+                const jsonStr = line.slice(6); // Remove 'data: ' prefix
+                if (jsonStr.trim() === '[DONE]') continue;
+                
+                const jsonData = JSON.parse(jsonStr);
+                if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                  const content = jsonData.choices[0].delta.content;
+                  aiResponse += content;
+                  hasStartedStreaming = true;
+                  // Update the message with streaming content
+                  updateMessage(aiMessage.id, { content: aiResponse });
+                }
+              } catch (parseError) {
+                // Skip invalid JSON lines
+                console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
               }
-            } catch (parseError) {
-              // Skip invalid JSON lines
-              console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
+            } else if (line.trim()) {
+              // Handle plain text format (multi-agent mode)
+              aiResponse += line + '\n';
+              hasStartedStreaming = true;
+              // Update the message with streaming content
+              updateMessage(aiMessage.id, { content: aiResponse });
             }
-          } else if (line.trim()) {
-            // Handle plain text format (multi-agent mode)
-            aiResponse += line + '\n';
-            hasStartedStreaming = true;
-            // Update the message with streaming content
-            updateMessage(aiMessage.id, { content: aiResponse });
           }
         }
       }
 
       reader.releaseLock();
+      setIsThinking(false);
 
       // Save the AI message to the database
       if (aiResponse.trim()) {
@@ -131,6 +148,7 @@ export function useChatAI(chatId: string, userId?: string) {
       }
     } catch (error: any) {
       console.error('🟥 [chat_ui][ERROR] Failed to generate auto AI response:', error.message);
+      setIsThinking(false);
       
       // Remove the AI message if it was added
       if (aiMessage) {
@@ -164,6 +182,8 @@ export function useChatAI(chatId: string, userId?: string) {
 
     addMessage(userMessage);
     setLoadingAI(true);
+    setIsThinking(true);
+    setThinkingContent('');
     setSendError(null);
 
     let aiMessage: Message | null = null;
@@ -219,34 +239,46 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
-        // Handle both JSON streaming format and plain text format
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            // Handle JSON streaming format (single-agent mode)
-            try {
-              const jsonStr = line.slice(6); // Remove 'data: ' prefix
-              if (jsonStr.trim() === '[DONE]') continue;
-              
-              const jsonData = JSON.parse(jsonStr);
-              if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
-                const content = jsonData.choices[0].delta.content;
-                aiResponse += content;
-                updateMessage(aiMessage.id, { content: aiResponse });
+        // Handle thinking and final response separation
+        if (chunk.startsWith('THINKING:')) {
+          const thinkingData = chunk.replace('THINKING:', '');
+          setThinkingContent(prev => prev + thinkingData);
+        } else if (chunk.startsWith('FINAL:')) {
+          setIsThinking(false);
+          const finalData = chunk.replace('FINAL:', '');
+          aiResponse += finalData;
+          updateMessage(aiMessage.id, { content: aiResponse });
+        } else {
+          // Handle both JSON streaming format and plain text format
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              // Handle JSON streaming format (single-agent mode)
+              try {
+                const jsonStr = line.slice(6); // Remove 'data: ' prefix
+                if (jsonStr.trim() === '[DONE]') continue;
+                
+                const jsonData = JSON.parse(jsonStr);
+                if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                  const content = jsonData.choices[0].delta.content;
+                  aiResponse += content;
+                  updateMessage(aiMessage.id, { content: aiResponse });
+                }
+              } catch (parseError) {
+                // Skip invalid JSON lines
+                console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
               }
-            } catch (parseError) {
-              // Skip invalid JSON lines
-              console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
+            } else if (line.trim()) {
+              // Handle plain text format (multi-agent mode)
+              aiResponse += line + '\n';
+              updateMessage(aiMessage.id, { content: aiResponse });
             }
-          } else if (line.trim()) {
-            // Handle plain text format (multi-agent mode)
-            aiResponse += line + '\n';
-            updateMessage(aiMessage.id, { content: aiResponse });
           }
         }
       }
 
       reader.releaseLock();
+      setIsThinking(false);
 
       // Save the AI message to the database
       if (aiResponse.trim()) {
@@ -265,6 +297,7 @@ export function useChatAI(chatId: string, userId?: string) {
       }
     } catch (error: any) {
       console.error('🟥 [chat_ui][ERROR] Failed to send message:', error.message);
+      setIsThinking(false);
       const errorMessage = error.message || 'Failed to send message';
       setSendError(errorMessage);
       toast.error(errorMessage);
@@ -333,6 +366,8 @@ export function useChatAI(chatId: string, userId?: string) {
     sendError,
     handleSend,
     generateAIResponse,
-    checkAndGenerateAutoResponse
+    checkAndGenerateAutoResponse,
+    isThinking,
+    thinkingContent
   };
 } 

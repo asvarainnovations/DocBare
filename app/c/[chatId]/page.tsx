@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ChatInput from "@/app/components/ChatInput";
 import { useSidebar } from "@/app/components/SidebarContext";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
+import { ThinkingDisplay } from "@/app/components/ThinkingDisplay";
 
 // Custom hooks
 import { useChatMessages } from "./hooks/useChatMessages";
@@ -48,7 +49,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { uploadedFiles, handleFileUpload, handleFileRemove } = useFileUpload(
     session?.user?.id
   );
-  const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse } =
+  const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, isThinking, thinkingContent } =
     useChatAI(params.chatId, session?.user?.id);
 
   // Essential logging for chat page state (only in development)
@@ -210,7 +211,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           )}
 
           {/* Loading indicator for AI response */}
-          {loadingAI && (
+          {loadingAI && !isThinking && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -223,6 +224,25 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     <span className="text-sm">AI is thinking...</span>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Thinking Display */}
+          {(isThinking || thinkingContent) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full flex justify-start mb-4"
+            >
+              <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
+                <ThinkingDisplay
+                  isThinking={isThinking}
+                  thinkingContent={thinkingContent}
+                  onComplete={() => {
+                    // Thinking display will auto-hide after completion
+                  }}
+                />
               </div>
             </motion.div>
           )}
