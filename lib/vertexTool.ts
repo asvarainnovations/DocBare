@@ -57,7 +57,7 @@ export async function retrieveFromKB(query: string, topK: number = 5): Promise<s
     }
 
     const response = await axios.post(
-      `https://${process.env.VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GCP_PROJECT_ID}/locations/${process.env.VERTEX_AI_LOCATION}/endpoints/${process.env.VERTEX_AI_INDEX_ENDPOINT}:predict`,
+      `https://${process.env.VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GCP_PROJECT_ID}/locations/${process.env.VERTEX_AI_LOCATION}/indexEndpoints/${process.env.VERTEX_AI_INDEX_ENDPOINT}:predict`,
       {
         instances: [{ content: query }],
         parameters: { topK },
@@ -67,7 +67,7 @@ export async function retrieveFromKB(query: string, topK: number = 5): Promise<s
           Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000 // 10 second timeout
+        timeout: 30000 // 30 second timeout
       }
     );
 

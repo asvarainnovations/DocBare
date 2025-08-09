@@ -47,12 +47,10 @@ export default function Home() {
       // Cancel ongoing upload/processing if it exists
       if (fileToRemove.abortController) {
         fileToRemove.abortController.abort();
-        console.info('🟦 [file_removal][INFO] Aborted ongoing upload/processing for:', fileToRemove.name);
       }
 
       // Delete from backend if the file was successfully uploaded
       if (fileToRemove.status === 'done' && fileToRemove.prismaId && session?.user?.id) {
-        console.info('🟦 [file_removal][INFO] Deleting file from backend:', fileToRemove.name);
         
         await axios.delete('/api/documents/delete', {
           params: {
@@ -131,6 +129,12 @@ export default function Home() {
     }
     setLoadingFirstPrompt(true);
     setSendError(null); // Clear previous errors
+    
+    // Set a flag in localStorage to indicate we're transitioning
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('docbare_creating_chat', 'true');
+    }
+    
     try {
       // Create the chat session
       const sessionRes = await axios.post('/api/create_chat_session', { firstMessage: msg, userId: session.user.id });
@@ -139,17 +143,24 @@ export default function Home() {
       // Navigate to the chat page immediately after creating the session
       // The AI response will be generated on the chat page with proper streaming
       router.push(`/c/${chatId}`);
+      
+      // Keep loading state active - it will be cleared when the new page loads
+      // This ensures the "Creating your chat..." animation stays visible during navigation
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.message || 'Failed to create chat session';
       setSendError(errorMessage);
       toast.error(errorMessage);
-    } finally {
-      setLoadingFirstPrompt(false);
+      setLoadingFirstPrompt(false); // Only clear loading on error
+      
+      // Clear the transition flag on error
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('docbare_creating_chat');
+      }
     }
   }
 
   // Show loading skeleton when transitioning
-  if (loadingFirstPrompt) {
+  if (loadingFirstPrompt || (typeof window !== 'undefined' && localStorage.getItem('docbare_creating_chat') === 'true')) {
     return <LoadingSkeleton message="Creating your chat..." />;
   }
 

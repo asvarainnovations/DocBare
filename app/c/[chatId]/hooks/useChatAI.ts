@@ -18,8 +18,6 @@ export function useChatAI(chatId: string, userId?: string) {
 
   // Generate AI response with proper streaming display
   const generateAIResponse = useCallback(async (message: string, addMessage: (message: Message) => void, updateMessage: (messageId: string, updates: Partial<Message>) => void, removeMessage: (messageId: string) => void) => {
-    console.info('🟦 [chat_ui][INFO] generateAIResponse called with message:', message.substring(0, 100));
-    
     if (!userId) {
       console.error('🟥 [chat_ui][ERROR] No user ID');
       return;
@@ -116,7 +114,9 @@ export function useChatAI(chatId: string, userId?: string) {
             role: 'ASSISTANT',
             content: aiResponse.trim()
           });
-          console.info('🟩 [chat_ui][SUCCESS] Auto AI message saved to database');
+          if (process.env.NODE_ENV === 'development') {
+            console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
+          }
         } catch (saveError) {
           console.error('🟥 [chat_ui][ERROR] Failed to save auto AI message:', saveError);
           // Don't fail the entire request if saving fails
@@ -258,31 +258,13 @@ export function useChatAI(chatId: string, userId?: string) {
     updateMessage: (messageId: string, updates: Partial<Message>) => void, 
     removeMessage: (messageId: string) => void
   ) => {
-    console.info('🟦 [chat_ui][INFO] checkAndGenerateAutoResponse called with:', {
-      chatId,
-      userId,
-      messagesCount: messages.length,
-      sessionMeta: sessionMeta ? 'exists' : 'null',
-      loadingMessages,
-      loadingMeta,
-      autoResponseGenerated: autoResponseGeneratedRef.current
-    });
-    
     // Don't proceed if we're still loading or if we've already generated a response
     if (!chatId || !userId || loadingMessages || loadingMeta || autoResponseGeneratedRef.current) {
-      console.info('🟦 [chat_ui][INFO] Auto-response check skipped:', {
-        hasChatId: !!chatId,
-        hasUserId: !!userId,
-        loadingMessages,
-        loadingMeta,
-        autoResponseGenerated: autoResponseGeneratedRef.current
-      });
       return;
     }
     
     // Wait for both messages and metadata to be fully loaded
     if (loadingMessages || loadingMeta) {
-      console.info('🟦 [chat_ui][INFO] Waiting for data to load:', { loadingMessages, loadingMeta });
       return;
     }
     
@@ -290,53 +272,24 @@ export function useChatAI(chatId: string, userId?: string) {
     const userMessages = messages.filter(msg => msg.role === 'USER');
     const aiMessages = messages.filter(msg => msg.role === 'ASSISTANT');
     
-    console.info('🟦 [chat_ui][INFO] Auto-response check:', {
-      userMessages: userMessages.length,
-      aiMessages: aiMessages.length,
-      totalMessages: messages.length,
-      messages: messages.map(m => ({ id: m.id, role: m.role, content: m.content.substring(0, 50) }))
-    });
-    
     // Safety check: if we already have AI messages, don't generate more
     if (aiMessages.length > 0) {
       autoResponseGeneratedRef.current = true;
-      console.info('🟦 [chat_ui][INFO] AI messages already exist, skipping auto-response');
       return;
     }
     
     // Only generate auto-response if:
     // 1. There's exactly one user message
     // 2. No AI messages exist
-    // 3. This appears to be a new chat (not an existing one being loaded)
     if (userMessages.length === 1 && aiMessages.length === 0) {
       const firstUserMessage = userMessages[0];
       
-      // Check if this is a new chat by looking at session metadata
-      const sessionAge = sessionMeta?.createdAt ? Date.now() - new Date(sessionMeta.createdAt).getTime() : 0;
-      const isNewSession = sessionAge < 300000; // Within the last 5 minutes (increased from 2 minutes)
-      
-      // Also check message age as a backup
-      const messageAge = Date.now() - new Date(firstUserMessage.createdAt).getTime();
-      const isRecentMessage = messageAge < 300000; // Within the last 5 minutes (increased from 2 minutes)
-      
-      console.info('🟦 [chat_ui][INFO] Auto-response decision:', {
-        sessionAge: Math.round(sessionAge / 1000) + 's',
-        messageAge: Math.round(messageAge / 1000) + 's',
-        isNewSession,
-        isRecentMessage,
-        shouldGenerate: isNewSession && isRecentMessage,
-        firstUserMessageContent: firstUserMessage.content.substring(0, 50)
-      });
-      
-      if (isNewSession && isRecentMessage) {
-        autoResponseGeneratedRef.current = true; // Prevent multiple auto-responses
+      // Generate AI response for the first user message
+      autoResponseGeneratedRef.current = true; // Prevent multiple auto-responses
+      if (process.env.NODE_ENV === 'development') {
         console.info('🟦 [chat_ui][INFO] Auto-generating AI response for new chat');
-        await generateAIResponse(firstUserMessage.content, addMessage, updateMessage, removeMessage);
-      } else {
-        // This is an existing chat - don't auto-generate
-        autoResponseGeneratedRef.current = true;
-        console.info('🟦 [chat_ui][INFO] Existing chat detected, skipping auto-response');
       }
+      await generateAIResponse(firstUserMessage.content, addMessage, updateMessage, removeMessage);
     }
   }, [chatId, userId, generateAIResponse]);
 

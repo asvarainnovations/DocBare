@@ -145,7 +145,9 @@ export default function ChatInput({
   // Dropzone configuration
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      console.info("🟦 [chat_input][INFO] Files dropped:", acceptedFiles);
+      if (process.env.NODE_ENV === 'development') {
+      console.info("🟦 [chat_input][INFO] Files dropped:", acceptedFiles.length);
+    }
 
       if (!acceptedFiles.length) return;
 
@@ -220,7 +222,9 @@ export default function ChatInput({
             toast.success("Document processing started");
           } catch (ingestError: any) {
             if (ingestError.name === 'AbortError') {
-              console.info("🟦 [chat_input][INFO] Document ingestion aborted");
+              if (process.env.NODE_ENV === 'development') {
+          console.info("🟦 [chat_input][INFO] Document ingestion aborted");
+        }
               return;
             }
             console.error(
@@ -232,7 +236,9 @@ export default function ChatInput({
         }
       } catch (error: any) {
         if (error.name === 'AbortError') {
+          if (process.env.NODE_ENV === 'development') {
           console.info("🟦 [chat_input][INFO] File upload aborted");
+        }
           toast.info("File upload cancelled");
           return;
         }

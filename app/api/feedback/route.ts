@@ -7,7 +7,17 @@ export async function POST(req: NextRequest) {
   try {
     const { sessionId, userId, rating, messageIndex, messageId, comments } = await req.json();
     
+    console.info('🟦 [feedback][INFO] Received feedback request:', { 
+      sessionId, 
+      userId, 
+      rating, 
+      messageIndex, 
+      messageId, 
+      comments 
+    });
+    
     if (!sessionId || !userId || !rating) {
+      console.error('🟥 [feedback][ERROR] Missing required fields:', { sessionId, userId, rating });
       return NextResponse.json({ 
         error: 'Missing sessionId, userId, or rating' 
       }, { status: 400 });
@@ -15,18 +25,48 @@ export async function POST(req: NextRequest) {
 
     // Validate rating
     if (!['good', 'bad'].includes(rating)) {
+      console.error('🟥 [feedback][ERROR] Invalid rating:', rating);
       return NextResponse.json({ 
         error: 'Rating must be either "good" or "bad"' 
       }, { status: 400 });
     }
 
-    // Sanitize feedback data
+    // Ensure messageIndex is a number or null
+    let sanitizedMessageIndex: number | null = null;
+    if (messageIndex !== undefined && messageIndex !== null && messageIndex !== '') {
+      const parsed = parseInt(messageIndex.toString(), 10);
+      if (!isNaN(parsed)) {
+        sanitizedMessageIndex = parsed;
+      } else {
+        console.warn('🟨 [feedback][WARN] Invalid messageIndex:', messageIndex);
+      }
+    }
+
+    console.info('🟦 [feedback][INFO] Sanitized messageIndex:', sanitizedMessageIndex);
+
+    // Check if feedback already exists for this user, session, and messageIndex
+    const existingFeedback = await prisma.feedback.findFirst({
+      where: {
+        userId,
+        sessionId,
+        messageIndex: sanitizedMessageIndex,
+      }
+    });
+
+    if (existingFeedback) {
+      console.info('🟨 [feedback][INFO] Feedback already exists:', existingFeedback.id);
+      return NextResponse.json({ 
+        error: 'Feedback already submitted for this message' 
+      }, { status: 409 });
+    }
+
+    // Create new feedback
     const feedback = await prisma.feedback.create({
       data: {
         sessionId,
         userId,
         rating,
-        messageIndex: messageIndex || null,
+        messageIndex: sanitizedMessageIndex,
         comments: typeof comments === 'string' ? comments : null,
         createdAt: new Date(),
       }
@@ -36,7 +76,8 @@ export async function POST(req: NextRequest) {
       feedbackId: feedback.id,
       sessionId, 
       userId, 
-      rating 
+      rating,
+      messageIndex: sanitizedMessageIndex
     });
 
     return NextResponse.json({ 
@@ -47,7 +88,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('🟥 [feedback][ERROR] Failed to submit feedback:', error);
     
-    // Handle duplicate feedback submission
+    // Handle duplicate feedback submission (fallback)
     if (error.code === 'P2002') {
       return NextResponse.json({ 
         error: 'Feedback already submitted for this message' 

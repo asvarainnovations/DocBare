@@ -37,7 +37,9 @@ export default function RegenerateButton({
         return;
       }
 
+      if (process.env.NODE_ENV === 'development') {
       console.info('🟩 [regenerate][INFO] Regenerating response for message index:', messageIndex);
+    }
 
       const response = await fetch('/api/query', {
         method: 'POST',

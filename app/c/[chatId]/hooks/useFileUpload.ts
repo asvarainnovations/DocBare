@@ -43,12 +43,10 @@ export function useFileUpload(userId?: string) {
       // Cancel ongoing upload/processing if it exists
       if (fileToRemove.abortController) {
         fileToRemove.abortController.abort();
-        console.info('🟦 [file_removal][INFO] Aborted ongoing upload/processing for:', fileToRemove.name);
       }
 
       // Delete from backend if the file was successfully uploaded
       if (fileToRemove.status === 'done' && fileToRemove.prismaId && userId) {
-        console.info('🟦 [file_removal][INFO] Deleting file from backend:', fileToRemove.name);
         
         await axios.delete('/api/documents/delete', {
           params: {

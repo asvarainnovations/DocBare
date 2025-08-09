@@ -3,8 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
-import { toast } from "sonner";
 
 import ChatInput from "@/app/components/ChatInput";
 import { useSidebar } from "@/app/components/SidebarContext";
@@ -53,32 +51,17 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse } =
     useChatAI(params.chatId, session?.user?.id);
 
-  // Debug logging for input state
+  // Essential logging for chat page state (only in development)
   useEffect(() => {
-    console.log("🟦 [chat_ui][INFO] Input state changed:", input);
-  }, [input]);
-
-  // Debug logging for session and component state
-  useEffect(() => {
-    console.log("🟦 [chat_ui][INFO] Chat page mounted/updated:", {
-      chatId: params.chatId,
-      sessionStatus: status,
-      sessionExists: !!session,
-      userId: session?.user?.id,
-      messagesCount: messages.length,
-      loadingAI,
-      loadingMeta,
-      loadingMessages,
-    });
-  }, [
-    params.chatId,
-    status,
-    session,
-    messages.length,
-    loadingAI,
-    loadingMeta,
-    loadingMessages,
-  ]);
+    if (process.env.NODE_ENV === 'development') {
+      console.info("🟦 [chat_ui][INFO] Chat page state:", {
+        chatId: params.chatId,
+        messagesCount: messages.length,
+        loadingAI,
+        loadingMessages,
+      });
+    }
+  }, [params.chatId, messages.length, loadingAI, loadingMessages]);
 
   // Auto-generate AI response for first message if it's a new chat
   useEffect(() => {
@@ -90,7 +73,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       messages.length === 1 &&
       messages[0].role === "USER"
     ) {
-      console.info("🟦 [chat_ui][INFO] Auto-response check for new chat");
       checkAndGenerateAutoResponse(
         messages,
         sessionMeta,
@@ -127,6 +109,14 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [loadingMessages, loadingMeta]);
 
+  // Clear loading state from home page when chat page loads
+  useEffect(() => {
+    // Clear any loading state that might be set from the home page
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('docbare_creating_chat');
+    }
+  }, []);
+
   // Handle sending messages
   const handleSendMessage = useCallback(
     async (message: string) => {
@@ -153,27 +143,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       setFeedback((prev) => ({ ...prev, [messageIndex]: type }));
     }
 
-    try {
-      // Submit feedback to API
-      await axios.post("/api/feedback", {
-        sessionId: params.chatId,
-        userId: session?.user?.id,
-        rating: type,
-        comments: comment || `User marked message ${messageIndex} as ${type}`,
-        messageIndex,
-        feedbackType: type,
-      });
-
-      console.info("🟦 [chat_ui][INFO] Feedback submitted successfully:", {
-        type,
-        comment,
-        messageIndex,
-      });
-      toast.success("Feedback submitted successfully!");
-    } catch (err: any) {
-      console.error("🟥 [chat_ui][ERROR] Failed to submit feedback:", err);
-      toast.error("Failed to submit feedback");
-    }
+    // Note: FeedbackSection component already handles the API submission
+    // This function is only used for updating local state
+    console.info("🟦 [chat_ui][INFO] Feedback state updated:", {
+      type,
+      comment,
+      messageIndex,
+    });
   };
 
   // Show loading skeleton while page is loading

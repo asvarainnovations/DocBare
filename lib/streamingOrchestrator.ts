@@ -20,17 +20,19 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     ? `\n\n**Legal Knowledge Base Context:**\n${kbChunks.join("\n\n---\n\n")}`
     : '';
   
-  // Log detailed knowledge base metrics
-  aiLogger.info("🟦 [streaming][INFO] Knowledge base content metrics", {
-    query: query.substring(0, 100),
-    chunksRetrieved: totalChunks,
-    totalCharacters: totalCharacters,
-    totalWords: totalWords,
-    estimatedTokens: estimatedTokens,
-    averageChunkSize: totalChunks > 0 ? Math.round(totalCharacters / totalChunks) : 0,
-    hasKnowledgeContext: knowledgeContext.length > 0,
-    knowledgeContextLength: knowledgeContext.length
-  });
+  // Log detailed knowledge base metrics (development only)
+  if (process.env.NODE_ENV === 'development') {
+    aiLogger.info("🟦 [streaming][INFO] Knowledge base content metrics", {
+      query: query.substring(0, 100),
+      chunksRetrieved: totalChunks,
+      totalCharacters: totalCharacters,
+      totalWords: totalWords,
+      estimatedTokens: estimatedTokens,
+      averageChunkSize: totalChunks > 0 ? Math.round(totalCharacters / totalChunks) : 0,
+      hasKnowledgeContext: knowledgeContext.length > 0,
+      knowledgeContextLength: knowledgeContext.length
+    });
+  }
   
   // Use the expert-designed system prompt from query/route.ts
   const systemPrompt = `
@@ -87,21 +89,23 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     ? `${systemPrompt}\n\n**Previous Context:**\n${memoryContext}\n\n**Current Query:**`
     : systemPrompt;
   
-  // Log final system prompt metrics
+  // Log final system prompt metrics (development only)
   const systemPromptCharacters = enhancedSystemPrompt.length;
   const systemPromptWords = enhancedSystemPrompt.split(/\s+/).length;
   const systemPromptEstimatedTokens = Math.ceil(systemPromptCharacters / 4);
   
-  aiLogger.info("🟦 [streaming][INFO] Final system prompt metrics", {
-    query: query.substring(0, 100),
-    systemPromptCharacters: systemPromptCharacters,
-    systemPromptWords: systemPromptWords,
-    systemPromptEstimatedTokens: systemPromptEstimatedTokens,
-    hasMemoryContext: !!memoryContext,
-    memoryContextLength: memoryContext ? memoryContext.length : 0,
-    knowledgeBaseContribution: knowledgeContext.length,
-    knowledgeBaseContributionPercentage: systemPromptCharacters > 0 ? Math.round((knowledgeContext.length / systemPromptCharacters) * 100) : 0
-  });
+  if (process.env.NODE_ENV === 'development') {
+    aiLogger.info("🟦 [streaming][INFO] Final system prompt metrics", {
+      query: query.substring(0, 100),
+      systemPromptCharacters: systemPromptCharacters,
+      systemPromptWords: systemPromptWords,
+      systemPromptEstimatedTokens: systemPromptEstimatedTokens,
+      hasMemoryContext: !!memoryContext,
+      memoryContextLength: memoryContext ? memoryContext.length : 0,
+      knowledgeBaseContribution: knowledgeContext.length,
+      knowledgeBaseContributionPercentage: systemPromptCharacters > 0 ? Math.round((knowledgeContext.length / systemPromptCharacters) * 100) : 0
+    });
+  }
 
   try {
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {

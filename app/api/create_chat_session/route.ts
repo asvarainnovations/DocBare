@@ -31,7 +31,9 @@ async function generateChatTitle(prompt: string) {
 export async function POST(req: NextRequest) {
   try {
     const { firstMessage, userId } = await req.json();
-    console.info('🟦 [chat_session][INFO] Received:', { firstMessage, userId });
+    if (process.env.NODE_ENV === 'development') {
+      console.info('🟦 [chat_session][INFO] Received:', { firstMessage: firstMessage.substring(0, 100), userId });
+    }
     if (!userId) {
       console.error('🟥 [chat_session][ERROR] Missing userId');
       return NextResponse.json({ error: 'Missing userId' }, { status: 401 });
