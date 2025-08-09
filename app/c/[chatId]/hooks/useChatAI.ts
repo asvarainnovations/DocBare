@@ -94,34 +94,11 @@ export function useChatAI(chatId: string, userId?: string) {
           hasStartedStreaming = true;
           updateMessage(aiMessage.id, { content: aiResponse });
         } else {
-          // Handle both JSON streaming format and plain text format
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              // Handle JSON streaming format (single-agent mode)
-              try {
-                const jsonStr = line.slice(6); // Remove 'data: ' prefix
-                if (jsonStr.trim() === '[DONE]') continue;
-                
-                const jsonData = JSON.parse(jsonStr);
-                if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
-                  const content = jsonData.choices[0].delta.content;
-                  aiResponse += content;
-                  hasStartedStreaming = true;
-                  // Update the message with streaming content
-                  updateMessage(aiMessage.id, { content: aiResponse });
-                }
-              } catch (parseError) {
-                // Skip invalid JSON lines
-                console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
-              }
-            } else if (line.trim()) {
-              // Handle plain text format (multi-agent mode)
-              aiResponse += line + '\n';
-              hasStartedStreaming = true;
-              // Update the message with streaming content
-              updateMessage(aiMessage.id, { content: aiResponse });
-            }
+          // Handle any remaining plain text content (fallback for multi-agent mode)
+          if (chunk.trim()) {
+            aiResponse += chunk;
+            hasStartedStreaming = true;
+            updateMessage(aiMessage.id, { content: aiResponse });
           }
         }
       }
@@ -249,30 +226,10 @@ export function useChatAI(chatId: string, userId?: string) {
           aiResponse += finalData;
           updateMessage(aiMessage.id, { content: aiResponse });
         } else {
-          // Handle both JSON streaming format and plain text format
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              // Handle JSON streaming format (single-agent mode)
-              try {
-                const jsonStr = line.slice(6); // Remove 'data: ' prefix
-                if (jsonStr.trim() === '[DONE]') continue;
-                
-                const jsonData = JSON.parse(jsonStr);
-                if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
-                  const content = jsonData.choices[0].delta.content;
-                  aiResponse += content;
-                  updateMessage(aiMessage.id, { content: aiResponse });
-                }
-              } catch (parseError) {
-                // Skip invalid JSON lines
-                console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
-              }
-            } else if (line.trim()) {
-              // Handle plain text format (multi-agent mode)
-              aiResponse += line + '\n';
-              updateMessage(aiMessage.id, { content: aiResponse });
-            }
+          // Handle any remaining plain text content (fallback for multi-agent mode)
+          if (chunk.trim()) {
+            aiResponse += chunk;
+            updateMessage(aiMessage.id, { content: aiResponse });
           }
         }
       }

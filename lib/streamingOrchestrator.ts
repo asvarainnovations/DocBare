@@ -38,8 +38,8 @@ async function callLLMStream(query: string, memoryContext: string = '') {
   const systemPrompt = `
     You are DocBare, an expert AI legal analyst specializing in contracts, pleadings, and legal drafts.
 
-    **INTERNAL ANALYSIS PROCESS (NOT FOR USER DISPLAY):**
-    When processing requests, follow this internal pipeline but DO NOT include this in your final response:
+    **INTERNAL ANALYSIS PROCESS (FOR REASONING_CONTENT):**
+    When processing requests, follow this internal pipeline and include it in your reasoning_content:
 
     1. Task Classification - Determine Analysis vs Drafting
     2. Document Type Identification - Label input type
@@ -54,17 +54,12 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     11. Output Formatting - Final structure
     12. Clarification - Unclear points
 
-    **FINAL RESPONSE FORMAT:**
+    **FINAL RESPONSE FORMAT (FOR CONTENT):**
     - Provide ONLY the final, user-facing response
     - Use professional legal formatting
     - Include relevant analysis and recommendations
     - Maintain concise, clear language
     - NO internal pipeline steps or analysis markers
-
-    **THINKING DISPLAY:**
-    - Your internal analysis will be shown to users in real-time
-    - Focus on providing valuable insights in the thinking display
-    - Keep final response clean and professional
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your analysis and ensure accuracy.` : ''}
 
@@ -102,7 +97,7 @@ async function callLLMStream(query: string, memoryContext: string = '') {
         Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-reasoner",
         messages: [
           {
             role: "system",
@@ -114,7 +109,6 @@ async function callLLMStream(query: string, memoryContext: string = '') {
           },
         ],
         stream: true,
-        temperature: 0.1,
         max_tokens: 4000,
       }),
     });
@@ -140,48 +134,6 @@ export interface StreamingContext {
 }
 
 export class StreamingOrchestrator {
-  /**
-   * Parse response to separate internal analysis from final response
-   */
-  private static parseResponse(response: string) {
-    const thinkingMarkers = [
-      '1. Task Classification',
-      '2. Document Type Identification', 
-      '3. Objective Extraction',
-      '4. Constraint Extraction',
-      '5. Context Summarization',
-      '6. Legal Intent Determination',
-      '7. Structural Outline',
-      '8. Apply Legal Principles',
-      '9. Consistency Check',
-      '10. Length Control',
-      '11. Output Formatting',
-      '12. Clarification'
-    ];
-    
-    const hasInternalAnalysis = thinkingMarkers.some(marker => 
-      response.includes(marker)
-    );
-    
-    if (hasInternalAnalysis) {
-      // Extract thinking content (everything before final response)
-      let thinkingEnd = response.indexOf('**FINAL RESPONSE:**');
-      if (thinkingEnd === -1) {
-        thinkingEnd = response.indexOf('---');
-      }
-      if (thinkingEnd === -1) {
-        thinkingEnd = response.length;
-      }
-      
-      const thinkingContent = response.substring(0, thinkingEnd);
-      const finalResponse = response.substring(thinkingEnd);
-      
-      return { thinkingContent, finalResponse };
-    }
-    
-    return { thinkingContent: '', finalResponse: response };
-  }
-
   /**
    * Main streaming method that routes to either single-agent or multi-agent based on feature flag
    */
@@ -287,7 +239,7 @@ export class StreamingOrchestrator {
 
     aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using single-agent mode with prompt length: ${prompt.length}`);
     
-    // Use the existing single-agent flow with response parsing
+    // Use the existing single-agent flow with native reasoning model support
     const encoder = new TextEncoder();
     
     return new ReadableStream({
@@ -296,9 +248,8 @@ export class StreamingOrchestrator {
           const response = await callLLMStream(prompt);
           const reader = response.getReader();
           
-          let fullResponse = '';
-          let lastThinkingContent = '';
-          let lastFinalResponse = '';
+          let reasoningContent = '';
+          let finalContent = '';
           let hasStartedFinalResponse = false;
           
           try {
@@ -307,30 +258,38 @@ export class StreamingOrchestrator {
               if (done) break;
               
               const chunk = new TextDecoder().decode(value);
-              fullResponse += chunk;
               
-              // Parse the accumulated response
-              const { thinkingContent: parsedThinking, finalResponse: parsedFinal } = StreamingOrchestrator.parseResponse(fullResponse);
-              
-              // If we have new thinking content, send it
-              if (parsedThinking && parsedThinking !== lastThinkingContent) {
-                const newThinkingContent = parsedThinking.substring(lastThinkingContent.length);
-                if (newThinkingContent) {
-                  controller.enqueue(encoder.encode(`THINKING:${newThinkingContent}`));
-                  lastThinkingContent = parsedThinking;
-                }
-              }
-              
-              // If we have final response, send it
-              if (parsedFinal && parsedFinal !== lastFinalResponse) {
-                if (!hasStartedFinalResponse) {
-                  hasStartedFinalResponse = true;
-                  controller.enqueue(encoder.encode('FINAL:'));
-                }
-                const newFinalContent = parsedFinal.substring(lastFinalResponse.length);
-                if (newFinalContent) {
-                  controller.enqueue(encoder.encode(newFinalContent));
-                  lastFinalResponse = parsedFinal;
+              // Handle DeepSeek reasoning model streaming format
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const jsonStr = line.slice(6); // Remove 'data: ' prefix
+                    if (jsonStr.trim() === '[DONE]') continue;
+                    
+                    const jsonData = JSON.parse(jsonStr);
+                    
+                    // Handle reasoning_content (thinking content)
+                    if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.reasoning_content) {
+                      const newReasoningContent = jsonData.choices[0].delta.reasoning_content;
+                      reasoningContent += newReasoningContent;
+                      controller.enqueue(encoder.encode(`THINKING:${newReasoningContent}`));
+                    }
+                    
+                    // Handle content (final response)
+                    if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                      if (!hasStartedFinalResponse) {
+                        hasStartedFinalResponse = true;
+                        controller.enqueue(encoder.encode('FINAL:'));
+                      }
+                      const newContent = jsonData.choices[0].delta.content;
+                      finalContent += newContent;
+                      controller.enqueue(encoder.encode(newContent));
+                    }
+                  } catch (parseError) {
+                    // Skip invalid JSON lines
+                    console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
+                  }
                 }
               }
             }
