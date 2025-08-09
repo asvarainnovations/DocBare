@@ -180,43 +180,28 @@ export class StreamingOrchestrator {
           aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Starting LangGraph multi-agent orchestration`);
           
           // Send initial status
-          controller.enqueue(encoder.encode('🎭 Starting LangGraph multi-agent analysis...\n\n'));
+          controller.enqueue(encoder.encode('🎭 Starting multi-agent analysis...\n\n'));
 
-          const result = await orchestrator.processQuery(
+          // Create a streaming version of the multi-agent response
+          const streamResult = await orchestrator.streamResponse(
             context.sessionId,
             context.userId,
             context.query,
             context.documentContent,
             context.documentName
           );
+
+          // Read from the stream and forward to the controller
+          const reader = streamResult.getReader();
           
-          if (result.error) {
-            aiLogger.warn(`${LOG_PREFIXES.FALLBACK} LangGraph multi-agent failed, falling back to single agent`);
-            controller.enqueue(encoder.encode('⚠️ Multi-agent processing failed, using standard mode...\n\n'));
-            
-            // Fallback to single agent
-            const fallbackStream = await StreamingOrchestrator.streamSingleAgentResponse(context);
-            const fallbackReader = fallbackStream.getReader();
-            
-            try {
-              while (true) {
-                const { done, value } = await fallbackReader.read();
-                if (done) break;
-                controller.enqueue(value);
-              }
-            } finally {
-              fallbackReader.releaseLock();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              controller.enqueue(value);
             }
-          } else {
-            // Stream the multi-agent result
-            const content = result.response;
-            const chunks = content.split('\n');
-            
-            for (const chunk of chunks) {
-              controller.enqueue(encoder.encode(chunk + '\n'));
-              // Small delay to simulate streaming
-              await new Promise(resolve => setTimeout(resolve, 10));
-            }
+          } finally {
+            reader.releaseLock();
           }
           
           controller.close();

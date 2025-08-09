@@ -79,10 +79,11 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
-        // Parse the streaming response to extract only the text content
+        // Handle both JSON streaming format and plain text format
         const lines = chunk.split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            // Handle JSON streaming format (single-agent mode)
             try {
               const jsonStr = line.slice(6); // Remove 'data: ' prefix
               if (jsonStr.trim() === '[DONE]') continue;
@@ -99,6 +100,12 @@ export function useChatAI(chatId: string, userId?: string) {
               // Skip invalid JSON lines
               console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
             }
+          } else if (line.trim()) {
+            // Handle plain text format (multi-agent mode)
+            aiResponse += line + '\n';
+            hasStartedStreaming = true;
+            // Update the message with streaming content
+            updateMessage(aiMessage.id, { content: aiResponse });
           }
         }
       }
@@ -211,9 +218,32 @@ export function useChatAI(chatId: string, userId?: string) {
         }
 
         const chunk = decoder.decode(value);
-        // The API returns plain text content directly
-        aiResponse += chunk;
-        updateMessage(aiMessage.id, { content: aiResponse });
+        
+        // Handle both JSON streaming format and plain text format
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            // Handle JSON streaming format (single-agent mode)
+            try {
+              const jsonStr = line.slice(6); // Remove 'data: ' prefix
+              if (jsonStr.trim() === '[DONE]') continue;
+              
+              const jsonData = JSON.parse(jsonStr);
+              if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                const content = jsonData.choices[0].delta.content;
+                aiResponse += content;
+                updateMessage(aiMessage.id, { content: aiResponse });
+              }
+            } catch (parseError) {
+              // Skip invalid JSON lines
+              console.warn('🟨 [chat_ui][WARN] Failed to parse streaming chunk:', parseError);
+            }
+          } else if (line.trim()) {
+            // Handle plain text format (multi-agent mode)
+            aiResponse += line + '\n';
+            updateMessage(aiMessage.id, { content: aiResponse });
+          }
+        }
       }
 
       reader.releaseLock();

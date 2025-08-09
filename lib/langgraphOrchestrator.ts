@@ -272,13 +272,17 @@ export class LangGraphOrchestrator {
         if (
           lowerDecision.includes("needanalysis=true") ||
           lowerDecision.includes("needanalysis: true") ||
-          lowerDecision.includes("needanalysis:true")
+          lowerDecision.includes("needanalysis:true") ||
+          lowerDecision.includes('"needanalysis": true') ||
+          lowerDecision.includes('"needanalysis":true')
         ) {
           needAnalysis = true;
         } else if (
           lowerDecision.includes("needanalysis=false") ||
           lowerDecision.includes("needanalysis: false") ||
-          lowerDecision.includes("needanalysis:false")
+          lowerDecision.includes("needanalysis:false") ||
+          lowerDecision.includes('"needanalysis": false') ||
+          lowerDecision.includes('"needanalysis":false')
         ) {
           needAnalysis = false;
         } else {
@@ -309,32 +313,21 @@ export class LangGraphOrchestrator {
         );
       }
 
-      // Store orchestrator decision in memory
-      await memoryManager.storeReasoningMemory(
-        state.sessionId,
-        state.userId,
-        `Orchestrator Decision: ${JSON.stringify(orchestratorDecision)}`,
-        { source: "orchestrator", tag: MEMORY_CONFIG.ORCHESTRATION_TAG }
-      );
-
       return {
+        ...state,
         needAnalysis,
         orchestratorDecision,
-        messages: [
-          ...state.messages,
-          new SystemMessage(AGENT_CONFIG.ORCHESTRATOR_PROMPT),
-          new HumanMessage(`Query: ${state.query}\n\nDocument Available: ${
-            state.hasDocument ? "Yes" : "No"
-          }${
-            state.hasDocument ? `\nDocument Name: ${state.documentName}` : ""
-          }\n\nMemory Context: ${state.memoryContext}`),
-          new AIMessage(response),
-        ],
       };
     } catch (error) {
-      aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Error`, error);
+      aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Orchestrator node failed`, error);
       return {
-        error: ERROR_MESSAGES.ORCHESTRATION_FAILURE,
+        ...state,
+        needAnalysis: false,
+        orchestratorDecision: {
+          needAnalysis: false,
+          fallback: true,
+          error: "Orchestrator node failed",
+        },
       };
     }
   }
@@ -625,25 +618,121 @@ export class LangGraphOrchestrator {
     documentContent?: string,
     documentName?: string
   ): Promise<ReadableStream> {
-    const result = await this.processQuery(
-      sessionId,
-      userId,
-      query,
-      documentContent,
-      documentName
-    );
-
-    if (result.error) {
-      throw new Error(result.error);
-    }
-
-    // Convert string response to ReadableStream
     const encoder = new TextEncoder();
+    const self = this; // Capture the this context
+    
     return new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(result.response));
-        controller.close();
-      },
+      async start(controller) {
+        try {
+          // Send initial status
+          controller.enqueue(encoder.encode('🎭 Starting multi-agent analysis...\n\n'));
+
+          // Get memory context
+          let memoryContext = "";
+          try {
+            const memories = await memoryManager.retrieveMemories(
+              sessionId,
+              userId,
+              query,
+              10
+            );
+            memoryContext = memories.map((m) => m.content).join("\n\n");
+          } catch (error) {
+            aiLogger.warn(
+              `${LOG_PREFIXES.MEMORY} Failed to load memory context`,
+              error
+            );
+          }
+
+          // Store user query in memory
+          await memoryManager.storeConversationMemory(
+            sessionId,
+            userId,
+            "user",
+            query
+          );
+
+          // 1. Retrieve knowledge base context once for all agents
+          const kbChunks = await retrieveFromKB(query, 5);
+          const knowledgeBaseContext = kbChunks.join("\n\n---\n\n");
+          
+          // Initialize state
+          const state: AgentState = {
+            sessionId,
+            userId,
+            query,
+            documentContent: documentContent || "",
+            documentName: documentName || "",
+            hasDocument: !!documentContent,
+            memoryContext,
+            knowledgeBaseContext,
+            messages: [],
+          };
+
+          // Step 1: Orchestrator - Decide workflow
+          controller.enqueue(encoder.encode('🤔 Analyzing request...\n'));
+          const orchestratorResult = await self.orchestratorNode(state);
+          if (orchestratorResult.error) {
+            controller.enqueue(encoder.encode('❌ Orchestration failed\n'));
+            controller.close();
+            return;
+          }
+          Object.assign(state, orchestratorResult);
+
+          // Step 2: Analysis (if needed)
+          if (state.needAnalysis && state.hasDocument) {
+            controller.enqueue(encoder.encode('📋 Analyzing document...\n'));
+            const analysisResult = await self.analysisNode(state);
+            if (analysisResult.error) {
+              controller.enqueue(encoder.encode('⚠️ Analysis failed, proceeding with drafting...\n'));
+            } else {
+              Object.assign(state, analysisResult);
+              controller.enqueue(encoder.encode('✅ Analysis completed\n'));
+            }
+          } else if (state.needAnalysis && !state.hasDocument) {
+            controller.enqueue(encoder.encode('⚠️ Analysis requested but no document provided\n'));
+          }
+
+          // Step 3: Drafting
+          controller.enqueue(encoder.encode('✍️ Drafting response...\n'));
+          const draftingResult = await self.draftingNode(state);
+          if (draftingResult.error) {
+            controller.enqueue(encoder.encode('❌ Drafting failed\n'));
+            controller.close();
+            return;
+          }
+          Object.assign(state, draftingResult);
+          controller.enqueue(encoder.encode('✅ Drafting completed\n'));
+
+          // Step 4: Finalize
+          controller.enqueue(encoder.encode('🎯 Finalizing response...\n\n'));
+          const finalizeResult = await self.finalizeNode(state);
+          if (finalizeResult.error) {
+            controller.enqueue(encoder.encode('❌ Finalization failed\n'));
+            controller.close();
+            return;
+          }
+          Object.assign(state, finalizeResult);
+
+          // Stream the final response
+          if (state.finalResponse) {
+            const chunks = state.finalResponse.split('\n');
+            for (const chunk of chunks) {
+              controller.enqueue(encoder.encode(chunk + '\n'));
+              // Small delay to simulate streaming
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+          } else {
+            controller.enqueue(encoder.encode('❌ No response generated\n'));
+          }
+
+          controller.close();
+        } catch (error) {
+          aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Streaming error`, error);
+          controller.enqueue(encoder.encode('❌ Processing failed. Please try again.\n'));
+          controller.close();
+        }
+      }
     });
   }
 }
