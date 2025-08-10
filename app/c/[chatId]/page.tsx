@@ -28,6 +28,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const [feedback, setFeedback] = useState<{
     [idx: number]: "good" | "bad" | undefined;
   }>({});
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -51,6 +52,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   );
   const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, isThinking, thinkingContent } =
     useChatAI(params.chatId, session?.user?.id);
+
+  // Track streaming state
+  useEffect(() => {
+    setIsStreaming(loadingAI || isThinking);
+  }, [loadingAI, isThinking]);
 
   // Essential logging for chat page state (only in development)
   useEffect(() => {
@@ -121,9 +127,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   // Handle sending messages
   const handleSendMessage = useCallback(
     async (message: string) => {
+      if (!message.trim()) return;
+      
+      setInput("");
       await handleSend(message, addMessage, updateMessage, removeMessage);
     },
-    [handleSend, addMessage, updateMessage, removeMessage]
+    [handleSend, addMessage, updateMessage, removeMessage, setInput]
   );
 
   // Handle regenerating state changes
@@ -192,6 +201,25 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   key={msg.id || idx}
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
+                  {/* Show Thinking Display before AI message when AI is thinking or streaming */}
+                  {msg.role === 'ASSISTANT' && (isThinking || thinkingContent) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="w-full flex justify-start mb-4"
+                    >
+                      <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
+                        <ThinkingDisplay
+                          isThinking={isThinking}
+                          thinkingContent={thinkingContent}
+                          onComplete={() => {
+                            // Thinking display will auto-hide after completion
+                          }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                  
                   <ChatMessage
                     message={msg}
                     index={idx}
@@ -204,47 +232,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     }}
                     onRegeneratingChange={handleRegeneratingChange}
                     onFeedback={handleFeedback}
+                    isStreaming={isStreaming && idx === messages.length - 1}
+                    isThinking={isThinking}
+                    thinkingContent={thinkingContent}
                   />
                 </div>
               ))}
             </AnimatePresence>
-          )}
-
-          {/* Loading indicator for AI response */}
-          {loadingAI && !isThinking && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full flex justify-start mb-4"
-            >
-              <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
-                <div className="bg-gray-800 text-white px-4 py-3 rounded-lg shadow-md">
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span className="text-sm">AI is thinking...</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Thinking Display */}
-          {(isThinking || thinkingContent) && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full flex justify-start mb-4"
-            >
-              <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
-                <ThinkingDisplay
-                  isThinking={isThinking}
-                  thinkingContent={thinkingContent}
-                  onComplete={() => {
-                    // Thinking display will auto-hide after completion
-                  }}
-                />
-              </div>
-            </motion.div>
           )}
         </div>
       </div>
@@ -256,8 +250,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       />
 
       {/* Fixed ChatInput at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-main-bg shadow-[0_-4px_20px_0_rgba(0,0,0,0.3)]">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className={`fixed bottom-0 left-0 right-0 z-30 bg-main-bg transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+        <div className="max-w-3xl mx-auto px-4 pb-4">
           <ChatInput
             variant="chat"
             onSend={handleSendMessage}

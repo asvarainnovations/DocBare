@@ -27,6 +27,9 @@ interface ChatMessageProps {
   onRegenerate: (newContent: string) => void;
   onRegeneratingChange: (isRegenerating: boolean, messageIndex: number) => void;
   onFeedback: (type: 'good' | 'bad', comment?: string, messageIndex?: number) => void;
+  isStreaming?: boolean;
+  isThinking?: boolean;
+  thinkingContent?: string;
 }
 
 export default function ChatMessage({
@@ -38,7 +41,10 @@ export default function ChatMessage({
   messages,
   onRegenerate,
   onRegeneratingChange,
-  onFeedback
+  onFeedback,
+  isStreaming = false,
+  isThinking,
+  thinkingContent
 }: ChatMessageProps) {
   return (
     <motion.div
@@ -55,9 +61,12 @@ export default function ChatMessage({
     >
       {message.role === 'ASSISTANT' ? (
         <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
-                    {/* Show thinking animation if AI message is empty */}
-          {!message.content.trim() ? (
+                    {/* Show thinking animation if AI message is empty and not showing ThinkingDisplay */}
+          {!message.content.trim() && !isStreaming && !(isThinking || thinkingContent) ? (
             <AIThinkingAnimation />
+          ) : !message.content.trim() && (isStreaming || isThinking || thinkingContent) ? (
+            // Don't render anything when streaming or showing ThinkingDisplay
+            null
           ) : (
             <>
               <div className="markdown-content max-w-none bg-transparent">
@@ -134,24 +143,26 @@ export default function ChatMessage({
               </div>
               
               {/* Action buttons for AI messages */}
-              <div className="flex items-center gap-2 mt-4">
-                <AnimatedCopyButton content={message.content} />
-                <RegenerateButton 
-                  sessionId={chatId}
-                  userId={userId || ''}
-                  messageIndex={index}
-                  messages={messages}
-                  onRegenerate={onRegenerate}
-                  onRegeneratingChange={(isRegenerating) => onRegeneratingChange(isRegenerating, index)}
-                />
-                <FeedbackSection 
-                  sessionId={chatId}
-                  userId={userId || ''}
-                  messageId={message.id}
-                  messageIndex={index}
-                  onFeedback={(type, comment) => onFeedback(type, comment, index)}
-                />
-              </div>
+              {!isStreaming && (
+                <div className="flex items-center gap-2 mt-4">
+                  <AnimatedCopyButton content={message.content} />
+                  <RegenerateButton 
+                    sessionId={chatId}
+                    userId={userId || ''}
+                    messageIndex={index}
+                    messages={messages}
+                    onRegenerate={onRegenerate}
+                    onRegeneratingChange={(isRegenerating) => onRegeneratingChange(isRegenerating, index)}
+                  />
+                  <FeedbackSection 
+                    sessionId={chatId}
+                    userId={userId || ''}
+                    messageId={message.id}
+                    messageIndex={index}
+                    onFeedback={(type, comment) => onFeedback(type, comment, index)}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

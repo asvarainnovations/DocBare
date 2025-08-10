@@ -26,15 +26,15 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
   if (!thinkingContent && !isThinking) return null;
 
   return (
-    <div className="mb-4 border border-gray-300 rounded-lg bg-gray-50 shadow-sm">
+    <div className="mb-4 border border-gray-600 rounded-lg bg-gray-800 shadow-sm">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors rounded-t-lg"
+        className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-white hover:bg-gray-700 transition-colors rounded-t-lg"
       >
         <span className="flex items-center">
           {isThinking ? (
             <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
               <span>AI is analyzing...</span>
             </div>
           ) : (
@@ -51,7 +51,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       {isExpanded && (
         <div className="px-4 pb-4">
           <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap text-gray-600 font-mono text-xs bg-gray-100 p-3 rounded border max-h-96 overflow-y-auto">
+            <pre className="whitespace-pre-wrap text-gray-300 font-mono text-xs bg-gray-900 p-3 rounded border max-h-96 overflow-y-auto">
               {displayContent}
             </pre>
           </div>

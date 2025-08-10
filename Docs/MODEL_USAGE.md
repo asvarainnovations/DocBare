@@ -9,7 +9,7 @@ This document provides a comprehensive overview of all AI models used in the Doc
 | **Component** | **Model** | **Provider** | **Purpose** | **API Key** |
 |---------------|-----------|--------------|-------------|-------------|
 | **Multi-Agent System** | `deepseek-reasoner` | DeepSeek | Orchestrator, Analysis, Drafting agents | `DEEPSEEK_API_KEY` |
-| **Single-Agent Mode** | `deepseek-reasoner` | DeepSeek | Direct user queries | `DEEPSEEK_API_KEY` |
+| **Single-Agent Mode** | `deepseek-reasoner` | DeepSeek | Direct user queries with real-time thinking | `DEEPSEEK_API_KEY` |
 | **Chat Title Generation** | `gpt-4o-mini` | OpenAI | Generate descriptive chat titles | `OPENAI_API_KEY` |
 | **Document Embeddings** | `text-embedding-3-small` | OpenAI | Document chunk embeddings | `OPENAI_API_KEY` |
 | **Query Embeddings** | `text-embedding-3-large` | OpenAI | Query embeddings for RAG | `OPENAI_API_KEY` |
@@ -18,13 +18,13 @@ This document provides a comprehensive overview of all AI models used in the Doc
 
 ### **Model: `deepseek-reasoner`**
 - **Provider**: DeepSeek AI
-- **Type**: Large Language Model (LLM)
-- **Purpose**: Primary reasoning and text generation
-- **Usage**: Multi-agent system and single-agent mode
+- **Type**: Large Language Model (LLM) with native reasoning capabilities
+- **Purpose**: Primary reasoning and text generation with real-time thinking display
+- **Usage**: Multi-agent system and single-agent mode with native reasoning content separation
 
 #### **Configuration**
 ```typescript
-// In lib/langgraphOrchestrator.ts
+// In lib/streamingOrchestrator.ts
 const response = await axios({
   method: "post",
   url: "https://api.deepseek.com/v1/chat/completions",
@@ -35,8 +35,8 @@ const response = await axios({
       { role: "user", content: userMessage }
     ],
     max_tokens: 4096,
-    temperature: 0.1,
-    stream: false
+    stream: true
+    // Note: temperature, top_p, presence_penalty, frequency_penalty not supported by reasoning model
   },
   headers: {
     Authorization: `Bearer ${DEEPSEEK_API_KEY}`
@@ -44,17 +44,24 @@ const response = await axios({
 });
 ```
 
+#### **Native Reasoning Model Features**
+- **`reasoning_content`**: Internal analysis and thinking process
+- **`content`**: Final user-facing response
+- **Real-Time Streaming**: Separate streaming of thinking and final content
+- **Automatic Separation**: Native field separation without custom parsing
+
 #### **Use Cases**
 1. **Orchestrator Agent**: Decides workflow routing and coordination
 2. **Analysis Agent**: Performs structured document analysis with JSON output
 3. **Drafting Agent**: Creates legal documents and responses
-4. **Single-Agent Mode**: Direct user query processing
+4. **Single-Agent Mode**: Direct user query processing with real-time thinking display
 
 #### **Performance Characteristics**
 - **Reasoning Capability**: Excellent for complex legal reasoning
 - **JSON Output**: Strong structured output generation
 - **Context Length**: 32K tokens
 - **Cost**: Competitive pricing for reasoning tasks
+- **Real-Time Thinking**: Native support for thinking process display
 
 ## 🧠 **OpenAI Models**
 

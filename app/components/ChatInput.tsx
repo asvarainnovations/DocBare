@@ -23,7 +23,16 @@ interface ChatInputProps {
   value?: string;
   onChange?: (value: string) => void;
   userId?: string; // Add userId prop
-  onFileUpload?: (file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => void;
+  onFileUpload?: (file: {
+    name: string;
+    status: "uploading" | "done" | "error";
+    url?: string;
+    error?: string;
+    documentId?: string;
+    prismaId?: string;
+    firestoreId?: string;
+    abortController?: AbortController;
+  }) => void;
 }
 
 export default function ChatInput({
@@ -145,9 +154,12 @@ export default function ChatInput({
   // Dropzone configuration
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      if (process.env.NODE_ENV === 'development') {
-      console.info("🟦 [chat_input][INFO] Files dropped:", acceptedFiles.length);
-    }
+      if (process.env.NODE_ENV === "development") {
+        console.info(
+          "🟦 [chat_input][INFO] Files dropped:",
+          acceptedFiles.length
+        );
+      }
 
       if (!acceptedFiles.length) return;
 
@@ -157,13 +169,13 @@ export default function ChatInput({
       }
 
       const file = acceptedFiles[0];
-      
+
       // Create AbortController for this upload
       const abortController = new AbortController();
-      
+
       // Notify parent component about file upload start with abort controller
       if (onFileUpload) {
-        onFileUpload({ name: file.name, status: 'uploading', abortController });
+        onFileUpload({ name: file.name, status: "uploading", abortController });
       }
 
       setUploading(true);
@@ -197,34 +209,48 @@ export default function ChatInput({
         toast.success(`File "${file.name}" uploaded successfully!`);
 
         // Notify parent component about successful upload
-        if (onFileUpload && response.data.results && response.data.results.length > 0) {
+        if (
+          onFileUpload &&
+          response.data.results &&
+          response.data.results.length > 0
+        ) {
           const result = response.data.results[0];
-          onFileUpload({ 
-            name: file.name, 
-            status: 'done', 
+          onFileUpload({
+            name: file.name,
+            status: "done",
             url: result.url,
             prismaId: result.document?.id,
             firestoreId: result.firestoreId,
-            abortController
+            abortController,
           });
         }
 
         // Optionally trigger document ingestion
-        if (response.data.results && response.data.results.length > 0 && response.data.results[0].url) {
+        if (
+          response.data.results &&
+          response.data.results.length > 0 &&
+          response.data.results[0].url
+        ) {
           try {
-            await axios.post("/api/ingest", {
-              documentId: response.data.results[0].document?.id,
-              userId: userId,
-            }, {
-              signal: abortController.signal,
-            });
+            await axios.post(
+              "/api/ingest",
+              {
+                documentId: response.data.results[0].document?.id,
+                userId: userId,
+              },
+              {
+                signal: abortController.signal,
+              }
+            );
             console.info("🟦 [chat_input][SUCCESS] Document ingestion started");
             toast.success("Document processing started");
           } catch (ingestError: any) {
-            if (ingestError.name === 'AbortError') {
-              if (process.env.NODE_ENV === 'development') {
-          console.info("🟦 [chat_input][INFO] Document ingestion aborted");
-        }
+            if (ingestError.name === "AbortError") {
+              if (process.env.NODE_ENV === "development") {
+                console.info(
+                  "🟦 [chat_input][INFO] Document ingestion aborted"
+                );
+              }
               return;
             }
             console.error(
@@ -235,24 +261,24 @@ export default function ChatInput({
           }
         }
       } catch (error: any) {
-        if (error.name === 'AbortError') {
-          if (process.env.NODE_ENV === 'development') {
-          console.info("🟦 [chat_input][INFO] File upload aborted");
-        }
+        if (error.name === "AbortError") {
+          if (process.env.NODE_ENV === "development") {
+            console.info("🟦 [chat_input][INFO] File upload aborted");
+          }
           toast.info("File upload cancelled");
           return;
         }
 
         console.error("🟥 [chat_input][ERROR] File upload failed:", error);
         toast.error(error.response?.data?.error || "Failed to upload file");
-        
+
         // Notify parent component about upload failure
         if (onFileUpload) {
-          onFileUpload({ 
-            name: file.name, 
-            status: 'error', 
+          onFileUpload({
+            name: file.name,
+            status: "error",
             error: error.response?.data?.error || "Failed to upload file",
-            abortController
+            abortController,
           });
         }
       } finally {
@@ -274,7 +300,9 @@ export default function ChatInput({
     }
   };
 
-  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (files && files.length > 0) {
       // Use the same onDrop logic for manually selected files
@@ -282,7 +310,7 @@ export default function ChatInput({
       onDrop(fileArray);
     }
     // Reset the input value so the same file can be selected again
-    event.target.value = '';
+    event.target.value = "";
   };
 
   const containerClasses = clsx(
@@ -299,17 +327,6 @@ export default function ChatInput({
 
   return (
     <motion.div className={containerClasses}>
-      {/* Loading indicator message */}
-      {loading && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-sm text-blue-400 mb-2 text-center"
-        >
-          AI is thinking... You can type your next question below
-        </motion.div>
-      )}
-
       <div {...getRootProps()} className="w-full relative">
         <form
           onSubmit={(e) => {
@@ -457,7 +474,7 @@ export default function ChatInput({
 
           {/* Hidden input for dropzone */}
           <input {...getInputProps()} tabIndex={-1} className="hidden" />
-          
+
           {/* Manual file input for button clicks */}
           <input
             ref={fileInputRef}

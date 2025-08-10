@@ -4,6 +4,7 @@
 flowchart TD
   subgraph User
     A1["Web App (Next.js React UI)"]
+    A2["Thinking Display Component"]
   end
 
   subgraph Auth
@@ -35,8 +36,9 @@ flowchart TD
     E5["Query API (/api/query)"]
     E6["RAG Pipeline"]
     E7["Vertex AI Vector Search"]
-    E8["DeepSeek (LLM)"]
+    E8["DeepSeek Reasoning Model (deepseek-reasoner)"]
     E9["AI Response + Sources"]
+    E10["Real-Time Thinking Display"]
   end
 
   subgraph RAGSession
@@ -84,8 +86,10 @@ flowchart TD
   E5 -- "RAG/LLM" --> E6
   E6 -- "Retrieve" --> E7
   E7 -- "Context" --> E8
-  E8 -- "Answer" --> E9
+  E8 -- "Reasoning Content + Final Content" --> E9
   E9 -- "Display" --> E4
+  E8 -- "Thinking Stream" --> E10
+  E10 -- "Real-Time Display" --> A2
 
   %% RAG Session
   E4 -- "Start RAG Session" --> F1
@@ -98,9 +102,40 @@ flowchart TD
 
   %% Admin
   H1 -- "View Feedbacks" --> H2
-  H2 -- "Query" --> G3
-  H2 -- "Admin Data" --> H3
 ```
+
+## 🧠 **DeepSeek Reasoning Model Integration**
+
+### **Native Reasoning Model**
+- **Model**: `deepseek-reasoner` with native `reasoning_content` and `content` fields
+- **Streaming**: Real-time streaming of thinking process and final response
+- **Separation**: Automatic separation of internal analysis from user-facing content
+
+### **Thinking Display Component**
+- **File**: `app/components/ThinkingDisplay.tsx`
+- **Features**: Collapsible interface, real-time streaming, professional styling
+- **Integration**: Seamless integration with chat interface
+- **Accessibility**: Screen reader friendly with ARIA attributes
+
+### **Streaming Architecture**
+```
+DeepSeek Reasoning Model
+├── reasoning_content (Internal Analysis)
+│   ├── Task Classification
+│   ├── Document Type Identification
+│   ├── Objective Extraction
+│   └── ... (12-step pipeline)
+└── content (Final Response)
+    ├── Professional Legal Analysis
+    ├── Recommendations
+    └── User-Facing Content
+```
+
+### **Frontend Integration**
+- **State Management**: `isThinking` and `thinkingContent` states
+- **Real-Time Updates**: Live streaming of thinking content
+- **UI Components**: Professional thinking display with animations
+- **Error Handling**: Robust fallback mechanisms
 
 ## Document Management UI
 
