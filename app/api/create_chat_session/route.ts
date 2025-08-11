@@ -13,11 +13,11 @@ async function generateChatTitle(prompt: string) {
       messages: [
         { 
           role: 'system', 
-          content: `You are a legal assistant. Create a concise, professional chat title (3-8 words) for this legal query. The title should be descriptive, clear, and relevant to the legal context. Return only the title, no quotes or extra text.`
+          content: `You are an Indian legal assistant. Create a concise, professional chat title (3-8 words) for this legal query. The title should be descriptive, clear, and relevant to Indian legal context. Focus on Indian laws, courts, and legal procedures. Return only the title, no quotes or extra text.` 
         },
         { 
           role: 'user', 
-          content: `Create a chat title for this legal query: "${prompt}"` 
+          content: `Create a chat title for this Indian legal query: "${prompt}"` 
         }
       ],
       max_tokens: 20,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 
 interface ThinkingDisplayProps {
@@ -10,11 +10,72 @@ interface ThinkingDisplayProps {
 export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: ThinkingDisplayProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [displayContent, setDisplayContent] = useState('');
+  const [thinkingTime, setThinkingTime] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Format thinking content by removing "THINKING:" prefixes and organizing it
+  const formatThinkingContent = (content: string) => {
+    // Split by THINKING: and clean up
+    const parts = content
+      .split('THINKING:')
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+    
+    // Join all parts first
+    let joinedContent = parts.join(' ');
+    
+    // Now apply better formatting to the joined content
+    let formattedContent = joinedContent;
+    
+    // Add line breaks before numbered items (1., 2., 3., etc.) - including bold formatting
+    formattedContent = formattedContent.replace(/(\d+\.\s+\*\*[^*]+\*\*:)/g, '\n\n$1');
+    
+    // Also handle numbered items without bold formatting
+    formattedContent = formattedContent.replace(/(\d+\.\s+[^:]+:)/g, '\n\n$1');
+    
+    // Add line breaks before bullet points (- item)
+    formattedContent = formattedContent.replace(/(\s+-\s+)/g, '\n$1');
+    
+    // Add line breaks before main sections (Internal Analysis Process:)
+    formattedContent = formattedContent.replace(/(Internal Analysis Process:)/g, '\n\n$1');
+    
+    // Add line breaks before colon-separated items that aren't already formatted
+    formattedContent = formattedContent.replace(/([^:\n]):\s+([^-\n])/g, '$1:\n$2');
+    
+    // Clean up multiple line breaks
+    formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
+    
+    // Remove leading/trailing whitespace
+    formattedContent = formattedContent.trim();
+    
+    return formattedContent;
+  };
 
   useEffect(() => {
     if (isThinking && thinkingContent) {
-      setDisplayContent(thinkingContent);
+      // Start timing when thinking begins
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+        setThinkingTime(0); // Reset timer for new thinking session
+        intervalRef.current = setInterval(() => {
+          setThinkingTime(Math.floor((Date.now() - startTimeRef.current!) / 1000));
+        }, 1000);
+      }
+      setDisplayContent(formatThinkingContent(thinkingContent));
     } else if (!isThinking && thinkingContent) {
+      // Stop timing when thinking is complete
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // Calculate final thinking time
+      if (startTimeRef.current) {
+        const finalTime = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setThinkingTime(finalTime);
+        startTimeRef.current = null; // Reset for next thinking session
+      }
+      setDisplayContent(formatThinkingContent(thinkingContent));
       // Keep content visible for a few seconds after completion
       setTimeout(() => {
         setIsExpanded(false);
@@ -22,6 +83,15 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       }, 3000);
     }
   }, [isThinking, thinkingContent, onComplete]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   if (!thinkingContent && !isThinking) return null;
 
@@ -38,7 +108,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
               <span>AI is analyzing...</span>
             </div>
           ) : (
-            <span>AI Analysis Complete</span>
+            <span>Thought for {thinkingTime} seconds</span>
           )}
         </span>
         {isExpanded ? (
@@ -48,15 +118,15 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
         )}
       </button>
       
-      {isExpanded && (
-        <div className="px-4 pb-4">
-          <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap text-gray-300 font-mono text-xs bg-gray-900 p-3 rounded border max-h-96 overflow-y-auto">
-              {displayContent}
-            </pre>
-          </div>
-        </div>
-      )}
+             {isExpanded && (
+         <div className="px-4 pb-4">
+           <div className="prose prose-sm max-w-none">
+             <div className="text-gray-300 text-sm bg-gray-900 p-4 rounded border max-h-96 overflow-y-auto leading-relaxed whitespace-pre-wrap font-mono">
+               {displayContent}
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   );
 }

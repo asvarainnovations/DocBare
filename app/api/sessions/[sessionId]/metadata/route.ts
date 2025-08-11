@@ -31,6 +31,7 @@ export async function GET(
 
       return NextResponse.json({
         id: sessionDoc.id,
+        sessionName: sessionData?.sessionName,
         createdAt: sessionData?.createdAt?.toDate?.() || sessionData?.createdAt,
         updatedAt: sessionData?.updatedAt?.toDate?.() || sessionData?.updatedAt,
         user: {

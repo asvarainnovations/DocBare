@@ -11,11 +11,20 @@ interface Message {
   createdAt: Date;
 }
 
+interface ThinkingState {
+  isThinking: boolean;
+  content: string;
+}
+
+// Generate unique message ID
+const generateUniqueId = (prefix: string) => {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
 export function useChatAI(chatId: string, userId?: string) {
   const [loadingAI, setLoadingAI] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [isThinking, setIsThinking] = useState(false);
-  const [thinkingContent, setThinkingContent] = useState('');
+  const [thinkingStates, setThinkingStates] = useState<{ [messageId: string]: ThinkingState }>({});
   const autoResponseGeneratedRef = useRef(false);
 
   // Generate AI response with proper streaming display
@@ -26,8 +35,6 @@ export function useChatAI(chatId: string, userId?: string) {
     }
 
     setLoadingAI(true);
-    setIsThinking(true);
-    setThinkingContent('');
     let aiMessage: Message | null = null;
 
     try {
@@ -59,7 +66,7 @@ export function useChatAI(chatId: string, userId?: string) {
 
       let aiResponse = '';
       aiMessage = {
-        id: `ai-auto-${Date.now()}`,
+        id: generateUniqueId('ai-auto'),
         sessionId: chatId,
         userId: userId,
         role: 'ASSISTANT',
@@ -69,6 +76,12 @@ export function useChatAI(chatId: string, userId?: string) {
 
       // Add the AI message immediately to show "AI is thinking..." state
       addMessage(aiMessage);
+
+      // Initialize thinking state for this message
+              setThinkingStates(prev => ({
+          ...prev,
+          [aiMessage!.id]: { isThinking: true, content: '' }
+        }));
 
       const decoder = new TextDecoder();
       let closed = false;
@@ -86,25 +99,39 @@ export function useChatAI(chatId: string, userId?: string) {
         // Handle thinking and final response separation
         if (chunk.startsWith('THINKING:')) {
           const thinkingData = chunk.replace('THINKING:', '');
-          setThinkingContent(prev => prev + thinkingData);
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: {
+              ...prev[aiMessage!.id],
+              content: (prev[aiMessage!.id]?.content || '') + thinkingData
+            }
+          }));
         } else if (chunk.startsWith('FINAL:')) {
-          setIsThinking(false);
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+          }));
           const finalData = chunk.replace('FINAL:', '');
           aiResponse += finalData;
           hasStartedStreaming = true;
-          updateMessage(aiMessage.id, { content: aiResponse });
+          updateMessage(aiMessage!.id, { content: aiResponse });
         } else {
           // Handle any remaining plain text content (fallback for multi-agent mode)
           if (chunk.trim()) {
             aiResponse += chunk;
             hasStartedStreaming = true;
-            updateMessage(aiMessage.id, { content: aiResponse });
+            updateMessage(aiMessage!.id, { content: aiResponse });
           }
         }
       }
 
       reader.releaseLock();
-      setIsThinking(false);
+      if (aiMessage) {
+        setThinkingStates(prev => ({
+          ...prev,
+          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+        }));
+      }
 
       // Save the AI message to the database
       if (aiResponse.trim()) {
@@ -125,11 +152,12 @@ export function useChatAI(chatId: string, userId?: string) {
       }
     } catch (error: any) {
       console.error('🟥 [chat_ui][ERROR] Failed to generate auto AI response:', error.message);
-      setIsThinking(false);
-      
-      // Remove the AI message if it was added
       if (aiMessage) {
-        removeMessage(aiMessage.id);
+        setThinkingStates(prev => ({
+          ...prev,
+          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+        }));
+        removeMessage(aiMessage!.id);
       }
     } finally {
       setLoadingAI(false);
@@ -149,7 +177,7 @@ export function useChatAI(chatId: string, userId?: string) {
     }
 
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
+      id: generateUniqueId('user'),
       sessionId: chatId,
       userId: userId,
       role: 'USER',
@@ -158,9 +186,22 @@ export function useChatAI(chatId: string, userId?: string) {
     };
 
     addMessage(userMessage);
+    
+    // Save user message to database
+    try {
+      await axios.post('/api/chat', {
+        sessionId: chatId,
+        userId: userId,
+        role: 'USER',
+        content: message.trim()
+      });
+      console.info('🟩 [chat_ui][SUCCESS] User message saved to database');
+    } catch (saveError) {
+      console.error('🟥 [chat_ui][ERROR] Failed to save user message:', saveError);
+      // Don't fail the entire request if saving fails
+    }
+    
     setLoadingAI(true);
-    setIsThinking(true);
-    setThinkingContent('');
     setSendError(null);
 
     let aiMessage: Message | null = null;
@@ -183,18 +224,22 @@ export function useChatAI(chatId: string, userId?: string) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🟥 [chat_ui][ERROR] API error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        console.error('🟥 [chat_ui][ERROR] API error:', errorText);
+        const errorMessage = errorText || 'Failed to send message';
+        setSendError(errorMessage);
+        toast.error(errorMessage);
+        return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('No response body');
+        console.error('🟥 [chat_ui][ERROR] No response body reader');
+        return;
       }
 
       let aiResponse = '';
       aiMessage = {
-        id: `ai-${Date.now()}`,
+        id: generateUniqueId('ai'),
         sessionId: chatId,
         userId: userId,
         role: 'ASSISTANT',
@@ -202,7 +247,14 @@ export function useChatAI(chatId: string, userId?: string) {
         createdAt: new Date()
       };
 
+      // Add the AI message immediately
       addMessage(aiMessage);
+
+      // Initialize thinking state for this message
+      setThinkingStates(prev => ({
+        ...prev,
+        [aiMessage!.id]: { isThinking: true, content: '' }
+      }));
 
       const decoder = new TextDecoder();
       let closed = false;
@@ -219,23 +271,37 @@ export function useChatAI(chatId: string, userId?: string) {
         // Handle thinking and final response separation
         if (chunk.startsWith('THINKING:')) {
           const thinkingData = chunk.replace('THINKING:', '');
-          setThinkingContent(prev => prev + thinkingData);
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: {
+              ...prev[aiMessage!.id],
+              content: (prev[aiMessage!.id]?.content || '') + thinkingData
+            }
+          }));
         } else if (chunk.startsWith('FINAL:')) {
-          setIsThinking(false);
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+          }));
           const finalData = chunk.replace('FINAL:', '');
           aiResponse += finalData;
-          updateMessage(aiMessage.id, { content: aiResponse });
+          updateMessage(aiMessage!.id, { content: aiResponse });
         } else {
           // Handle any remaining plain text content (fallback for multi-agent mode)
           if (chunk.trim()) {
             aiResponse += chunk;
-            updateMessage(aiMessage.id, { content: aiResponse });
+            updateMessage(aiMessage!.id, { content: aiResponse });
           }
         }
       }
 
       reader.releaseLock();
-      setIsThinking(false);
+      if (aiMessage) {
+        setThinkingStates(prev => ({
+          ...prev,
+          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+        }));
+      }
 
       // Save the AI message to the database
       if (aiResponse.trim()) {
@@ -254,15 +320,16 @@ export function useChatAI(chatId: string, userId?: string) {
       }
     } catch (error: any) {
       console.error('🟥 [chat_ui][ERROR] Failed to send message:', error.message);
-      setIsThinking(false);
+      if (aiMessage) {
+        setThinkingStates(prev => ({
+          ...prev,
+          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
+        }));
+        removeMessage(aiMessage!.id);
+      }
       const errorMessage = error.message || 'Failed to send message';
       setSendError(errorMessage);
       toast.error(errorMessage);
-      
-      // Remove the AI message if it was added
-      if (aiMessage) {
-        removeMessage(aiMessage.id);
-      }
     } finally {
       setLoadingAI(false);
     }
@@ -324,7 +391,6 @@ export function useChatAI(chatId: string, userId?: string) {
     handleSend,
     generateAIResponse,
     checkAndGenerateAutoResponse,
-    isThinking,
-    thinkingContent
+    thinkingStates
   };
 } 

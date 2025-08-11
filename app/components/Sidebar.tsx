@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import ConfirmationDialog from './ConfirmationDialog';
+import { useChat } from './ChatContext';
 
 function useClickOutside(ref: React.RefObject<any>, handler: () => void) {
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function Sidebar({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [chats, setChats] = useState<any[]>([]);
+  const { chats, setChats } = useChat();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");

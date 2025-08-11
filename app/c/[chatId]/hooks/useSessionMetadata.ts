@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 interface SessionMetadata {
   id: string;
+  sessionName?: string;
   user: {
     name: string;
   };

@@ -1,18 +1,18 @@
-import { motion } from 'framer-motion';
-import clsx from 'clsx';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import AnimatedCopyButton from '@/app/components/AnimatedCopyButton';
-import RegenerateButton from '@/app/components/RegenerateButton';
-import FeedbackSection from '@/app/components/FeedbackSection';
-import AIThinkingAnimation from '@/app/components/AIThinkingAnimation';
+import { motion } from "framer-motion";
+import clsx from "clsx";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import AnimatedCopyButton from "@/app/components/AnimatedCopyButton";
+import RegenerateButton from "@/app/components/RegenerateButton";
+import FeedbackSection from "@/app/components/FeedbackSection";
+import AIThinkingAnimation from "@/app/components/AIThinkingAnimation";
 
 interface Message {
   id: string;
   sessionId: string;
   userId: string;
-  role: 'USER' | 'ASSISTANT';
+  role: "USER" | "ASSISTANT";
   content: string;
   createdAt: Date;
 }
@@ -26,7 +26,11 @@ interface ChatMessageProps {
   messages: Message[];
   onRegenerate: (newContent: string) => void;
   onRegeneratingChange: (isRegenerating: boolean, messageIndex: number) => void;
-  onFeedback: (type: 'good' | 'bad', comment?: string, messageIndex?: number) => void;
+  onFeedback: (
+    type: "good" | "bad",
+    comment?: string,
+    messageIndex?: number
+  ) => void;
   isStreaming?: boolean;
   isThinking?: boolean;
   thinkingContent?: string;
@@ -44,7 +48,7 @@ export default function ChatMessage({
   onFeedback,
   isStreaming = false,
   isThinking,
-  thinkingContent
+  thinkingContent,
 }: ChatMessageProps) {
   return (
     <motion.div
@@ -53,46 +57,86 @@ export default function ChatMessage({
       exit={{ opacity: 0, y: 10 }}
       transition={{ duration: 0.2 }}
       className={clsx(
-        'w-full flex mb-4',
-        message.role === 'USER' ? 'justify-end' : 'justify-start'
+        "w-full flex mb-4",
+        message.role === "USER" ? "justify-end" : "justify-start"
       )}
       role="group"
-      aria-label={message.role === 'USER' ? 'User message' : 'AI response'}
+      aria-label={message.role === "USER" ? "User message" : "AI response"}
     >
-      {message.role === 'ASSISTANT' ? (
+      {message.role === "ASSISTANT" ? (
         <div className="w-full max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
-                    {/* Show thinking animation if AI message is empty and not showing ThinkingDisplay */}
-          {!message.content.trim() && !isStreaming && !(isThinking || thinkingContent) ? (
+          {/* Show thinking animation if AI message is empty and not showing ThinkingDisplay */}
+          {!message.content.trim() &&
+          !isStreaming &&
+          !(isThinking || thinkingContent) ? (
             <AIThinkingAnimation />
-          ) : !message.content.trim() && (isStreaming || isThinking || thinkingContent) ? (
-            // Don't render anything when streaming or showing ThinkingDisplay
-            null
-          ) : (
+          ) : !message.content.trim() &&
+            (isStreaming ||
+              isThinking ||
+              thinkingContent) ? // Don't render anything when streaming or showing ThinkingDisplay
+          null : (
             <>
               <div className="markdown-content max-w-none bg-transparent">
                 <ReactMarkdown
                   components={{
                     // Headings
-                    h1: ({ children }) => <h1 className="text-xl font-bold text-white mb-4 mt-6 first:mt-0">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-lg font-semibold text-white mb-3 mt-5 first:mt-0">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-base font-semibold text-white mb-2 mt-4 first:mt-0">{children}</h3>,
-                    h4: ({ children }) => <h4 className="text-sm font-semibold text-white mb-2 mt-3 first:mt-0">{children}</h4>,
-                    
+                    h1: ({ children }) => (
+                      <h1 className="text-xl font-bold text-white mb-4 mt-6 first:mt-0">
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="text-lg font-semibold text-white mb-3 mt-5 first:mt-0">
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="text-base font-semibold text-white mb-2 mt-4 first:mt-0">
+                        {children}
+                      </h3>
+                    ),
+                    h4: ({ children }) => (
+                      <h4 className="text-sm font-semibold text-white mb-2 mt-3 first:mt-0">
+                        {children}
+                      </h4>
+                    ),
+
                     // Paragraphs
-                    p: ({ children }) => <p className="text-white mb-3 leading-relaxed last:mb-0 font-legal-content text-base">{children}</p>,
-                    
+                    p: ({ children }) => (
+                      <p className="text-white mb-3 leading-relaxed last:mb-0 font-legal-content text-base">
+                        {children}
+                      </p>
+                    ),
+
                     // Lists
-                    ul: ({ children }) => <ul className="text-white mb-4 space-y-1 list-disc list-inside font-legal-content">{children}</ul>,
-                    ol: ({ children }) => <ol className="text-white mb-4 space-y-1 list-decimal list-inside font-legal-content">{children}</ol>,
-                    li: ({ children }) => <li className="text-white leading-relaxed font-legal-content">{children}</li>,
-                    
+                    ul: ({ children }) => (
+                      <ul className="text-white mb-4 space-y-1 list-disc list-inside font-legal-content">
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="text-white mb-4 space-y-1 list-decimal list-inside font-legal-content">
+                        {children}
+                      </ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="text-white leading-relaxed font-legal-content">
+                        {children}
+                      </li>
+                    ),
+
                     // Code blocks
                     code: ({ children, className }) => {
                       const isInline = !className;
                       if (isInline) {
-                        return <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-legal-mono">{children}</code>;
+                        return (
+                          <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-legal-mono">
+                            {children}
+                          </code>
+                        );
                       }
-                      const language = className?.replace('language-', '') || 'text';
+                      const language =
+                        className?.replace("language-", "") || "text";
                       return (
                         <div className="my-4">
                           <SyntaxHighlighter
@@ -100,24 +144,25 @@ export default function ChatMessage({
                             style={atomDark}
                             customStyle={{
                               margin: 0,
-                              borderRadius: '0.5rem',
-                              fontSize: '0.875rem',
-                              fontFamily: 'JetBrains Mono, Monaco, Menlo, monospace',
+                              borderRadius: "0.5rem",
+                              fontSize: "0.875rem",
+                              fontFamily:
+                                "JetBrains Mono, Monaco, Menlo, monospace",
                             }}
                           >
-                            {String(children).replace(/\n$/, '')}
+                            {String(children).replace(/\n$/, "")}
                           </SyntaxHighlighter>
                         </div>
                       );
                     },
-                    
+
                     // Blockquotes
                     blockquote: ({ children }) => (
                       <blockquote className="border-l-4 border-blue-500 pl-4 my-4 text-gray-300 italic">
                         {children}
                       </blockquote>
                     ),
-                    
+
                     // Tables
                     table: ({ children }) => (
                       <div className="overflow-x-auto my-4">
@@ -141,25 +186,29 @@ export default function ChatMessage({
                   {message.content}
                 </ReactMarkdown>
               </div>
-              
+
               {/* Action buttons for AI messages */}
               {!isStreaming && (
                 <div className="flex items-center gap-2 mt-4">
                   <AnimatedCopyButton content={message.content} />
-                  <RegenerateButton 
+                  <RegenerateButton
                     sessionId={chatId}
-                    userId={userId || ''}
+                    userId={userId || ""}
                     messageIndex={index}
                     messages={messages}
                     onRegenerate={onRegenerate}
-                    onRegeneratingChange={(isRegenerating) => onRegeneratingChange(isRegenerating, index)}
+                    onRegeneratingChange={(isRegenerating) =>
+                      onRegeneratingChange(isRegenerating, index)
+                    }
                   />
-                  <FeedbackSection 
+                  <FeedbackSection
                     sessionId={chatId}
-                    userId={userId || ''}
+                    userId={userId || ""}
                     messageId={message.id}
                     messageIndex={index}
-                    onFeedback={(type, comment) => onFeedback(type, comment, index)}
+                    onFeedback={(type, comment) =>
+                      onFeedback(type, comment, index)
+                    }
                   />
                 </div>
               )}
@@ -177,4 +226,4 @@ export default function ChatMessage({
       )}
     </motion.div>
   );
-} 
+}

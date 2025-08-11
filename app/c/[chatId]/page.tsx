@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import ChatInput from "@/app/components/ChatInput";
 import { useSidebar } from "@/app/components/SidebarContext";
+import { useChat } from "@/app/components/ChatContext";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
 import { ThinkingDisplay } from "@/app/components/ThinkingDisplay";
 
@@ -22,6 +23,7 @@ import UploadedFilesDisplay from "./components/UploadedFilesDisplay";
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { sidebarOpen } = useSidebar();
+  const { addChat, updateChat } = useChat();
   const [input, setInput] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
   const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null);
@@ -50,13 +52,14 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { uploadedFiles, handleFileUpload, handleFileRemove } = useFileUpload(
     session?.user?.id
   );
-  const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, isThinking, thinkingContent } =
+  const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, thinkingStates } =
     useChatAI(params.chatId, session?.user?.id);
 
-  // Track streaming state
+  // Track streaming state - check if any message is currently thinking
   useEffect(() => {
-    setIsStreaming(loadingAI || isThinking);
-  }, [loadingAI, isThinking]);
+    const anyThinking = Object.values(thinkingStates).some(state => state.isThinking);
+    setIsStreaming(loadingAI || anyThinking);
+  }, [loadingAI, thinkingStates]);
 
   // Essential logging for chat page state (only in development)
   useEffect(() => {
@@ -69,6 +72,43 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       });
     }
   }, [params.chatId, messages.length, loadingAI, loadingMessages]);
+
+  // Add chat to context when session metadata is loaded
+  useEffect(() => {
+    if (sessionMeta && !loadingMeta) {
+      addChat({
+        id: params.chatId,
+        sessionName: sessionMeta.sessionName || 'New Chat',
+        createdAt: new Date(sessionMeta.createdAt),
+        updatedAt: new Date(sessionMeta.createdAt)
+      });
+    }
+  }, [sessionMeta, loadingMeta, params.chatId, addChat]);
+
+  // Poll for session name updates if it's still "New Chat"
+  useEffect(() => {
+    if (!sessionMeta?.sessionName && !loadingMeta) {
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/sessions/${params.chatId}/metadata`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.sessionName && data.sessionName !== 'New Chat') {
+              updateChat(params.chatId, {
+                sessionName: data.sessionName,
+                updatedAt: new Date(data.createdAt)
+              });
+              clearInterval(pollInterval);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to poll for session name:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [sessionMeta?.sessionName, loadingMeta, params.chatId, updateChat]);
 
   // Auto-generate AI response for first message if it's a new chat
   useEffect(() => {
@@ -202,7 +242,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
-                  {msg.role === 'ASSISTANT' && (isThinking || thinkingContent) && (
+                  {msg.role === 'ASSISTANT' && thinkingStates[msg.id] && (thinkingStates[msg.id].isThinking || thinkingStates[msg.id].content) && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -210,8 +250,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     >
                       <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
                         <ThinkingDisplay
-                          isThinking={isThinking}
-                          thinkingContent={thinkingContent}
+                          isThinking={thinkingStates[msg.id].isThinking}
+                          thinkingContent={thinkingStates[msg.id].content}
                           onComplete={() => {
                             // Thinking display will auto-hide after completion
                           }}
@@ -233,8 +273,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     onRegeneratingChange={handleRegeneratingChange}
                     onFeedback={handleFeedback}
                     isStreaming={isStreaming && idx === messages.length - 1}
-                    isThinking={isThinking}
-                    thinkingContent={thinkingContent}
+                    isThinking={thinkingStates[msg.id]?.isThinking || false}
+                    thinkingContent={thinkingStates[msg.id]?.content || ''}
                   />
                 </div>
               ))}
