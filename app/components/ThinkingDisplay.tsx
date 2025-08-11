@@ -22,34 +22,8 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       .map(part => part.trim())
       .filter(part => part.length > 0);
     
-    // Join all parts first
-    let joinedContent = parts.join(' ');
-    
-    // Now apply better formatting to the joined content
-    let formattedContent = joinedContent;
-    
-    // Add line breaks before numbered items (1., 2., 3., etc.) - including bold formatting
-    formattedContent = formattedContent.replace(/(\d+\.\s+\*\*[^*]+\*\*:)/g, '\n\n$1');
-    
-    // Also handle numbered items without bold formatting
-    formattedContent = formattedContent.replace(/(\d+\.\s+[^:]+:)/g, '\n\n$1');
-    
-    // Add line breaks before bullet points (- item)
-    formattedContent = formattedContent.replace(/(\s+-\s+)/g, '\n$1');
-    
-    // Add line breaks before main sections (Internal Analysis Process:)
-    formattedContent = formattedContent.replace(/(Internal Analysis Process:)/g, '\n\n$1');
-    
-    // Add line breaks before colon-separated items that aren't already formatted
-    formattedContent = formattedContent.replace(/([^:\n]):\s+([^-\n])/g, '$1:\n$2');
-    
-    // Clean up multiple line breaks
-    formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
-    
-    // Remove leading/trailing whitespace
-    formattedContent = formattedContent.trim();
-    
-    return formattedContent;
+    // Join all parts and return - AI now formats content properly
+    return parts.join('\n\n');
   };
 
   useEffect(() => {
