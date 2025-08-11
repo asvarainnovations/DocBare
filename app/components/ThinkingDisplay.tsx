@@ -23,7 +23,8 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       .filter(part => part.length > 0);
     
     // Join all parts and return - AI now formats content properly
-    return parts.join('\n\n');
+    // Add a small spacing improvement for better readability
+    return parts.join('\n\n').trim();
   };
 
   useEffect(() => {
