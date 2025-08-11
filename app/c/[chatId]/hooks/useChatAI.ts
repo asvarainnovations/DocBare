@@ -8,6 +8,7 @@ interface Message {
   userId: string;
   role: 'USER' | 'ASSISTANT';
   content: string;
+  reasoningContent?: string; // Add reasoning content for AI messages
   createdAt: Date;
 }
 

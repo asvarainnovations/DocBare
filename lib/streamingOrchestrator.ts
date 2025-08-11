@@ -83,6 +83,15 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     - Maintain concise, clear language
     - NO internal pipeline steps or analysis markers
     - Ensure the response is complete and actionable
+    
+    **CRITICAL FINAL RESPONSE FORMATTING:**
+    - ALWAYS use proper line breaks between numbered items
+    - Format numbered lists as: "1. [Title]" followed by a line break, then content
+    - Use bullet points (-) for sub-items with proper indentation
+    - Ensure each numbered section has clear spacing
+    - Use consistent formatting throughout the response
+    - Structure content with proper headings and subheadings
+    - Maintain professional document formatting standards
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your Indian legal analysis and ensure accuracy.` : ''}
 

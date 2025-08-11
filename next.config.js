@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Docker optimization - using Asvara site approach with Prisma
+
   // Optimize package imports
   experimental: {
     optimizePackageImports: [

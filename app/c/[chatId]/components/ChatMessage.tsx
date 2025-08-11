@@ -110,17 +110,17 @@ export default function ChatMessage({
 
                     // Lists
                     ul: ({ children }) => (
-                      <ul className="text-white mb-4 space-y-1 list-disc list-inside font-legal-content">
+                      <ul className="text-white mb-4 space-y-2 list-disc pl-6 font-legal-content">
                         {children}
                       </ul>
                     ),
                     ol: ({ children }) => (
-                      <ol className="text-white mb-4 space-y-1 list-decimal list-inside font-legal-content">
+                      <ol className="text-white mb-4 space-y-2 list-decimal pl-6 font-legal-content">
                         {children}
                       </ol>
                     ),
                     li: ({ children }) => (
-                      <li className="text-white leading-relaxed font-legal-content">
+                      <li className="text-white leading-relaxed font-legal-content mb-1">
                         {children}
                       </li>
                     ),
@@ -218,9 +218,9 @@ export default function ChatMessage({
       ) : (
         <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
           <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md max-w-full">
-            <p className="text-sm md:text-base leading-relaxed break-words font-legal-content">
+            <div className="text-sm md:text-base leading-relaxed break-words font-legal-content whitespace-pre-wrap">
               {message.content}
-            </p>
+            </div>
           </div>
         </div>
       )}

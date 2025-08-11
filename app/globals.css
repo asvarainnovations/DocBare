@@ -95,10 +95,12 @@ body {
 .markdown-content ol {
   margin-bottom: 1rem;
   padding-left: 1.5rem;
+  list-style-position: outside;
 }
 
 .markdown-content li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
 }
 
 .markdown-content blockquote {
