@@ -30,9 +30,13 @@ async function generateChatTitle(prompt: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { firstMessage, userId } = await req.json();
+    const { firstMessage, userId, documentContext } = await req.json();
     if (process.env.NODE_ENV === 'development') {
-      console.info('🟦 [chat_session][INFO] Received:', { firstMessage: firstMessage.substring(0, 100), userId });
+      console.info('🟦 [chat_session][INFO] Received:', { 
+        firstMessage: firstMessage.substring(0, 100), 
+        userId,
+        documentContext: documentContext || []
+      });
     }
     if (!userId) {
       console.error('🟥 [chat_session][ERROR] Missing userId');
@@ -79,14 +83,15 @@ export async function POST(req: NextRequest) {
     });
     console.info('🟩 [chat_session][SUCCESS] Created session in Postgres:', session.id);
 
-    // Create session in Firestore
+    // Create session in Firestore with document context
     const now = new Date();
     const firestoreSession = {
       userId,
       createdAt: now,
       lastAccessed: now,
       sessionName,
-      documentIds: [],
+      documentIds: documentContext ? documentContext.map((doc: any) => doc.documentId) : [],
+      documentContext: documentContext || [], // Store full document context
     };
     await firestore.collection('chat_sessions').doc(session.id).set(firestoreSession);
     console.info('🟩 [chat_session][SUCCESS] Created session in Firestore:', session.id);

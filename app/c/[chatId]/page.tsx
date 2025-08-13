@@ -55,6 +55,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, thinkingStates } =
     useChatAI(params.chatId, session?.user?.id);
 
+  // Check if any documents are still processing
+  const isAnyDocumentProcessing = uploadedFiles.some(file => 
+    file.status === 'uploading' || file.status === 'processing'
+  );
+
   // Track streaming state - check if any message is currently thinking
   useEffect(() => {
     const anyThinking = Object.values(thinkingStates).some(state => state.isThinking);
@@ -296,6 +301,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             variant="chat"
             onSend={handleSendMessage}
             loading={loadingAI}
+            disabled={isAnyDocumentProcessing}
             error={sendError}
             showAttachments={true}
             value={input}

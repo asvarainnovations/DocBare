@@ -2,7 +2,7 @@ import clsx from 'clsx';
 
 interface UploadedFile {
   name: string;
-  status: 'uploading' | 'done' | 'error';
+  status: 'uploading' | 'processing' | 'done' | 'error';
   url?: string;
   error?: string;
   documentId?: string;
@@ -31,6 +31,7 @@ export default function UploadedFilesDisplay({ uploadedFiles, onRemoveFile }: Up
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm",
                 file.status === 'uploading' && "bg-gray-800 border-gray-600 text-gray-300",
+                file.status === 'processing' && "bg-yellow-900 border-yellow-600 text-yellow-300",
                 file.status === 'done' && "bg-green-900 border-green-600 text-green-300",
                 file.status === 'error' && "bg-red-900 border-red-600 text-red-300"
               )}
@@ -39,6 +40,8 @@ export default function UploadedFilesDisplay({ uploadedFiles, onRemoveFile }: Up
               <div className="flex-shrink-0">
                 {file.status === 'uploading' ? (
                   <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : file.status === 'processing' ? (
+                  <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
                 ) : file.status === 'done' ? (
                   <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />

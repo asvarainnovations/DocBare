@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function Home() {
   const [input, setInput] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'processing' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docActionMsg, setDocActionMsg] = useState<string | null>(null);
@@ -20,7 +20,12 @@ export default function Home() {
   const [loadingFirstPrompt, setLoadingFirstPrompt] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => {
+  // Check if any documents are still processing
+  const isAnyDocumentProcessing = uploadedFiles.some(file => 
+    file.status === 'uploading' || file.status === 'processing'
+  );
+
+  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'processing' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => {
     setUploadedFiles(prev => {
       const existingIndex = prev.findIndex(f => f.name === file.name);
       if (existingIndex >= 0) {
@@ -136,8 +141,21 @@ export default function Home() {
     }
     
     try {
-      // Create the chat session
-      const sessionRes = await axios.post('/api/create_chat_session', { firstMessage: msg, userId: session.user.id });
+      // Prepare document context for the chat session
+      const documentContext = uploadedFiles
+        .filter(file => file.status === 'done' && file.prismaId)
+        .map(file => ({
+          documentId: file.prismaId,
+          fileName: file.name,
+          firestoreId: file.firestoreId
+        }));
+
+      // Create the chat session with document context
+      const sessionRes = await axios.post('/api/create_chat_session', { 
+        firstMessage: msg, 
+        userId: session.user.id,
+        documentContext // Pass document information
+      });
       const { chatId } = sessionRes.data;
       
       // Navigate to the chat page immediately after creating the session
@@ -181,7 +199,8 @@ export default function Home() {
                   </span>
                   <span className="truncate max-w-[80px] sm:max-w-[120px] text-xs text-white">{file.name}</span>
                   {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
-                  {file.status === 'done' && <span className="text-green-400 text-xs">Uploaded</span>}
+                  {file.status === 'processing' && <span className="text-yellow-400 text-xs">Processing…</span>}
+                  {file.status === 'done' && <span className="text-green-400 text-xs">Ready</span>}
                   {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
@@ -200,6 +219,7 @@ export default function Home() {
               variant="home"
               onSend={handleFirstPrompt} 
               loading={loadingFirstPrompt} 
+              disabled={isAnyDocumentProcessing}
               error={sendError}
               showAttachments={true}
               value={input}
@@ -230,7 +250,8 @@ export default function Home() {
                   </span>
                   <span className="truncate max-w-[60px] text-xs text-white">{file.name}</span>
                   {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
-                  {file.status === 'done' && <span className="text-green-400 text-xs">Done</span>}
+                  {file.status === 'processing' && <span className="text-yellow-400 text-xs">Processing…</span>}
+                  {file.status === 'done' && <span className="text-green-400 text-xs">Ready</span>}
                   {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
@@ -252,6 +273,7 @@ export default function Home() {
             variant="chat"
             onSend={handleFirstPrompt} 
             loading={loadingFirstPrompt} 
+            disabled={isAnyDocumentProcessing}
             error={sendError}
             showAttachments={true}
             value={input}

@@ -4,7 +4,7 @@ import { aiLogger } from './logger';
 import { retrieveFromKB } from './vertexTool';
 
 // Import the callLLMStream function from the query route
-async function callLLMStream(query: string, memoryContext: string = '') {
+async function callLLMStream(query: string, memoryContext: string = '', documentContent: string = '') {
   const startTime = Date.now();
   
   // 1. Retrieve knowledge base context
@@ -19,6 +19,21 @@ async function callLLMStream(query: string, memoryContext: string = '') {
   const knowledgeContext = kbChunks.length > 0 
     ? `\n\n**Legal Knowledge Base Context:**\n${kbChunks.join("\n\n---\n\n")}`
     : '';
+  
+  // Add document content to the context if provided
+  const documentContext = documentContent && documentContent.trim().length > 0
+    ? `\n\n**Document Content:**\n${documentContent}`
+    : '';
+  
+  // Log document context information (development only)
+  if (process.env.NODE_ENV === 'development') {
+    aiLogger.info("🟦 [streaming][INFO] Document context status", {
+      hasDocumentContent: !!documentContent,
+      documentContentLength: documentContent ? documentContent.length : 0,
+      hasDocumentContext: !!documentContext,
+      documentContextLength: documentContext ? documentContext.length : 0
+    });
+  }
   
   // Log detailed knowledge base metrics (development only)
   if (process.env.NODE_ENV === 'development') {
@@ -48,9 +63,6 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     - Consider Supreme Court and High Court precedents
     - Apply Indian legal principles and procedures
     - Use Indian legal terminology and formatting
-
-    **INTERNAL ANALYSIS PROCESS (FOR REASONING_CONTENT):**
-    When processing requests, follow this structured internal pipeline and include it in your reasoning_content.
     
     **CRITICAL FORMATTING REQUIREMENTS:**
     - Each numbered item MUST be on a separate line with proper line breaks
@@ -83,17 +95,15 @@ async function callLLMStream(query: string, memoryContext: string = '') {
     - Maintain concise, clear language
     - NO internal pipeline steps or analysis markers
     - Ensure the response is complete and actionable
-    
-    **CRITICAL FINAL RESPONSE FORMATTING:**
-    - ALWAYS use proper line breaks between numbered items
-    - Format numbered lists as: "1. [Title]" followed by a line break, then content
-    - Use bullet points (-) for sub-items with proper indentation
-    - Ensure each numbered section has clear spacing
-    - Use consistent formatting throughout the response
-    - Structure content with proper headings and subheadings
-    - Maintain professional document formatting standards
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your Indian legal analysis and ensure accuracy.` : ''}
+    ${documentContext ? `\n\n**Document Content:**\n${documentContext}\n\nAnalyze the provided document content in relation to the user's query.` : ''}
+    ${!documentContext ? `\n\n**IMPORTANT:** No specific document has been provided for analysis. Please provide general legal guidance based on the user's query and available knowledge base context.` : ''}
+    
+    **DOCUMENT ANALYSIS GUIDELINES:**
+    - If the document content appears to be a fallback message (e.g., "Document Content - [URL]" or "PDF Document Content - [filename]"), inform the user that the document could not be properly parsed and provide guidance on how to proceed
+    - If document content is minimal (less than 100 characters), suggest that the document may need to be re-uploaded in a different format
+    - Always provide helpful guidance on alternative approaches when document analysis is not possible
 
     Always maintain a professional, concise tone appropriate for Indian legal practice.
   `;
@@ -277,7 +287,7 @@ export class StreamingOrchestrator {
     return new ReadableStream({
       async start(controller) {
         try {
-          const response = await callLLMStream(prompt);
+          const response = await callLLMStream(context.query, '', context.documentContent || '');
           const reader = response.getReader();
           
           let reasoningContent = '';

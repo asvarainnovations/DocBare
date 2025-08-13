@@ -6,7 +6,7 @@ import { apiLogger } from '@/lib/logger';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sessionId, userId, role, content } = body;
+    const { sessionId, userId, role, content, reasoningContent } = body;
 
     apiLogger.info('Chat message received', { 
       sessionId, 
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
         userId,
         role: role as 'USER' | 'ASSISTANT' | 'SYSTEM',
         content,
+        reasoningContent: reasoningContent || null, // Save reasoning content if provided
         createdAt: new Date(),
       };
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
           sessionId,
           role: role as 'USER' | 'ASSISTANT' | 'SYSTEM',
           content,
+          reasoningContent: reasoningContent || null, // Save reasoning content if provided
         },
       });
 

@@ -137,14 +137,18 @@ export function useChatAI(chatId: string, userId?: string) {
       // Save the AI message to the database
       if (aiResponse.trim()) {
         try {
+          // Get the reasoning content for this message
+          const reasoningContent = thinkingStates[aiMessage!.id]?.content || '';
+          
           await axios.post('/api/chat', {
             sessionId: chatId,
             userId: userId,
             role: 'ASSISTANT',
-            content: aiResponse.trim()
+            content: aiResponse.trim(),
+            reasoningContent: reasoningContent.trim() || null
           });
           if (process.env.NODE_ENV === 'development') {
-            console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
+            console.info('🟩 [chat_ui][SUCCESS] AI message saved to database with reasoning content');
           }
         } catch (saveError) {
           console.error('🟥 [chat_ui][ERROR] Failed to save auto AI message:', saveError);
@@ -307,13 +311,17 @@ export function useChatAI(chatId: string, userId?: string) {
       // Save the AI message to the database
       if (aiResponse.trim()) {
         try {
+          // Get the reasoning content for this message
+          const reasoningContent = thinkingStates[aiMessage!.id]?.content || '';
+          
           await axios.post('/api/chat', {
             sessionId: chatId,
             userId: userId,
             role: 'ASSISTANT',
-            content: aiResponse.trim()
+            content: aiResponse.trim(),
+            reasoningContent: reasoningContent.trim() || null
           });
-          console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
+          console.info('🟩 [chat_ui][SUCCESS] AI message saved to database with reasoning content');
         } catch (saveError) {
           console.error('🟥 [chat_ui][ERROR] Failed to save AI message:', saveError);
           // Don't fail the entire request if saving fails

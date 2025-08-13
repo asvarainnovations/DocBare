@@ -12,11 +12,12 @@ function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);
   const pathname = usePathname();
   
-  // Check if current page is an admin page
+  // Check if current page is an admin page or auth page
   const isAdminPage = pathname?.startsWith('/admin');
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname?.startsWith('/auth');
   
-  // If it's an admin page, render children directly without global navigation
-  if (isAdminPage) {
+  // If it's an admin page or auth page, render children directly without global navigation
+  if (isAdminPage || isAuthPage) {
     return <>{children}</>;
   }
   

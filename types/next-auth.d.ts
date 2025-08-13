@@ -12,6 +12,7 @@ declare module 'next-auth' {
       image?: string | null;
       isAdmin?: boolean;
       adminId?: string;
+      platform?: string; // Add platform identifier for cross-platform auth
     };
   }
 }
@@ -20,5 +21,6 @@ declare module 'next-auth/jwt' {
   interface JWT {
     isAdmin?: boolean;
     adminId?: string;
+    platform?: string; // Add platform identifier for cross-platform auth
   }
 } 

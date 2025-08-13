@@ -44,6 +44,10 @@ export const authOptions: AuthOptions = {
   ],
   session: {
     strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days - longer for cross-platform
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: '/login',
@@ -51,13 +55,14 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile, email, credentials }) {
-      // Account linking logic that relied on session is removed due to NextAuth callback limitations.
+      // Silent cross-platform authentication - no UI indicators
       return true;
     },
     async jwt({ token, user, account, profile }) {
       if (user) {
         token.id = user.id;
         token.picture = user.image || ((profile as any)?.picture);
+        token.platform = 'docbare'; // Add platform identifier
         
         // Check if user is an admin and add to token
         try {
@@ -82,6 +87,7 @@ export const authOptions: AuthOptions = {
       if (session.user && token?.id) {
         session.user.id = token.id as string;
         session.user.image = token.picture;
+        session.user.platform = token.platform as string;
         // Add admin status from token to session
         session.user.isAdmin = token.isAdmin as boolean;
         if (token.adminId) {
@@ -92,4 +98,17 @@ export const authOptions: AuthOptions = {
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
+  // Enable cross-platform cookies
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      }
+    }
+  }
 }; 

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 interface UploadedFile {
   name: string;
-  status: 'uploading' | 'done' | 'error';
+  status: 'uploading' | 'processing' | 'done' | 'error';
   url?: string;
   error?: string;
   documentId?: string;

@@ -5,20 +5,19 @@ import { validateQuery } from "@/lib/validation";
 import { memoryManager } from "@/lib/memory";
 import { StreamingOrchestrator } from "@/lib/streamingOrchestrator";
 import { USE_MULTI_AGENT } from "@/lib/config";
-
-
+import firestore from "@/lib/firestore";
 
 export async function GET(req: NextRequest) {
-  aiLogger.info("Query route GET method called", { 
+  aiLogger.info("Query route GET method called", {
     method: req.method,
     url: req.url,
-    headers: Object.fromEntries(req.headers.entries())
+    headers: Object.fromEntries(req.headers.entries()),
   });
-  
-  return NextResponse.json({ 
-    status: "Query API is working", 
+
+  return NextResponse.json({
+    status: "Query API is working",
     timestamp: new Date().toISOString(),
-    method: "GET"
+    method: "GET",
   });
 }
 
@@ -26,122 +25,195 @@ export async function POST(req: NextRequest) {
   // Temporarily disable rate limiting to debug the issue
   // return withRateLimit(rateLimitConfigs.ai)(async (req: NextRequest) => {
   try {
-    aiLogger.info("Query route called", { 
+    aiLogger.info("Query route called", {
       method: req.method,
       url: req.url,
-      headers: Object.fromEntries(req.headers.entries())
+      headers: Object.fromEntries(req.headers.entries()),
     });
-      
-      // Validate request
-      const validation = await validateQuery(req);
-      if (validation.error) {
-        aiLogger.error("Validation failed", { error: validation.error });
-        return validation.error;
-      }
 
-      const { query, userId, sessionId } = validation.data;
-      
-      // AI query request received
+    // Validate request
+    const validation = await validateQuery(req);
+    if (validation.error) {
+      aiLogger.error("Validation failed", { error: validation.error });
+      return validation.error;
+    }
 
-      // Log the current mode
-      aiLogger.info("Processing query", { 
-        mode: USE_MULTI_AGENT ? 'Multi-Agent' : 'Single-Agent',
-        sessionId,
-        userId,
-        queryLength: query.length
-      });
+    const { query, userId, sessionId } = validation.data;
 
-      // Generate memory context if sessionId is provided
-      let memoryContext = '';
-      if (sessionId) {
-        try {
-          memoryContext = await memoryManager.generateMemoryContext(sessionId, userId, query);
-        } catch (error) {
-          // Continue without memory context if it fails
-        }
-      }
+    // AI query request received
 
-      // Use the streaming orchestrator to handle both single-agent and multi-agent modes
-      let stream;
-      let finalAnswer = ""; // Store the final answer for memory storage
-      
+    // Log the current mode
+    aiLogger.info("Processing query", {
+      mode: USE_MULTI_AGENT ? "Multi-Agent" : "Single-Agent",
+      sessionId,
+      userId,
+      queryLength: query.length,
+    });
+
+    // Retrieve document context from chat session
+    let documentContent = "";
+    let documentName = "";
+    if (sessionId) {
       try {
-        const streamingContext = {
-          query,
-          sessionId: sessionId || '',
-          userId,
-          documentContent: '', // Will be enhanced later to support document uploads
-          documentName: ''
-        };
-        
-        stream = await StreamingOrchestrator.streamResponse(streamingContext);
-      } catch (llmErr: any) {
-        const apiError = llmErr?.response?.data?.error;
-        if (apiError && apiError.message === "Insufficient Balance") {
-          aiLogger.error("DeepSeek API insufficient balance", llmErr);
-          return NextResponse.json(
-            {
-              error:
-                "DeepSeek API: Insufficient balance. Please check your account credits.",
-            },
-            { status: 402 }
-          );
+        const sessionDoc = await firestore
+          .collection("chat_sessions")
+          .doc(sessionId)
+          .get();
+        if (sessionDoc.exists) {
+          const sessionData = sessionDoc.data();
+          const documentContext = sessionData?.documentContext || [];
+
+          if (documentContext.length > 0) {
+            aiLogger.info("Found document context in session", {
+              sessionId,
+              documentCount: documentContext.length,
+            });
+
+            // Retrieve document content from chunks
+            for (const doc of documentContext) {
+              try {
+                const chunksSnapshot = await firestore
+                  .collection("document_chunks")
+                  .where("documentId", "==", doc.documentId)
+                  .orderBy("chunkIndex", "asc")
+                  .get();
+
+                if (!chunksSnapshot.empty) {
+                  const docText = chunksSnapshot.docs
+                    .map((chunk: any) => chunk.data().text)
+                    .join("\n\n");
+                  documentContent += `\n\n--- Document: ${doc.fileName} ---\n${docText}\n`;
+                  documentName = doc.fileName;
+                  aiLogger.info("Retrieved document content", {
+                    documentId: doc.documentId,
+                    fileName: doc.fileName,
+                    contentLength: docText.length,
+                  });
+                }
+              } catch (docError) {
+                aiLogger.warn("Failed to retrieve document content", {
+                  documentId: doc.documentId,
+                  error: docError,
+                });
+              }
+            }
+          }
         }
-        aiLogger.error("Streaming orchestrator error", llmErr);
+      } catch (sessionError) {
+        aiLogger.warn("Failed to retrieve session document context", {
+          sessionId,
+          error: sessionError,
+        });
+      }
+    }
+
+    // Generate memory context if sessionId is provided
+    let memoryContext = "";
+    if (sessionId) {
+      try {
+        memoryContext = await memoryManager.generateMemoryContext(
+          sessionId,
+          userId,
+          query
+        );
+      } catch (error) {
+        // Continue without memory context if it fails
+      }
+    }
+
+    // Use the streaming orchestrator to handle both single-agent and multi-agent modes
+    let stream;
+    let finalAnswer = "";
+
+    try {
+      const streamingContext = {
+        query,
+        sessionId: sessionId || "",
+        userId,
+        documentContent: documentContent.trim(), // Pass retrieved document content
+        documentName: documentName,
+      };
+
+      stream = await StreamingOrchestrator.streamResponse(streamingContext);
+    } catch (llmErr: any) {
+      const apiError = llmErr?.response?.data?.error;
+      if (apiError && apiError.message === "Insufficient Balance") {
+        aiLogger.error("DeepSeek API insufficient balance", llmErr);
         return NextResponse.json(
-          { error: "Failed to get response from AI system." },
-          { status: 500 }
+          {
+            error:
+              "DeepSeek API: Insufficient balance. Please check your account credits.",
+          },
+          { status: 402 }
         );
       }
+      aiLogger.error("Streaming orchestrator error", llmErr);
+      return NextResponse.json(
+        { error: "Failed to get response from AI system." },
+        { status: 500 }
+      );
+    }
 
-        // 2. Stream response to client and collect answer for logging
-        const encoder = new TextEncoder();
-        let errorDuringStream: any = null;
-        const readable = new ReadableStream({
-          async start(controller) {
-            let answer = "";
-            
-            try {
-              const reader = stream.getReader();
-              const decoder = new TextDecoder();
-              
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                
-                const chunk = decoder.decode(value, { stream: true });
-                answer += chunk;
-                finalAnswer = answer; // Update final answer as we receive chunks
-                
-                controller.enqueue(encoder.encode(chunk));
-              }
-              
-              controller.close();
-            } catch (error: any) {
-              aiLogger.error("Stream error", { error: error.message });
-              errorDuringStream = error;
-              controller.error(error);
-            }
-          },
-        });
+    // 2. Stream response to client and collect answer for logging
+    const encoder = new TextEncoder();
+    let errorDuringStream: any = null;
+    const readable = new ReadableStream({
+      async start(controller) {
+        let answer = "";
+
+        try {
+          const reader = stream.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            answer += chunk;
+            finalAnswer = answer; // Update final answer as we receive chunks
+
+            controller.enqueue(encoder.encode(chunk));
+          }
+
+          controller.close();
+        } catch (error: any) {
+          aiLogger.error("Stream error", { error: error.message });
+          errorDuringStream = error;
+          controller.error(error);
+        }
+      },
+    });
 
     // 3. Store memories if sessionId is provided
     if (sessionId && !errorDuringStream) {
       try {
         // Store user query as conversation memory
-        await memoryManager.storeConversationMemory(sessionId, userId, 'user', query);
-        
+        await memoryManager.storeConversationMemory(
+          sessionId,
+          userId,
+          "user",
+          query
+        );
+
         // Store AI response as conversation memory
-        await memoryManager.storeConversationMemory(sessionId, userId, 'assistant', finalAnswer);
-        
+        await memoryManager.storeConversationMemory(
+          sessionId,
+          userId,
+          "assistant",
+          finalAnswer
+        );
+
         // Extract and store reasoning from the response
-        const reasoningMatch = finalAnswer.match(/## Reasoning:([\s\S]*?)(?=##|$)/);
+        const reasoningMatch = finalAnswer.match(
+          /## Reasoning:([\s\S]*?)(?=##|$)/
+        );
         if (reasoningMatch) {
           await memoryManager.storeReasoningMemory(
-            sessionId, 
-            userId, 
+            sessionId,
+            userId,
             reasoningMatch[1].trim(),
-            { source: 'response_analysis' }
+            { source: "response_analysis" }
           );
         }
       } catch (error) {
@@ -163,11 +235,14 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
       },
     });
   } catch (error: any) {
-    aiLogger.error("Query route error", { error: error.message, stack: error.stack });
+    aiLogger.error("Query route error", {
+      error: error.message,
+      stack: error.stack,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -175,4 +250,3 @@ export async function POST(req: NextRequest) {
   }
   // });
 }
-

@@ -25,7 +25,7 @@ interface ChatInputProps {
   userId?: string; // Add userId prop
   onFileUpload?: (file: {
     name: string;
-    status: "uploading" | "done" | "error";
+    status: "uploading" | "processing" | "done" | "error";
     url?: string;
     error?: string;
     documentId?: string;
@@ -231,6 +231,18 @@ export default function ChatInput({
           response.data.results.length > 0 &&
           response.data.results[0].url
         ) {
+          // Update status to processing before starting ingestion
+          if (onFileUpload) {
+            onFileUpload({
+              name: file.name,
+              status: "processing",
+              url: response.data.results[0].url,
+              prismaId: response.data.results[0].document?.id,
+              firestoreId: response.data.results[0].firestoreId,
+              abortController,
+            });
+          }
+
           try {
             await axios.post(
               "/api/ingest",
@@ -242,8 +254,38 @@ export default function ChatInput({
                 signal: abortController.signal,
               }
             );
-            console.info("🟦 [chat_input][SUCCESS] Document ingestion started");
-            toast.success("Document processing started");
+            console.info("🟦 [chat_input][SUCCESS] Document ingestion completed");
+            
+            // Handle confidence-based feedback
+            if (response.data.confidence) {
+              const { level, score, reasons, suggestions } = response.data.confidence;
+              
+              if (level === 'high') {
+                toast.success("Document processed successfully");
+              } else if (level === 'medium') {
+                toast.success(`Document processed with medium confidence (${score}/100)`, {
+                  description: "Consider re-uploading in DOCX format for better results"
+                });
+              } else {
+                toast.warning(`Document processed with low confidence (${score}/100)`, {
+                  description: suggestions.slice(0, 2).join('. ')
+                });
+              }
+            } else {
+              toast.success("Document processing completed");
+            }
+            
+            // Update status to done after successful ingestion
+            if (onFileUpload) {
+              onFileUpload({
+                name: file.name,
+                status: "done",
+                url: response.data.results[0].url,
+                prismaId: response.data.results[0].document?.id,
+                firestoreId: response.data.results[0].firestoreId,
+                abortController,
+              });
+            }
           } catch (ingestError: any) {
             if (ingestError.name === "AbortError") {
               if (process.env.NODE_ENV === "development") {
@@ -258,6 +300,19 @@ export default function ChatInput({
               ingestError
             );
             toast.error("Failed to start document processing");
+            
+            // Update status to error if ingestion fails
+            if (onFileUpload) {
+              onFileUpload({
+                name: file.name,
+                status: "error",
+                error: "Document processing failed",
+                url: response.data.results[0].url,
+                prismaId: response.data.results[0].document?.id,
+                firestoreId: response.data.results[0].firestoreId,
+                abortController,
+              });
+            }
           }
         }
       } catch (error: any) {
@@ -379,7 +434,7 @@ export default function ChatInput({
                 ? "AI is thinking... You can type your next question..."
                 : placeholder
             }
-            disabled={disabled}
+            disabled={false}
             rows={isHomeVariant ? 2 : 1}
           />
 

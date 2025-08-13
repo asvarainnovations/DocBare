@@ -264,12 +264,13 @@ model ChatSession {
 }
 
 model ChatMessage {
-  id         String      @id @default(uuid())
-  sessionId  String
-  role       MessageRole
-  content    String      @db.Text
-  createdAt  DateTime    @default(now())
-  session    ChatSession @relation(fields: [sessionId], references: [id])
+  id              String      @id @default(uuid())
+  sessionId       String
+  role            MessageRole
+  content         String      @db.Text
+  reasoningContent String?    @db.Text // Store AI reasoning/thinking content
+  createdAt       DateTime    @default(now())
+  session         ChatSession @relation(fields: [sessionId], references: [id])
 }
 
 model Document {

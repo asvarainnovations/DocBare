@@ -76,6 +76,14 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "accessedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "document_chunks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "documentId", "order": "ASCENDING" },
+        { "fieldPath": "chunkIndex", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
