@@ -45,15 +45,15 @@ async function callDeepSeekLLM(systemPrompt: string, userMessage: string) {
       model: "deepseek-reasoner",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
+        { role: "user", content: userMessage },
       ],
       max_tokens: 4096,
       temperature: 0.1,
-      stream: false
+      stream: false,
     },
     headers: {
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`
-    }
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
   });
 
   return response.data.choices[0].message.content;
@@ -107,7 +107,7 @@ export class LangGraphOrchestrator {
       // 1. Retrieve knowledge base context once for all agents
       const kbChunks = await retrieveFromKB(query, 5);
       const knowledgeBaseContext = kbChunks.join("\n\n---\n\n");
-      
+
       // Initialize state
       const state: AgentState = {
         sessionId,
@@ -210,14 +210,14 @@ export class LangGraphOrchestrator {
   ): Promise<Partial<AgentState>> {
     try {
       // Enhance orchestrator prompt with knowledge base context
-      const enhancedOrchestratorPrompt = state.knowledgeBaseContext 
+      const enhancedOrchestratorPrompt = state.knowledgeBaseContext
         ? AGENT_CONFIG.ORCHESTRATOR_PROMPT.replace(
-            '{knowledgeBaseContext}',
+            "{knowledgeBaseContext}",
             `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to make informed decisions about routing and analysis.`
           )
         : AGENT_CONFIG.ORCHESTRATOR_PROMPT.replace(
-            '{knowledgeBaseContext}',
-            ''
+            "{knowledgeBaseContext}",
+            ""
           );
 
       const response = await callDeepSeekLLM(
@@ -318,7 +318,10 @@ export class LangGraphOrchestrator {
         orchestratorDecision,
       };
     } catch (error) {
-      aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Orchestrator node failed`, error);
+      aiLogger.error(
+        `${LOG_PREFIXES.ORCHESTRATOR} Orchestrator node failed`,
+        error
+      );
       return {
         ...state,
         needAnalysis: false,
@@ -335,8 +338,9 @@ export class LangGraphOrchestrator {
   private async analysisNode(state: AgentState): Promise<Partial<AgentState>> {
     try {
       // Enhance analysis prompt with knowledge base context
-      const enhancedAnalysisPrompt = state.knowledgeBaseContext 
-        ? AGENT_CONFIG.ANALYSIS_PROMPT + `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your analysis and provide more accurate legal insights.`
+      const enhancedAnalysisPrompt = state.knowledgeBaseContext
+        ? AGENT_CONFIG.ANALYSIS_PROMPT +
+          `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your analysis and provide more accurate legal insights.`
         : AGENT_CONFIG.ANALYSIS_PROMPT;
 
       const response = await callDeepSeekLLM(
@@ -484,8 +488,9 @@ export class LangGraphOrchestrator {
       }
 
       // Enhance drafting prompt with knowledge base context
-      const enhancedDraftingPrompt = state.knowledgeBaseContext 
-        ? AGENT_CONFIG.DRAFTING_PROMPT + `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your drafting with relevant legal precedents and templates.`
+      const enhancedDraftingPrompt = state.knowledgeBaseContext
+        ? AGENT_CONFIG.DRAFTING_PROMPT +
+          `\n\n**Available Legal Knowledge:**\n${state.knowledgeBaseContext}\n\nUse this knowledge to enhance your drafting with relevant legal precedents and templates.`
         : AGENT_CONFIG.DRAFTING_PROMPT;
 
       const response = await callDeepSeekLLM(
@@ -532,23 +537,22 @@ export class LangGraphOrchestrator {
         // Both analysis and drafting completed successfully
         finalResponse = `# Legal Document Analysis & Drafting
 
-## Document Analysis Summary
-**Document Type**: ${state.analysisJson.type}
-**Key Parties**: ${
+          ## Document Analysis Summary
+          **Document Type**: ${state.analysisJson.type}
+          **Key Parties**: ${
             state.analysisJson.facts.partyA || "Not specified"
           } & ${state.analysisJson.facts.partyB || "Not specified"}
 **Subject**: ${state.analysisJson.facts.subject || "Not specified"}
 
 **Risk Assessment**: ${
-            state.analysisJson.audit.filter(
-              (item: any) => item.label === "Risk"
-            ).length
-          } high-risk clauses identified
+          state.analysisJson.audit.filter((item: any) => item.label === "Risk")
+            .length
+        } high-risk clauses identified
 **Recommendations**: ${
-            state.analysisJson.audit.filter(
-              (item: any) => item.label === "Favorable"
-            ).length
-          } favorable clauses found
+          state.analysisJson.audit.filter(
+            (item: any) => item.label === "Favorable"
+          ).length
+        } favorable clauses found
 
 ## Legal Document
 ${state.draftingResult}
@@ -615,12 +619,14 @@ I apologize, but I encountered an issue processing your request. Please try agai
   ): Promise<ReadableStream> {
     const encoder = new TextEncoder();
     const self = this; // Capture the this context
-    
+
     return new ReadableStream({
       async start(controller) {
         try {
           // Send initial status
-          controller.enqueue(encoder.encode('🎭 Starting multi-agent analysis...\n\n'));
+          controller.enqueue(
+            encoder.encode("🎭 Starting multi-agent analysis...\n\n")
+          );
 
           // Get memory context
           let memoryContext = "";
@@ -650,7 +656,7 @@ I apologize, but I encountered an issue processing your request. Please try agai
           // 1. Retrieve knowledge base context once for all agents
           const kbChunks = await retrieveFromKB(query, 5);
           const knowledgeBaseContext = kbChunks.join("\n\n---\n\n");
-          
+
           // Initialize state
           const state: AgentState = {
             sessionId,
@@ -665,10 +671,10 @@ I apologize, but I encountered an issue processing your request. Please try agai
           };
 
           // Step 1: Orchestrator - Decide workflow
-          controller.enqueue(encoder.encode('🤔 Analyzing request...\n'));
+          controller.enqueue(encoder.encode("🤔 Analyzing request...\n"));
           const orchestratorResult = await self.orchestratorNode(state);
           if (orchestratorResult.error) {
-            controller.enqueue(encoder.encode('❌ Orchestration failed\n'));
+            controller.enqueue(encoder.encode("❌ Orchestration failed\n"));
             controller.close();
             return;
           }
@@ -676,34 +682,40 @@ I apologize, but I encountered an issue processing your request. Please try agai
 
           // Step 2: Analysis (if needed)
           if (state.needAnalysis && state.hasDocument) {
-            controller.enqueue(encoder.encode('📋 Analyzing document...\n'));
+            controller.enqueue(encoder.encode("📋 Analyzing document...\n"));
             const analysisResult = await self.analysisNode(state);
             if (analysisResult.error) {
-              controller.enqueue(encoder.encode('⚠️ Analysis failed, proceeding with drafting...\n'));
+              controller.enqueue(
+                encoder.encode(
+                  "⚠️ Analysis failed, proceeding with drafting...\n"
+                )
+              );
             } else {
               Object.assign(state, analysisResult);
-              controller.enqueue(encoder.encode('✅ Analysis completed\n'));
+              controller.enqueue(encoder.encode("✅ Analysis completed\n"));
             }
           } else if (state.needAnalysis && !state.hasDocument) {
-            controller.enqueue(encoder.encode('⚠️ Analysis requested but no document provided\n'));
+            controller.enqueue(
+              encoder.encode("⚠️ Analysis requested but no document provided\n")
+            );
           }
 
           // Step 3: Drafting
-          controller.enqueue(encoder.encode('✍️ Drafting response...\n'));
+          controller.enqueue(encoder.encode("✍️ Drafting response...\n"));
           const draftingResult = await self.draftingNode(state);
           if (draftingResult.error) {
-            controller.enqueue(encoder.encode('❌ Drafting failed\n'));
+            controller.enqueue(encoder.encode("❌ Drafting failed\n"));
             controller.close();
             return;
           }
           Object.assign(state, draftingResult);
-          controller.enqueue(encoder.encode('✅ Drafting completed\n'));
+          controller.enqueue(encoder.encode("✅ Drafting completed\n"));
 
           // Step 4: Finalize
-          controller.enqueue(encoder.encode('🎯 Finalizing response...\n\n'));
+          controller.enqueue(encoder.encode("🎯 Finalizing response...\n\n"));
           const finalizeResult = await self.finalizeNode(state);
           if (finalizeResult.error) {
-            controller.enqueue(encoder.encode('❌ Finalization failed\n'));
+            controller.enqueue(encoder.encode("❌ Finalization failed\n"));
             controller.close();
             return;
           }
@@ -711,23 +723,25 @@ I apologize, but I encountered an issue processing your request. Please try agai
 
           // Stream the final response
           if (state.finalResponse) {
-            const chunks = state.finalResponse.split('\n');
+            const chunks = state.finalResponse.split("\n");
             for (const chunk of chunks) {
-              controller.enqueue(encoder.encode(chunk + '\n'));
+              controller.enqueue(encoder.encode(chunk + "\n"));
               // Small delay to simulate streaming
-              await new Promise(resolve => setTimeout(resolve, 10));
+              await new Promise((resolve) => setTimeout(resolve, 10));
             }
           } else {
-            controller.enqueue(encoder.encode('❌ No response generated\n'));
+            controller.enqueue(encoder.encode("❌ No response generated\n"));
           }
 
           controller.close();
         } catch (error) {
           aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} Streaming error`, error);
-          controller.enqueue(encoder.encode('❌ Processing failed. Please try again.\n'));
+          controller.enqueue(
+            encoder.encode("❌ Processing failed. Please try again.\n")
+          );
           controller.close();
         }
-      }
+      },
     });
   }
 }

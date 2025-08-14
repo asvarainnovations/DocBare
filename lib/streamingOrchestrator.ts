@@ -2,6 +2,7 @@ import { LangGraphOrchestrator } from './langgraphOrchestrator';
 import { USE_MULTI_AGENT, LOG_PREFIXES } from './config';
 import { aiLogger } from './logger';
 import { retrieveFromKB } from './vertexTool';
+import { ContextOptimizer } from './contextOptimizer';
 
 // Import the callLLMStream function from the query route
 async function callLLMStream(query: string, memoryContext: string = '', documentContent: string = '') {
@@ -64,14 +65,15 @@ async function callLLMStream(query: string, memoryContext: string = '', document
     - Apply Indian legal principles and procedures
     - Use Indian legal terminology and formatting
     
-    **CRITICAL FORMATTING REQUIREMENTS:**
-    - Each numbered item MUST be on a separate line with proper line breaks
-    - Use clear formatting with line breaks between each step
-    - Format numbered items as: "1. **Step Name:** Description" (each on new line)
-    - Use bullet points (-) for sub-items with proper indentation
-    - Ensure readability with proper spacing
-    - Structure your reasoning content in a clean, organized manner
-    - Use consistent formatting throughout the analysis
+    **REASONING CONTENT FORMATTING (FOR THINKING DISPLAY):**
+    - Structure your reasoning in clear, professional sections
+    - Use numbered steps with descriptive headers: "1. **Task Analysis:** [description]"
+    - Separate each major step with line breaks for readability
+    - Use bullet points for sub-considerations: "- Key consideration: [detail]"
+    - Maintain consistent formatting throughout the reasoning process
+    - Write in a professional, analytical tone suitable for legal analysis
+    - Ensure each step builds logically on the previous one
+    - Use clear, concise language that demonstrates your analytical process
 
     **ANALYSIS PIPELINE:**
     1. **Task Classification:** Determine Analysis vs Drafting
@@ -108,26 +110,38 @@ async function callLLMStream(query: string, memoryContext: string = '', document
     Always maintain a professional, concise tone appropriate for Indian legal practice.
   `;
 
-  // Combine system prompt with memory context
-  const enhancedSystemPrompt = memoryContext
-    ? `${systemPrompt}\n\n**Previous Context:**\n${memoryContext}\n\n**Current Query:**`
-    : systemPrompt;
+  // Optimize context to fit within token limits
+  const optimizedContext = ContextOptimizer.optimizeContext(
+    systemPrompt,
+    memoryContext,
+    documentContext,
+    knowledgeContext,
+    query
+  );
+
+  // Combine optimized system prompt with memory context
+  const enhancedSystemPrompt = optimizedContext.memoryContext
+    ? `${optimizedContext.systemPrompt}\n\n**Previous Context:**\n${optimizedContext.memoryContext}\n\n**Current Query:**`
+    : optimizedContext.systemPrompt;
   
-  // Log final system prompt metrics (development only)
-  const systemPromptCharacters = enhancedSystemPrompt.length;
-  const systemPromptWords = enhancedSystemPrompt.split(/\s+/).length;
-  const systemPromptEstimatedTokens = Math.ceil(systemPromptCharacters / 4);
-  
+  // Log context optimization results (development only)
   if (process.env.NODE_ENV === 'development') {
-    aiLogger.info("🟦 [streaming][INFO] Final system prompt metrics", {
+    const contextStats = ContextOptimizer.getContextStats(
+      optimizedContext.systemPrompt,
+      optimizedContext.memoryContext,
+      optimizedContext.documentContext,
+      optimizedContext.knowledgeBaseContext,
+      optimizedContext.query
+    );
+    
+    aiLogger.info("🟦 [streaming][INFO] Context optimization results", {
       query: query.substring(0, 100),
-      systemPromptCharacters: systemPromptCharacters,
-      systemPromptWords: systemPromptWords,
-      systemPromptEstimatedTokens: systemPromptEstimatedTokens,
-      hasMemoryContext: !!memoryContext,
-      memoryContextLength: memoryContext ? memoryContext.length : 0,
-      knowledgeBaseContribution: knowledgeContext.length,
-      knowledgeBaseContributionPercentage: systemPromptCharacters > 0 ? Math.round((knowledgeContext.length / systemPromptCharacters) * 100) : 0
+      contextStats,
+      optimizationApplied: optimizedContext.optimizationApplied,
+      totalTokens: optimizedContext.totalTokens,
+      hasMemoryContext: !!optimizedContext.memoryContext,
+      hasDocumentContext: !!optimizedContext.documentContext,
+      hasKnowledgeBaseContext: !!optimizedContext.knowledgeBaseContext
     });
   }
 
@@ -293,6 +307,8 @@ export class StreamingOrchestrator {
           let reasoningContent = '';
           let finalContent = '';
           let hasStartedFinalResponse = false;
+          let lastReasoningChunk = '';
+          let reasoningChunkBuffer = '';
           
           try {
             while (true) {
@@ -315,13 +331,33 @@ export class StreamingOrchestrator {
                     if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.reasoning_content) {
                       const newReasoningContent = jsonData.choices[0].delta.reasoning_content;
                       reasoningContent += newReasoningContent;
-                      controller.enqueue(encoder.encode(`THINKING:${newReasoningContent}`));
+                      reasoningChunkBuffer += newReasoningContent;
+                      
+                      // Send reasoning content in larger chunks for better formatting
+                      // Send when we have a complete sentence or significant content
+                      if (reasoningChunkBuffer.length > 20 || 
+                          reasoningChunkBuffer.includes('.') || 
+                          reasoningChunkBuffer.includes('\n') ||
+                          reasoningChunkBuffer.includes('**')) {
+                        
+                        // Only send if content has changed
+                        if (reasoningChunkBuffer !== lastReasoningChunk) {
+                          controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
+                          lastReasoningChunk = reasoningChunkBuffer;
+                          reasoningChunkBuffer = ''; // Reset buffer after sending
+                        }
+                      }
                     }
                     
                     // Handle content (final response) - following DeepSeek pattern
                     if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
                       if (!hasStartedFinalResponse) {
                         hasStartedFinalResponse = true;
+                        // Send any remaining reasoning content before starting final response
+                        if (reasoningChunkBuffer.trim()) {
+                          controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
+                          reasoningChunkBuffer = '';
+                        }
                         controller.enqueue(encoder.encode('FINAL:'));
                       }
                       const newContent = jsonData.choices[0].delta.content;
@@ -336,6 +372,11 @@ export class StreamingOrchestrator {
                   }
                 }
               }
+            }
+            
+            // Send any remaining reasoning content at the end
+            if (reasoningChunkBuffer.trim() && !hasStartedFinalResponse) {
+              controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
             }
           } finally {
             reader.releaseLock();
