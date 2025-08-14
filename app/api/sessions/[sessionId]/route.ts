@@ -14,13 +14,15 @@ export async function GET(
     try {
       const snapshot = await firestore.collection('chat_messages')
         .where('sessionId', '==', params.sessionId)
-        .orderBy('createdAt', 'asc')
         .get();
       
       const messages = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      // Sort in memory to avoid index requirements
+      messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
       apiLogger.info('Session messages retrieved from Firestore', { 
         sessionId: params.sessionId,

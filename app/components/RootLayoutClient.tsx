@@ -7,6 +7,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import { usePathname } from "next/navigation";
 
+
 function RootLayoutClientInner({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);

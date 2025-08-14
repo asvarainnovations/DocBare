@@ -75,24 +75,37 @@ export default function Sidebar({
   // Fetch chat sessions for the current user
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) return;
+    
     async function fetchChats() {
       try {
-        // Firestore REST API: /api/user_chats?userId=xxx (let's use this endpoint)
+        console.info('🟦 [sidebar][INFO] Fetching chats for user:', session?.user?.id);
+        
         const res = await axios.get("/api/user_chats", {
           params: { userId: session?.user?.id },
         });
+        
+        console.info('🟩 [sidebar][SUCCESS] Chats fetched:', {
+          userId: session?.user?.id,
+          chatCount: res.data.chats?.length || 0,
+          source: res.data.source || 'unknown'
+        });
+        
         // Update chats through context
         if (res.data.chats) {
           res.data.chats.forEach((chat: any) => {
             updateChat(chat.id, chat);
           });
         }
-              } catch (err) {
-          // Handle error - chats will remain empty
-        }
+      } catch (err: any) {
+        console.error('🟥 [sidebar][ERROR] Failed to fetch chats:', {
+          userId: session?.user?.id,
+          error: err.response?.data?.error || err.message
+        });
+        // Handle error - chats will remain empty
+      }
     }
     fetchChats();
-  }, [status, session?.user?.id, selectedChatId]);
+  }, [status, session?.user?.id, selectedChatId, updateChat]);
 
   // Remove router.events code
 
