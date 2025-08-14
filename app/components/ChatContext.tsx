@@ -15,12 +15,14 @@ interface ChatContextType {
   updateChat: (chatId: string, updates: Partial<Chat>) => void;
   removeChat: (chatId: string) => void;
   refreshChats: () => void;
+  refreshTrigger: number;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const addChat = useCallback((chat: Chat) => {
     setChats(prev => {
@@ -44,8 +46,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshChats = useCallback(() => {
-    // This will be implemented to trigger a refresh from the sidebar
-    // For now, we'll rely on the sidebar's own refresh mechanism
+    // Trigger a refresh by incrementing the trigger
+    setRefreshTrigger(prev => prev + 1);
   }, []);
 
   return (
@@ -55,7 +57,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       addChat,
       updateChat,
       removeChat,
-      refreshChats
+      refreshChats,
+      refreshTrigger
     }}>
       {children}
     </ChatContext.Provider>

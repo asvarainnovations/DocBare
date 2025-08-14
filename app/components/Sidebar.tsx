@@ -58,7 +58,7 @@ export default function Sidebar({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { chats, updateChat, removeChat } = useChat();
+     const { chats, updateChat, removeChat, refreshTrigger } = useChat();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -72,40 +72,40 @@ export default function Sidebar({
   useClickOutside(menuRef, () => setMenuOpen(null));
   useClickOutside(userDropdownRef, () => setUserDropdownOpen(false));
 
-  // Fetch chat sessions for the current user
-  useEffect(() => {
-    if (status !== "authenticated" || !session?.user?.id) return;
-    
-    async function fetchChats() {
-      try {
-        console.info('🟦 [sidebar][INFO] Fetching chats for user:', session?.user?.id);
-        
-        const res = await axios.get("/api/user_chats", {
-          params: { userId: session?.user?.id },
-        });
-        
-        console.info('🟩 [sidebar][SUCCESS] Chats fetched:', {
-          userId: session?.user?.id,
-          chatCount: res.data.chats?.length || 0,
-          source: res.data.source || 'unknown'
-        });
-        
-        // Update chats through context
-        if (res.data.chats) {
-          res.data.chats.forEach((chat: any) => {
-            updateChat(chat.id, chat);
-          });
-        }
-      } catch (err: any) {
-        console.error('🟥 [sidebar][ERROR] Failed to fetch chats:', {
-          userId: session?.user?.id,
-          error: err.response?.data?.error || err.message
-        });
-        // Handle error - chats will remain empty
-      }
-    }
-    fetchChats();
-  }, [status, session?.user?.id, selectedChatId, updateChat]);
+     // Fetch chat sessions for the current user
+   useEffect(() => {
+     if (status !== "authenticated" || !session?.user?.id) return;
+     
+     async function fetchChats() {
+       try {
+         console.info('🟦 [sidebar][INFO] Fetching chats for user:', session?.user?.id);
+         
+         const res = await axios.get("/api/user_chats", {
+           params: { userId: session?.user?.id },
+         });
+         
+         console.info('🟩 [sidebar][SUCCESS] Chats fetched:', {
+           userId: session?.user?.id,
+           chatCount: res.data.chats?.length || 0,
+           source: res.data.source || 'unknown'
+         });
+         
+         // Update chats through context
+         if (res.data.chats) {
+           res.data.chats.forEach((chat: any) => {
+             updateChat(chat.id, chat);
+           });
+         }
+       } catch (err: any) {
+         console.error('🟥 [sidebar][ERROR] Failed to fetch chats:', {
+           userId: session?.user?.id,
+           error: err.response?.data?.error || err.message
+         });
+         // Handle error - chats will remain empty
+       }
+     }
+     fetchChats();
+   }, [status, session?.user?.id]);
 
   // Remove router.events code
 
@@ -220,14 +220,14 @@ export default function Sidebar({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.2 }}
           >
-            <button
-              onClick={() => router.push("/")}
-              className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
-              aria-label="Create new chat"
-            >
-              <PlusIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="text-sm">New chat</span>
-            </button>
+                         <button
+               onClick={handleNewChat}
+               className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
+               aria-label="Create new chat"
+             >
+               <PlusIcon className="w-5 h-5 flex-shrink-0" />
+               <span className="text-sm">New chat</span>
+             </button>
             <button
               className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
               aria-label="Search chats"
