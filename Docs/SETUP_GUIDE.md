@@ -28,6 +28,14 @@
      - `VERTEX_AI_INDEX_ENDPOINT` (Vertex AI Vector Search endpoint)
      - `VERTEX_AI_LOCATION` (Vertex AI region, e.g. us-central1)
      - `DEEPSEEK_API_KEY` (for LLM completions)
+     - **Document AI Configuration:**
+       - `GOOGLE_CLOUD_PROJECT_ID` (Google Cloud Project ID)
+       - `DOCUMENT_AI_LOCATION` (Document AI location, default: us)
+       - `DOCUMENT_AI_GENERAL_PROCESSOR_ID` (General document processor ID)
+       - `DOCUMENT_AI_LEGAL_PROCESSOR_ID` (Legal document processor ID)
+       - `DOCUMENT_AI_FORM_PROCESSOR_ID` (Form parser processor ID)
+       - `DOCUMENT_AI_OCR_PROCESSOR_ID` (OCR processor ID)
+       - `GOOGLE_APPLICATION_CREDENTIALS` (Service account key path)
 
 4. **Run database migrations:**
    ```bash
@@ -48,7 +56,8 @@
 - **Next.js** (App Router, API routes)
 - **Prisma ORM** (Cloud SQL/PostgreSQL for users, auth, subscriptions, chat session metadata)
 - **Firestore** (GCP, for unstructured data: documents, chunks, embeddings, RAG sessions, agent state, feedback, chat)
-- **Google Cloud Storage** (for file uploads, if needed)
+- **Google Cloud Storage** (for file uploads)
+- **Google Document AI** (for document processing, OCR, and text extraction)
 - **OpenAI** (for embeddings)
 - **DeepSeek** (for LLM/chat/completions)
 - **NextAuth.js** (Google OAuth and credentials-based authentication)
@@ -67,6 +76,7 @@
 ## DocBare Documentation
 
 - [Model Usage Guide](./MODEL_USAGE.md) - Comprehensive guide to all AI models used in the platform
+- [Document AI Setup](./DOCUMENT_AI_SETUP.md) - Complete Google Document AI setup and configuration
 - [Multi-Agent System](./MULTI_AGENT_SYSTEM.md) - Detailed documentation of the multi-agent architecture
 - [System Architecture](./SYSTEM_ARCHITECTURE_DIAGRAM.md) - Complete system architecture diagram
 - [Progress Status](./PROGRESS_STATUS.md) - Current development status and roadmap

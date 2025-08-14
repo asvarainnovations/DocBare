@@ -23,7 +23,6 @@ gcloud services enable compute.googleapis.com
 Ensure you have the following environment variables configured:
 - `GOOGLE_CLOUD_PROJECT_ID` - Your GCP project ID
 - `DEEPSEEK_API_KEY` - DeepSeek API key
-- `GOOGLE_CLOUD_PROJECT_ID` - GCP project ID
 - `VERTEX_AI_LOCATION` - Vertex AI location (e.g., us-central1)
 - `VERTEX_AI_INDEX_ENDPOINT` - Vertex AI index endpoint
 - `VERTEX_AI_DEPLOYED_INDEX_ID` - Vertex AI deployed index ID
@@ -31,6 +30,13 @@ Ensure you have the following environment variables configured:
 - `DATABASE_URL` - PostgreSQL connection string
 - `NEXTAUTH_SECRET` - NextAuth secret
 - `NEXTAUTH_URL` - NextAuth URL (production URL)
+- **Document AI Configuration:**
+  - `DOCUMENT_AI_LOCATION` - Document AI location (default: us)
+  - `DOCUMENT_AI_GENERAL_PROCESSOR_ID` - General document processor ID
+  - `DOCUMENT_AI_LEGAL_PROCESSOR_ID` - Legal document processor ID
+  - `DOCUMENT_AI_FORM_PROCESSOR_ID` - Form parser processor ID
+  - `DOCUMENT_AI_OCR_PROCESSOR_ID` - OCR processor ID
+  - `GOOGLE_APPLICATION_CREDENTIALS` - Service account key path
 
 ## 🐳 Local Docker Development
 
@@ -87,6 +93,12 @@ VERTEX_AI_PUBLIC_DOMAIN=your-vertex-ai-public-domain
 DATABASE_URL=your-production-database-url
 NEXTAUTH_SECRET=your-nextauth-secret
 NEXTAUTH_URL=https://your-cloud-run-url.run.app
+DOCUMENT_AI_LOCATION=us
+DOCUMENT_AI_GENERAL_PROCESSOR_ID=your-general-processor-id
+DOCUMENT_AI_LEGAL_PROCESSOR_ID=your-legal-processor-id
+DOCUMENT_AI_FORM_PROCESSOR_ID=your-form-processor-id
+DOCUMENT_AI_OCR_PROCESSOR_ID=your-ocr-processor-id
+GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
 EOF
 ```
 

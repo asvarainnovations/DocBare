@@ -1,35 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import firestore from '@/lib/firestore';
-import OpenAI from 'openai';
-import { Storage } from '@google-cloud/storage';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import firestore from "@/lib/firestore";
+import OpenAI from "openai";
+import { Storage } from "@google-cloud/storage";
+import { documentAIService } from "@/lib/documentAI";
+import { rateLimit } from "@/lib/rate-limit";
 
-// Dynamic import for pdf-parse to avoid compilation issues
-let pdfParse: any = null;
+// Rate limiting configuration
+const limiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  uniqueTokenPerInterval: 500,
+});
 
-async function loadPdfParse() {
-  if (pdfParse) return pdfParse;
-  
-  try {
-    // Try to load pdf-parse in a way that avoids test file access
-    const pdfParseModule = await import('pdf-parse');
-    pdfParse = pdfParseModule.default || pdfParseModule;
-    
-    // Don't test with a minimal buffer as it may fail - just return the module
-    // The real test will be when we try to parse actual PDFs
-    console.log('✅ pdf-parse loaded successfully');
-    return pdfParse;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn('🟨 [ingest][WARN] pdf-parse loading failed, will use fallback:', errorMessage);
-    return null;
-  }
-}
-
-const openai = new OpenAI({ 
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   timeout: 30000, // 30 seconds timeout
-  maxRetries: 3
+  maxRetries: 3,
 });
 
 // Initialize GCS
@@ -58,415 +44,427 @@ function countTokens(text: string): number {
 
 interface ParsingConfidence {
   score: number; // 0-100
-  level: 'high' | 'medium' | 'low';
+  level: "high" | "medium" | "low";
   reasons: string[];
   suggestions: string[];
 }
 
-function calculateParsingConfidence(extractedText: string, fileName: string, fileSize: number): ParsingConfidence {
+function calculateParsingConfidence(
+  extractedText: string,
+  fileName: string,
+  fileSize: number
+): ParsingConfidence {
   const reasons: string[] = [];
   const suggestions: string[] = [];
   let score = 100;
-  
+
   // Check text length
   const textLength = extractedText.trim().length;
   if (textLength < 100) {
     score -= 40;
     reasons.push(`Extracted text is very short (${textLength} characters)`);
-    suggestions.push('Document may be image-based or corrupted');
+    suggestions.push("Document may be image-based or corrupted");
   } else if (textLength < 500) {
     score -= 20;
     reasons.push(`Extracted text is short (${textLength} characters)`);
-    suggestions.push('Consider re-uploading in DOCX or TXT format');
+    suggestions.push("Consider re-uploading in DOCX or TXT format");
   }
-  
+
   // Check for fallback content patterns
-  if (extractedText.includes('Document Content -') || extractedText.includes('PDF Document Content -')) {
+  if (
+    extractedText.includes("Document Content -") ||
+    extractedText.includes("PDF Document Content -")
+  ) {
     score -= 50;
-    reasons.push('Fallback content detected - parsing likely failed');
-    suggestions.push('Try uploading a different file format or re-scanning the document');
+    reasons.push("Fallback content detected - parsing likely failed");
+    suggestions.push(
+      "Try uploading a different file format or re-scanning the document"
+    );
   }
-  
+
   // Check for meaningful content patterns
-  const hasLegalTerms = /(whereas|agreement|contract|plaintiff|defendant|clause|section|article)/i.test(extractedText);
+  const hasLegalTerms =
+    /(whereas|agreement|contract|plaintiff|defendant|clause|section|article)/i.test(
+      extractedText
+    );
   const hasPunctuation = /[.!?]/.test(extractedText);
   const hasSpaces = /\s/.test(extractedText);
-  
+
   if (!hasLegalTerms && textLength > 200) {
     score -= 10;
-    reasons.push('No legal terminology detected in extracted text');
+    reasons.push("No legal terminology detected in extracted text");
   }
-  
+
   if (!hasPunctuation && textLength > 100) {
     score -= 15;
-    reasons.push('No punctuation detected - may be OCR artifacts');
-    suggestions.push('Consider using Google Document AI for better OCR');
+    reasons.push("No punctuation detected - may be OCR artifacts");
+    suggestions.push("Consider using Google Document AI for better OCR");
   }
-  
+
   if (!hasSpaces && textLength > 50) {
     score -= 25;
-    reasons.push('No spaces detected - likely OCR failure');
-    suggestions.push('Document may need better OCR processing');
+    reasons.push("No spaces detected - likely OCR failure");
+    suggestions.push("Document may need better OCR processing");
   }
-  
+
   // Check file size vs content ratio
   const contentRatio = textLength / fileSize;
   if (contentRatio < 0.01 && fileSize > 10000) {
     score -= 20;
-    reasons.push('Low content-to-file-size ratio');
-    suggestions.push('File may be image-heavy or compressed');
+    reasons.push("Low content-to-file-size ratio");
+    suggestions.push("File may be image-heavy or compressed");
   }
-  
+
   // Determine confidence level
-  let level: 'high' | 'medium' | 'low';
+  let level: "high" | "medium" | "low";
   if (score >= 80) {
-    level = 'high';
+    level = "high";
   } else if (score >= 50) {
-    level = 'medium';
+    level = "medium";
   } else {
-    level = 'low';
+    level = "low";
   }
-  
+
   // Add general suggestions based on level
-  if (level === 'low') {
-    suggestions.push('Consider re-uploading in DOCX or TXT format for better results');
-    suggestions.push('If this is a scanned document, try using Google Document AI');
+  if (level === "low") {
+    suggestions.push(
+      "Consider re-uploading in DOCX or TXT format for better results"
+    );
+    suggestions.push(
+      "If this is a scanned document, try using Google Document AI"
+    );
   }
-  
+
   return {
     score: Math.max(0, score),
     level,
     reasons,
-    suggestions
+    suggestions,
   };
 }
 
-async function extractTextWithFallbacks(fileUrl: string, mimeType: string, fileName: string): Promise<{ text: string; confidence: ParsingConfidence; method: string }> {
-  const methods = [];
-  
-  // Method 1: Primary extraction
+async function extractTextWithDocumentAI(
+  fileUrl: string,
+  mimeType: string,
+  fileName: string
+): Promise<{ text: string; confidence: ParsingConfidence; method: string }> {
   try {
-    const result = await extractTextFromFile(fileUrl, mimeType, fileName);
-    if (result.confidence.level === 'high') {
-      return { ...result, method: 'primary' };
+    console.log(
+      `🟦 [ingest][INFO] Processing document with Document AI: ${fileName}`
+    );
+
+    // Download the file from GCS
+    const file = bucket.file(fileName);
+    const [buffer] = await file.download();
+    console.log(`🟩 [ingest][SUCCESS] File downloaded: ${buffer.length} bytes`);
+
+    if (mimeType.startsWith("text/")) {
+      // For text files, process directly
+      const text = buffer.toString("utf8");
+      console.log(
+        `🟩 [ingest][SUCCESS] Text file processed: ${text.length} characters`
+      );
+      const confidence = calculateParsingConfidence(
+        text,
+        fileName,
+        buffer.length
+      );
+      return { text, confidence, method: "text" };
     }
-    methods.push({ result, method: 'primary' });
-  } catch (error) {
-    console.warn(`🟨 [ingest][WARN] Primary extraction failed:`, error);
-  }
-  
-  // Method 2: Try alternative PDF parsing if primary failed
-  if (mimeType === 'application/pdf' && methods.length > 0) {
-    try {
-      console.log(`🟦 [ingest][INFO] Trying alternative PDF parsing method`);
-      const file = bucket.file(fileName);
-      const [buffer] = await file.download();
-      
-      // Try with different pdf-parse options
-      const pdfParser = await loadPdfParse();
-      if (pdfParser) {
-        const data = await pdfParser(buffer, {
-          max: 0, // No page limit
-          version: 'v2.0.0'
-        });
-        const altText = data.text;
-        const altConfidence = calculateParsingConfidence(altText, fileName, buffer.length);
-        
-        if (altConfidence.score > methods[0].result.confidence.score) {
-          console.log(`🟩 [ingest][SUCCESS] Alternative method improved confidence: ${altConfidence.score} vs ${methods[0].result.confidence.score}`);
-          return { text: altText, confidence: altConfidence, method: 'alternative' };
-        }
-        methods.push({ result: { text: altText, confidence: altConfidence }, method: 'alternative' });
+
+    // Use Document AI for all other file types
+    const options = {
+      enableOCR: mimeType.startsWith("image/"), // Enable OCR for images
+      extractTables: true, // Extract tables for better legal document processing
+      extractEntities: true, // Extract entities for legal documents
+    };
+
+    const result = await documentAIService.processDocument(
+      buffer,
+      fileName,
+      options
+    );
+
+    if (result.confidence > 0) {
+      console.log(
+        `🟩 [ingest][SUCCESS] Document AI processed successfully: ${result.text.length} characters`
+      );
+      console.log(
+        `🟦 [ingest][INFO] Document AI confidence: ${result.confidence.toFixed(
+          2
+        )}%`
+      );
+      console.log(`🟦 [ingest][INFO] Pages processed: ${result.pages}`);
+      console.log(
+        `🟦 [ingest][INFO] Processing time: ${result.processingTime}ms`
+      );
+
+      // Convert Document AI confidence to our format
+      const confidence: ParsingConfidence = {
+        score: result.confidence,
+        level:
+          result.confidence >= 80
+            ? "high"
+            : result.confidence >= 50
+            ? "medium"
+            : "low",
+        reasons: [],
+        suggestions: [],
+      };
+
+      // Add reasons based on confidence level
+      if (confidence.level === "low") {
+        confidence.reasons.push(
+          `Document AI confidence is low (${result.confidence.toFixed(2)}%)`
+        );
+        confidence.suggestions.push(
+          "Consider re-uploading in a different format"
+        );
+        confidence.suggestions.push(
+          "Check if the document is clear and readable"
+        );
       }
-    } catch (error) {
-      console.warn(`🟨 [ingest][WARN] Alternative extraction failed:`, error);
-    }
-  }
-  
-  // Return the best result from all methods
-  const bestMethod = methods.reduce((best, current) => 
-    current.result.confidence.score > best.result.confidence.score ? current : best
-  );
-  
-  console.log(`🟦 [ingest][INFO] Using best extraction method: ${bestMethod.method} (confidence: ${bestMethod.result.confidence.score})`);
-  return { ...bestMethod.result, method: bestMethod.method };
-}
 
-async function extractTextFromFile(fileUrl: string, mimeType: string, fileName: string): Promise<{ text: string; confidence: ParsingConfidence }> {
-  try {
-    console.log(`🟦 [ingest][INFO] Extracting text from file: ${fileName}, type: ${mimeType}`);
-    
-    if (mimeType.startsWith('text/')) {
-      // For text files, we can fetch the content directly
-      const response = await fetch(fileUrl);
-      const text = await response.text();
-      console.log(`🟩 [ingest][SUCCESS] Text file extracted: ${text.length} characters`);
-      
-      const confidence = calculateParsingConfidence(text, fileName, text.length);
-      console.log(`🟦 [ingest][INFO] Text file confidence: ${confidence.level} (${confidence.score}/100)`);
-      
-      return { text, confidence };
-    } else if (mimeType === 'application/pdf') {
-      // For PDFs, download from GCS and parse with pdf-parse
-      const file = bucket.file(fileName);
-      
-      console.log(`🟦 [ingest][INFO] Downloading PDF from GCS: ${fileName}`);
-      // Download the file
-      const [buffer] = await file.download();
-      console.log(`🟩 [ingest][SUCCESS] PDF downloaded: ${buffer.length} bytes`);
-      
-      // Load pdf-parse dynamically
-      const pdfParser = await loadPdfParse();
-      
-                    if (pdfParser) {
-         // Use pdf-parse to extract text
-         console.log(`🟦 [ingest][INFO] Parsing PDF with pdf-parse`);
-         try {
-           const data = await pdfParser(buffer);
-           const extractedText = data.text;
-           console.log(`🟩 [ingest][SUCCESS] PDF parsed successfully: ${extractedText.length} characters`);
-           
-           // Calculate confidence score
-           const confidence = calculateParsingConfidence(extractedText, fileName, buffer.length);
-           console.log(`🟦 [ingest][INFO] PDF confidence: ${confidence.level} (${confidence.score}/100)`);
-           
-           if (confidence.level === 'low') {
-             console.warn(`🟨 [ingest][WARN] Low confidence PDF parsing:`, confidence.reasons);
-           }
-           
-           return { text: extractedText, confidence };
-         } catch (parseError) {
-           console.warn(`🟨 [ingest][WARN] pdf-parse failed to parse PDF:`, parseError);
-           // Continue to fallback methods
-         }
-       }
-       
-       // Fallback if pdf-parse is not available or failed - try enhanced basic text extraction
-       console.warn(`🟨 [ingest][WARN] pdf-parse not available or failed, trying enhanced basic text extraction`);
-       try {
-         // Enhanced text extraction from PDF buffer
-         const bufferString = buffer.toString('utf8');
-         
-         // Look for text content in PDF streams
-         const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
-         const textMatches = bufferString.match(/[\x20-\x7E]{10,}/g);
-         
-         let extractedText = '';
-         
-         // Try to extract from text streams first (more reliable)
-         if (textStreams && textStreams.length > 0) {
-           const streamText = textStreams.join(' ')
-             .replace(/BT|ET/g, '') // Remove PDF operators
-             .replace(/\[[^\]]*\]/g, ' ') // Remove arrays
-             .replace(/[0-9]+ [0-9]+ Td/g, ' ') // Remove positioning
-             .replace(/[0-9]+ [0-9]+ Tj/g, ' ') // Remove text objects
-             .replace(/\s+/g, ' ') // Normalize whitespace
-             .trim();
-           
-           if (streamText.length > 50) {
-             extractedText = streamText.substring(0, 3000);
-           }
-         }
-         
-         // Fallback to general text matching
-         if (!extractedText && textMatches && textMatches.length > 0) {
-           extractedText = textMatches.join(' ').substring(0, 2000);
-         }
-         
-         if (extractedText) {
-           console.log(`🟩 [ingest][SUCCESS] Enhanced basic text extraction: ${extractedText.length} characters`);
-           const confidence = calculateParsingConfidence(extractedText, fileName, buffer.length);
-           return { text: extractedText, confidence };
-         }
-       } catch (basicError) {
-         console.warn(`🟨 [ingest][WARN] Enhanced basic text extraction failed:`, basicError);
-       }
-       
-       // Final fallback
-       const fallbackText = `PDF Document Content - ${fileName} (${buffer.length} bytes) - PDF parsing not available`;
-       const confidence = calculateParsingConfidence(fallbackText, fileName, buffer.length);
-       return { text: fallbackText, confidence };
+      return { text: result.text, confidence, method: "document_ai" };
     } else {
-      // For other file types, return a placeholder
-      console.warn(`🟨 [ingest][WARN] Unsupported file type: ${mimeType}`);
-      const unsupportedText = `Document Content - ${fileUrl} (Unsupported file type: ${mimeType})`;
-      const confidence = calculateParsingConfidence(unsupportedText, fileName, 0);
-      return { text: unsupportedText, confidence };
+      throw new Error("Document AI returned zero confidence");
     }
   } catch (error) {
-    console.error('🟥 [ingest][ERROR] Error extracting text from file:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorText = `Document Content - ${fileUrl} (Error: ${errorMessage})`;
-    const confidence = calculateParsingConfidence(errorText, fileName, 0);
-    return { text: errorText, confidence };
+    console.error(`🟥 [ingest][ERROR] Document AI processing failed:`, error);
+
+    // Fallback to basic text extraction for PDFs
+    if (mimeType === "application/pdf") {
+      console.log(`🟦 [ingest][INFO] Trying fallback PDF text extraction`);
+      try {
+        const file = bucket.file(fileName);
+        const [buffer] = await file.download();
+        const bufferString = buffer.toString("utf8");
+        const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
+        const textMatches = bufferString.match(/[\x20-\x7E]{10,}/g);
+        let extractedText = "";
+
+        if (textStreams && textStreams.length > 0) {
+          const streamText = textStreams
+            .join(" ")
+            .replace(/BT|ET/g, "")
+            .replace(/\[[^\]]*\]/g, " ")
+            .replace(/[0-9]+ [0-9]+ Td/g, " ")
+            .replace(/[0-9]+ [0-9]+ Tj/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          if (streamText.length > 50) {
+            extractedText = streamText.substring(0, 3000);
+          }
+        }
+
+        if (!extractedText && textMatches && textMatches.length > 0) {
+          extractedText = textMatches.join(" ").substring(0, 2000);
+        }
+
+        if (extractedText) {
+          console.log(
+            `🟩 [ingest][SUCCESS] Fallback text extraction: ${extractedText.length} characters`
+          );
+          const confidence = calculateParsingConfidence(
+            extractedText,
+            fileName,
+            buffer.length
+          );
+          return { text: extractedText, confidence, method: "fallback" };
+        }
+      } catch (fallbackError) {
+        console.warn(
+          `🟨 [ingest][WARN] Fallback extraction failed:`,
+          fallbackError
+        );
+      }
+    }
+
+    // Final fallback
+    const fallbackText = `Document Content - ${fileName} (Document AI processing failed)`;
+    const confidence = calculateParsingConfidence(fallbackText, fileName, 0);
+    return { text: fallbackText, confidence, method: "error" };
   }
 }
 
-export async function GET(req: NextRequest) {
-  return NextResponse.json({ 
-    status: 'Ingest API is working',
-    message: 'GET method is accessible'
-  });
-}
-
-// Rate limiting configuration
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 5; // 5 requests per minute
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-  
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimitMap.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  
-  if (userLimit.count >= MAX_REQUESTS_PER_WINDOW) {
-    return false;
-  }
-  
-  userLimit.count++;
-  return true;
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { documentId, userId } = await req.json();
-    
-    if (!documentId) {
-      return NextResponse.json({ error: 'Missing documentId' }, { status: 400 });
+    // Rate limiting
+    const identifier = request.ip ?? "127.0.0.1";
+    const { success } = await limiter.limit(identifier);
+
+    if (!success) {
+      console.warn(`🟨 [ingest][WARN] Rate limit exceeded for ${identifier}`);
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 }
+      );
     }
-    
+
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+    const userId = formData.get("userId") as string;
+
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+
     if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-    }
-    
-    // Check rate limit
-    if (!checkRateLimit(userId)) {
-      return NextResponse.json({ 
-        error: 'Rate limit exceeded. Please wait before processing another document.',
-        retryAfter: Math.ceil(RATE_LIMIT_WINDOW / 1000)
-      }, { status: 429 });
+      return NextResponse.json(
+        { error: "No user ID provided" },
+        { status: 400 }
+      );
     }
 
-    // Fetch document from Prisma
-    const document = await prisma.document.findUnique({
-      where: { id: documentId }
+    console.log(
+      `🟦 [ingest][INFO] Processing file: ${file.name} for user: ${userId}`
+    );
+
+    // Upload file to GCS
+    const fileName = `${userId}/${Date.now()}-${file.name}`;
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+
+    const gcsFile = bucket.file(fileName);
+    await gcsFile.save(fileBuffer, {
+      metadata: {
+        contentType: file.type,
+      },
     });
 
-    if (!document) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
+    console.log(`🟩 [ingest][SUCCESS] File uploaded to GCS: ${fileName}`);
 
-    // Extract text from the uploaded file with fallbacks
-    const extractionResult = await extractTextWithFallbacks(document.path, document.mimeType, document.fileName);
-    
-    if (!extractionResult.text) {
-      return NextResponse.json({ error: 'No text could be extracted from document' }, { status: 400 });
-    }
+    // Extract text using Document AI
+    const extractionResult = await extractTextWithDocumentAI(
+      `gs://${process.env.GCS_BUCKET_NAME}/${fileName}`,
+      file.type,
+      fileName
+    );
 
-    // Log confidence information
-    console.log(`🟦 [ingest][INFO] Document processing confidence:`, {
-      fileName: document.fileName,
-      method: extractionResult.method,
-      confidence: extractionResult.confidence.level,
-      score: extractionResult.confidence.score,
-      reasons: extractionResult.confidence.reasons,
-      suggestions: extractionResult.confidence.suggestions
-    });
+    const { text: extractedText, confidence, method } = extractionResult;
+    console.log(`🟦 [ingest][INFO] Text extraction method: ${method}`);
+    console.log(
+      `🟦 [ingest][INFO] Confidence level: ${confidence.level} (${confidence.score}/100)`
+    );
+
+    if (confidence.level === "low") {
+      console.warn(
+        `🟨 [ingest][WARN] Low confidence extraction:`,
+        confidence.reasons
+      );
+    }
 
     // Split text into chunks
-    const chunks = splitIntoChunks(extractionResult.text);
-    
-    // Store chunks and embeddings in Firestore
+    const chunks = splitIntoChunks(extractedText);
+    console.log(`🟦 [ingest][INFO] Split into ${chunks.length} chunks`);
+
+    // Generate embeddings for each chunk
+    const embeddings = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunkText = chunks[i];
-      
-      // Store chunk metadata
-      const chunkDoc = {
-        documentId,
+      console.log(
+        `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
+          chunks.length
+        }`
+      );
+
+      // Generate embeddings with retry logic
+      let embeddingResp: any;
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          embeddingResp = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: chunkText,
+          });
+          break; // Success, exit retry loop
+        } catch (embeddingError) {
+          retryCount++;
+          console.warn(
+            `🟨 [ingest][WARN] Embedding generation failed (attempt ${retryCount}/${maxRetries}):`,
+            embeddingError
+          );
+          if (retryCount >= maxRetries) {
+            console.error(
+              `🟥 [ingest][ERROR] Failed to generate embedding after ${maxRetries} attempts`
+            );
+            throw embeddingError;
+          }
+          // Wait before retry (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * retryCount)
+          );
+        }
+      }
+
+      const embedding = embeddingResp.data[0].embedding;
+      embeddings.push(embedding);
+
+      // Store chunk and embedding in Firestore
+      await firestore.collection("document_chunks").add({
         userId,
+        documentId: fileName,
         chunkIndex: i,
         text: chunkText,
-        tokenCount: countTokens(chunkText),
-        createdAt: new Date(),
-      };
-      
-      const chunkRef = await firestore.collection('document_chunks').add(chunkDoc);
-      
-             // Generate embeddings with retry logic
-       let embeddingResp: any;
-       let retryCount = 0;
-       const maxRetries = 3;
-       
-       while (retryCount < maxRetries) {
-         try {
-           embeddingResp = await openai.embeddings.create({
-             model: 'text-embedding-3-small',
-             input: chunkText,
-           });
-           break; // Success, exit retry loop
-         } catch (embeddingError) {
-           retryCount++;
-           console.warn(`🟨 [ingest][WARN] Embedding generation failed (attempt ${retryCount}/${maxRetries}):`, embeddingError);
-           
-           if (retryCount >= maxRetries) {
-             console.error(`🟥 [ingest][ERROR] Failed to generate embedding after ${maxRetries} attempts`);
-             throw embeddingError;
-           }
-           
-           // Wait before retry (exponential backoff)
-           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-         }
-       }
-      
-      // Store embedding
-      const embeddingDoc = {
-        chunkId: chunkRef.id,
-        documentId,
-        userId,
-        vector: embeddingResp.data[0].embedding,
-        model: 'text-embedding-3-small',
-        createdAt: new Date(),
-      };
-      
-      await firestore.collection('embeddings').add(embeddingDoc);
+        embedding,
+        metadata: {
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          confidence: confidence.score,
+          extractionMethod: method,
+          timestamp: new Date(),
+        },
+      });
+
+      console.log(
+        `🟩 [ingest][SUCCESS] Stored chunk ${i + 1}/${chunks.length}`
+      );
     }
 
-    // Update document status in Prisma
-    await prisma.document.update({
-      where: { id: documentId },
-      data: { 
-        // Add a status field if it doesn't exist in the schema
-        // For now, we'll just log the completion
-      }
+    // Store document metadata in PostgreSQL
+    await prisma.document.create({
+      data: {
+        userId,
+        fileName: file.name,
+        path: fileName,
+        originalName: file.name,
+        mimeType: file.type,
+      },
     });
 
-    console.log(`✅ Document ${documentId} processed successfully with ${chunks.length} chunks`);
-    
-    return NextResponse.json({ 
-      status: 'ok', 
-      chunks: chunks.length,
-      documentId,
-      confidence: {
-        level: extractionResult.confidence.level,
-        score: extractionResult.confidence.score,
-        reasons: extractionResult.confidence.reasons,
-        suggestions: extractionResult.confidence.suggestions
+    console.log(
+      `🟩 [ingest][SUCCESS] Document processing completed successfully`
+    );
+    console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
+    console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
+    console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
+
+    return NextResponse.json({
+      success: true,
+      message: "Document processed successfully",
+      data: {
+        fileName: file.name,
+        chunks: chunks.length,
+        characters: extractedText.length,
+        confidence: confidence.score,
+        method,
+        suggestions: confidence.suggestions,
       },
-      method: extractionResult.method,
-      message: extractionResult.confidence.level === 'high' 
-        ? 'Document processed successfully' 
-        : `Document processed with ${extractionResult.confidence.level} confidence`
     });
-    
-  } catch (error: any) {
-    console.error('❌ Document processing failed:', error);
-    return NextResponse.json({ 
-      error: 'Document processing failed', 
-      details: error.message 
-    }, { status: 500 });
+  } catch (error) {
+    console.error("🟥 [ingest][ERROR] Error processing document:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    return NextResponse.json(
+      {
+        error: "Failed to process document",
+        details: errorMessage,
+      },
+      { status: 500 }
+    );
   }
-} 
+}

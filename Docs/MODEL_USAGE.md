@@ -13,6 +13,7 @@ This document provides a comprehensive overview of all AI models used in the Doc
 | **Chat Title Generation** | `gpt-4o-mini` | OpenAI | Generate descriptive chat titles | `OPENAI_API_KEY` |
 | **Document Embeddings** | `text-embedding-3-small` | OpenAI | Document chunk embeddings | `OPENAI_API_KEY` |
 | **Query Embeddings** | `text-embedding-3-large` | OpenAI | Query embeddings for RAG | `OPENAI_API_KEY` |
+| **Document Processing** | Various Processors | Google Document AI | OCR, text extraction, entity extraction | `GOOGLE_APPLICATION_CREDENTIALS` |
 
 ## 🤖 **DeepSeek Models**
 
@@ -243,6 +244,77 @@ aiLogger.aiResponse('DeepSeek', 'deepseek-reasoner', duration, { query });
 aiLogger.aiResponse('OpenAI', 'text-embedding-3-large', duration, { query });
 ```
 
+## 🔍 **Google Document AI Models**
+
+### **Overview**
+Google Document AI provides specialized processors for different document types and use cases. DocBare uses multiple processors to handle various legal documents effectively.
+
+### **Processor Types**
+
+#### **1. General Document Processor**
+- **Purpose**: Standard text extraction from documents
+- **Use Cases**: General PDFs, text documents, mixed content
+- **Features**: Basic text extraction, layout preservation
+- **Configuration**: `DOCUMENT_AI_GENERAL_PROCESSOR_ID`
+
+#### **2. Legal Document Processor**
+- **Purpose**: Specialized for legal documents
+- **Use Cases**: Contracts, agreements, legal correspondence
+- **Features**: Entity extraction, legal terminology recognition
+- **Configuration**: `DOCUMENT_AI_LEGAL_PROCESSOR_ID`
+
+#### **3. Form Parser Processor**
+- **Purpose**: Structured form data extraction
+- **Use Cases**: Legal forms, applications, questionnaires
+- **Features**: Form field extraction, table data
+- **Configuration**: `DOCUMENT_AI_FORM_PROCESSOR_ID`
+
+#### **4. OCR Processor**
+- **Purpose**: Image-to-text conversion
+- **Use Cases**: Scanned documents, images, handwritten text
+- **Features**: Optical character recognition, image processing
+- **Configuration**: `DOCUMENT_AI_OCR_PROCESSOR_ID`
+
+### **Configuration**
+```typescript
+// In lib/documentAI.ts
+const PROCESSOR_TYPES = {
+  GENERAL: 'general-document-processor',
+  LEGAL_DOCUMENT: 'legal-document-processor',
+  FORM_PARSER: 'form-parser-processor',
+  OCR: 'ocr-processor',
+} as const;
+```
+
+### **Usage Pattern**
+```typescript
+// Automatic processor selection based on file type and content
+const result = await documentAIService.processDocument(
+  fileBuffer,
+  fileName,
+  {
+    enableOCR: mimeType.startsWith("image/"),
+    extractTables: true,
+    extractEntities: true,
+  }
+);
+```
+
+### **Performance Characteristics**
+- **Processing Speed**: 1-5 seconds per document
+- **Accuracy**: 95%+ for clear documents
+- **Cost**: Pay-per-document processed
+- **Scalability**: Cloud-based processing
+- **Reliability**: 99.9% uptime SLA
+
+### **Benefits Over Traditional OCR**
+1. **Legal Specialization**: Built-in legal document understanding
+2. **Entity Extraction**: Automatic identification of legal entities
+3. **Table Recognition**: Structured table data extraction
+4. **Confidence Scoring**: Quality assessment of extracted content
+5. **Multi-Format Support**: PDF, images, scanned documents
+6. **Cloud Processing**: No local resource requirements
+
 ## 🚀 **Future Model Considerations**
 
 ### **Potential Upgrades**
@@ -250,6 +322,7 @@ aiLogger.aiResponse('OpenAI', 'text-embedding-3-large', duration, { query });
 2. **OpenAI GPT-4o**: For more complex chat title generation
 3. **Custom Embeddings**: Domain-specific legal embeddings
 4. **Multi-Modal Models**: For document image processing
+5. **Advanced Document AI**: Custom processors for specific legal domains
 
 ### **Model Comparison**
 | **Model** | **Current** | **Potential Upgrade** | **Benefits** |
@@ -257,6 +330,7 @@ aiLogger.aiResponse('OpenAI', 'text-embedding-3-large', duration, { query });
 | **Reasoning** | `deepseek-reasoner` | `deepseek-r2` | Better legal reasoning |
 | **Embeddings** | `text-embedding-3-*` | Custom legal embeddings | Domain-specific accuracy |
 | **Chat Titles** | `gpt-4o-mini` | `gpt-4o` | Better title quality |
+| **Document Processing** | Google Document AI | Custom legal processors | Domain-specific extraction |
 
 ## 🔍 **Troubleshooting**
 
@@ -277,6 +351,9 @@ npx tsx scripts/test-openai-embedding.ts
 
 # Test multi-agent system
 npx tsx scripts/test-updated-multi-agent.ts
+
+# Test Document AI integration
+npx tsx scripts/test-document-ai.ts
 ```
 
 ## 📚 **References**
@@ -285,6 +362,8 @@ npx tsx scripts/test-updated-multi-agent.ts
 - [OpenAI API Documentation](https://platform.openai.com/docs)
 - [Embedding Models Comparison](https://platform.openai.com/docs/guides/embeddings)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraphjs/)
+- [Google Document AI Documentation](https://cloud.google.com/document-ai/docs)
+- [Document AI Processor Types](https://cloud.google.com/document-ai/docs/processors-list)
 
 ---
 

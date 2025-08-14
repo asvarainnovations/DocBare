@@ -75,6 +75,12 @@ VERTEX_AI_PUBLIC_DOMAIN=your-vertex-ai-public-domain
 DATABASE_URL=your-production-database-url
 NEXTAUTH_SECRET=your-nextauth-secret
 NEXTAUTH_URL=https://your-cloud-run-url.run.app
+DOCUMENT_AI_LOCATION=us
+DOCUMENT_AI_GENERAL_PROCESSOR_ID=your-general-processor-id
+DOCUMENT_AI_LEGAL_PROCESSOR_ID=your-legal-processor-id
+DOCUMENT_AI_FORM_PROCESSOR_ID=your-form-processor-id
+DOCUMENT_AI_OCR_PROCESSOR_ID=your-ocr-processor-id
+GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
 ```
 
 ## 📊 Monitoring Commands

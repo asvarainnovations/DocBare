@@ -55,6 +55,9 @@ Below are the main API endpoints for DocBare. All endpoints are under `/api/`.
 
 ## Ingest
 - **POST /api/ingest**: Ingest a document for embeddings
+  - Request: `FormData` with `file` and `userId`
+  - Response: `{ success: true, message: string, data: { fileName, chunks, characters, confidence, method, suggestions } }`
+  - Features: Google Document AI processing, OCR, entity extraction, confidence scoring, rate limiting
 
 ## Account
 - **GET /api/account/providers**: List linked auth providers

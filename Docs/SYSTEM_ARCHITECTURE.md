@@ -23,9 +23,10 @@ flowchart TD
   subgraph Ingestion
     D1["Ingest API (/api/ingest)"]
     D2["Google Cloud Storage (Download File)"]
-    D3["Firestore (Document)"]
-    D4["OpenAI (Embeddings)"]
-    D5["Firestore (Chunks, Embeddings)"]
+    D3["Google Document AI (Text Extraction, OCR, Entity Extraction)"]
+    D4["Firestore (Document)"]
+    D5["OpenAI (Embeddings)"]
+    D6["Firestore (Chunks, Embeddings)"]
   end
 
   subgraph Chat
@@ -73,10 +74,11 @@ flowchart TD
   %% Ingestion Flow
   C4 -- "Trigger Ingest" --> D1
   D1 -- "Download" --> D2
-  D2 -- "Text Extraction" --> D3
-  D3 -- "Split/Chunk" --> D5
-  D5 -- "Embed" --> D4
-  D4 -- "Store Embeddings" --> D5
+  D2 -- "Document AI Processing" --> D3
+  D3 -- "Extracted Text" --> D4
+  D4 -- "Split/Chunk" --> D6
+  D6 -- "Embed" --> D5
+  D5 -- "Store Embeddings" --> D6
 
   %% Chat Flow
   A1 -- "First Prompt" --> E2

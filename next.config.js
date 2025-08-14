@@ -31,25 +31,7 @@ const nextConfig = {
       },
     });
 
-    // Exclude problematic test files from pdf-parse
-    config.module.rules.push({
-      test: /node_modules\/pdf-parse/,
-      use: {
-        loader: 'string-replace-loader',
-        options: {
-          multiple: [
-            {
-              search: /require\(['"]\.\/test\/data\/[^'"]+['"]\)/g,
-              replace: 'null',
-            },
-            {
-              search: /fs\.readFileSync\([^)]+test\/data[^)]+\)/g,
-              replace: 'Buffer.from("")',
-            },
-          ],
-        },
-      },
-    });
+
 
     // Optimize bundle splitting (only in production)
     if (!dev) {
