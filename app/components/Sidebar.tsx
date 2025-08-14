@@ -2,16 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import {
-  ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   EllipsisVerticalIcon,
   PencilIcon,
   TrashIcon,
-  ChevronLeftIcon,
-  Bars3Icon,
   XMarkIcon,
-  UserCircleIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   UserIcon,
@@ -20,7 +16,7 @@ import clsx from "clsx";
 import SidebarNavBar from "./SidebarNavBar";
 import { useSession, signIn, signOut } from "next-auth/react";
 import axios from "axios";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
@@ -58,7 +54,9 @@ export default function Sidebar({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-     const { chats, updateChat, removeChat, refreshTrigger } = useChat();
+  const { chats, updateChat, removeChat, refreshTrigger, addChat } = useChat();
+  
+  
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -72,40 +70,35 @@ export default function Sidebar({
   useClickOutside(menuRef, () => setMenuOpen(null));
   useClickOutside(userDropdownRef, () => setUserDropdownOpen(false));
 
-     // Fetch chat sessions for the current user
-   useEffect(() => {
-     if (status !== "authenticated" || !session?.user?.id) return;
-     
-     async function fetchChats() {
+  // Import usePathname to detect current route
+  const pathname = usePathname();
+
+           // Fetch chat sessions for the current user
+    useEffect(() => {
+      if (status !== "authenticated" || !session?.user?.id) {
+        return;
+      }
+
+         async function fetchChats() {
        try {
-         console.info('🟦 [sidebar][INFO] Fetching chats for user:', session?.user?.id);
-         
          const res = await axios.get("/api/user_chats", {
            params: { userId: session?.user?.id },
          });
-         
-         console.info('🟩 [sidebar][SUCCESS] Chats fetched:', {
-           userId: session?.user?.id,
-           chatCount: res.data.chats?.length || 0,
-           source: res.data.source || 'unknown'
-         });
-         
+
          // Update chats through context
          if (res.data.chats) {
            res.data.chats.forEach((chat: any) => {
-             updateChat(chat.id, chat);
+             addChat(chat);
            });
          }
-       } catch (err: any) {
-         console.error('🟥 [sidebar][ERROR] Failed to fetch chats:', {
-           userId: session?.user?.id,
-           error: err.response?.data?.error || err.message
-         });
-         // Handle error - chats will remain empty
+             } catch (err: any) {
+         console.error("Failed to fetch chats:", err);
        }
-     }
-     fetchChats();
-   }, [status, session?.user?.id]);
+    }
+    fetchChats();
+  }, [status, session?.user?.id, refreshTrigger]);
+
+
 
   // Remove router.events code
 
@@ -121,12 +114,12 @@ export default function Sidebar({
       const chatsRes = await axios.get("/api/user_chats", {
         params: { userId: session.user.id },
       });
-      // Update chats through context
-      if (chatsRes.data.chats) {
-        chatsRes.data.chats.forEach((chat: any) => {
-          updateChat(chat.id, chat);
-        });
-      }
+             // Update chats through context
+       if (chatsRes.data.chats) {
+         chatsRes.data.chats.forEach((chat: any) => {
+           addChat(chat);
+         });
+       }
       onSelectChat?.(chatId);
     } catch (err) {}
   }
@@ -220,14 +213,14 @@ export default function Sidebar({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.2 }}
           >
-                         <button
-               onClick={handleNewChat}
-               className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
-               aria-label="Create new chat"
-             >
-               <PlusIcon className="w-5 h-5 flex-shrink-0" />
-               <span className="text-sm">New chat</span>
-             </button>
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
+              aria-label="Create new chat"
+            >
+              <PlusIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm">New chat</span>
+            </button>
             <button
               className="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate/30 transition-colors text-white"
               aria-label="Search chats"
@@ -248,7 +241,7 @@ export default function Sidebar({
             <ul className="space-y-1">
               {chats.map((chat, index) => (
                 <motion.li
-                  key={chat.id}
+                  key={chat.id || `chat-${index}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{
@@ -285,6 +278,7 @@ export default function Sidebar({
                     {/* Dropdown menu */}
                     {menuOpen === chat.id && (
                       <motion.div
+                        key={`chat-menu-${chat.id}`}
                         ref={menuRef}
                         className="absolute right-2 top-10 z-30 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-1 w-32 sm:w-36 flex flex-col"
                         initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -419,6 +413,7 @@ export default function Sidebar({
                 <AnimatePresence>
                   {userDropdownOpen && (
                     <motion.div
+                      key="user-dropdown"
                       className="absolute bottom-full left-0 right-0 mb-2 bg-[#23272f] border border-gray-700 rounded-lg shadow-lg py-2 z-50"
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}

@@ -1,5 +1,11 @@
 "use client";
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useCallback,
+} from "react";
 
 interface Chat {
   id: string;
@@ -25,9 +31,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const addChat = useCallback((chat: Chat) => {
-    setChats(prev => {
+    setChats((prev) => {
       // Check if chat already exists
-      const exists = prev.find(c => c.id === chat.id);
+      const exists = prev.find((c) => c.id === chat.id);
       if (exists) {
         return prev;
       }
@@ -36,30 +42,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateChat = useCallback((chatId: string, updates: Partial<Chat>) => {
-    setChats(prev => prev.map(chat => 
-      chat.id === chatId ? { ...chat, ...updates } : chat
-    ));
+    setChats((prev) =>
+      prev.map((chat) => (chat.id === chatId ? { ...chat, ...updates } : chat))
+    );
   }, []);
 
   const removeChat = useCallback((chatId: string) => {
-    setChats(prev => prev.filter(chat => chat.id !== chatId));
+    setChats((prev) => prev.filter((chat) => chat.id !== chatId));
   }, []);
 
   const refreshChats = useCallback(() => {
     // Trigger a refresh by incrementing the trigger
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   }, []);
 
   return (
-    <ChatContext.Provider value={{
-      chats,
-      setChats,
-      addChat,
-      updateChat,
-      removeChat,
-      refreshChats,
-      refreshTrigger
-    }}>
+    <ChatContext.Provider
+      value={{
+        chats,
+        setChats,
+        addChat,
+        updateChat,
+        removeChat,
+        refreshChats,
+        refreshTrigger,
+      }}
+    >
       {children}
     </ChatContext.Provider>
   );
@@ -68,7 +76,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 export function useChat() {
   const context = useContext(ChatContext);
   if (context === undefined) {
-    throw new Error('useChat must be used within a ChatProvider');
+    throw new Error("useChat must be used within a ChatProvider");
   }
   return context;
 }
