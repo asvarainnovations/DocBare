@@ -21,14 +21,8 @@ DOCUMENT_AI_LOCATION=us
 # Document AI Processor IDs
 # Replace with your actual processor IDs from Google Cloud Console
 
-# Layout Parser Processor (from the image)
-DOCUMENT_AI_LAYOUT_PROCESSOR_ID=287ff3f615f149eb
-
-# General Document Processor (use the same ID for now, or create a separate one)
-DOCUMENT_AI_GENERAL_PROCESSOR_ID=287ff3f615f149eb
-
-# Legal Document Processor (create this processor in Google Cloud Console)
-DOCUMENT_AI_LEGAL_DOCUMENT_PROCESSOR_ID=your-legal-processor-id
+# Layout Parser Processor (from the image) - General purpose document processing
+DOCUMENT_AI_LAYOUT_PROCESSOR_ID=your-layout-processor-id
 
 # Form Parser Processor (create this processor in Google Cloud Console)
 DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID=your-form-processor-id
@@ -50,28 +44,19 @@ Based on the [Google Cloud Document AI documentation](https://cloud.google.com/n
 
 ### 1. Layout Parser (Already Created)
 - **Type**: Layout Parser
-- **Purpose**: Extract text with layout information
-- **Best for**: Complex documents with tables, forms, and structured layouts
+- **Purpose**: Extract text with layout information (general purpose)
+- **Best for**: All documents, PDFs, images, complex layouts, tables, forms
+- **Note**: This is the main processor for most document types
 
-### 2. General Document Processor
-- **Type**: General Document Processor
-- **Purpose**: General text extraction
-- **Best for**: Simple documents, PDFs, images
-
-### 3. Legal Document Processor
-- **Type**: Legal Document Processor
-- **Purpose**: Legal document specific processing
-- **Best for**: Contracts, agreements, legal forms
-
-### 4. Form Parser Processor
+### 2. Form Parser Processor
 - **Type**: Form Parser Processor
 - **Purpose**: Extract form fields and values
-- **Best for**: Forms, applications, questionnaires
+- **Best for**: Forms, applications, questionnaires, structured documents
 
-### 5. OCR Processor
+### 3. OCR Processor
 - **Type**: OCR Processor
 - **Purpose**: Optical Character Recognition
-- **Best for**: Scanned documents, images with text
+- **Best for**: Scanned documents, images with text, handwritten documents
 
 ## Complete .env File Example
 
@@ -84,8 +69,6 @@ GOOGLE_APPLICATION_CREDENTIALS=./secrets/docbare-document-ai-key.json
 DOCUMENT_AI_LOCATION=us
 
 # Document AI Processor IDs
-DOCUMENT_AI_GENERAL_PROCESSOR_ID=287ff3f615f149eb
-DOCUMENT_AI_LEGAL_DOCUMENT_PROCESSOR_ID=your-legal-processor-id
 DOCUMENT_AI_LAYOUT_PROCESSOR_ID=287ff3f615f149eb
 DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID=your-form-processor-id
 DOCUMENT_AI_OCR_PROCESSOR_ID=your-ocr-processor-id
@@ -147,7 +130,15 @@ curl -X POST http://localhost:3000/api/ingest \
 
 ## Next Steps
 
-1. **Create the missing processors** in Google Cloud Console
+1. **Create the missing processors** in Google Cloud Console (Form Parser, OCR)
 2. **Update the processor IDs** in your environment variables
 3. **Test the integration** with the test script
 4. **Deploy to production** with the updated configuration
+
+## Important Notes
+
+- **Layout Parser is the main processor** for most document types
+- **No "General Document Processor" or "Legal Document Processor"** exist in Google Cloud Document AI
+- **Layout Parser handles** legal documents, contracts, agreements, and all other document types
+- **Form Parser** is specifically for structured forms and applications
+- **OCR Processor** is for scanned documents and images with text

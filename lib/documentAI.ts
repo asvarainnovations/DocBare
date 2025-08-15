@@ -3,11 +3,7 @@ import { Storage } from '@google-cloud/storage';
 
 // Document AI processor types for legal documents
 const PROCESSOR_TYPES = {
-  // General document processing
-  GENERAL: 'general-document-processor',
-  // Legal document specific processors
-  LEGAL_DOCUMENT: 'legal-document-processor',
-  // Layout parser for document structure
+  // Layout parser for document structure (general purpose)
   LAYOUT_PARSER: 'layout-parser-processor',
   // Form processing
   FORM_PARSER: 'form-parser-processor',
@@ -152,37 +148,13 @@ export class DocumentAIService {
       return 'OCR';
     }
     
-    // For legal documents, prefer legal processor
-    if (this.isLegalDocument(fileName)) {
-      return 'LEGAL_DOCUMENT';
-    }
-    
     // For forms, use form parser
     if (this.isFormDocument(fileName)) {
       return 'FORM_PARSER';
     }
     
-    // For complex documents with layouts, use layout parser
-    if (this.isComplexDocument(fileName)) {
-      return 'LAYOUT_PARSER';
-    }
-    
-    // Default to general processor
-    return 'GENERAL';
-  }
-
-  /**
-   * Check if document appears to be a legal document
-   */
-  private isLegalDocument(fileName: string): boolean {
-    const legalKeywords = [
-      'contract', 'agreement', 'lease', 'deed', 'will', 'trust',
-      'petition', 'complaint', 'motion', 'brief', 'affidavit',
-      'legal', 'law', 'court', 'judgment', 'order', 'decree'
-    ];
-    
-    const fileNameLower = fileName.toLowerCase();
-    return legalKeywords.some(keyword => fileNameLower.includes(keyword));
+    // For all other documents, use layout parser (general purpose)
+    return 'LAYOUT_PARSER';
   }
 
   /**
@@ -199,27 +171,11 @@ export class DocumentAIService {
   }
 
   /**
-   * Check if document appears to be a complex document with layouts
-   */
-  private isComplexDocument(fileName: string): boolean {
-    const complexKeywords = [
-      'contract', 'agreement', 'proposal', 'report', 'manual',
-      'handbook', 'guide', 'specification', 'technical', 'layout',
-      'blueprint', 'diagram', 'chart', 'presentation'
-    ];
-    
-    const fileNameLower = fileName.toLowerCase();
-    return complexKeywords.some(keyword => fileNameLower.includes(keyword));
-  }
-
-  /**
    * Get the full processor name
    */
   private getProcessorName(processorType: keyof typeof PROCESSOR_TYPES): string {
     // Map processor types to environment variable names
     const envVarMap: Record<keyof typeof PROCESSOR_TYPES, string> = {
-      GENERAL: 'DOCUMENT_AI_GENERAL_PROCESSOR_ID',
-      LEGAL_DOCUMENT: 'DOCUMENT_AI_LEGAL_DOCUMENT_PROCESSOR_ID',
       LAYOUT_PARSER: 'DOCUMENT_AI_LAYOUT_PROCESSOR_ID',
       FORM_PARSER: 'DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID',
       OCR: 'DOCUMENT_AI_OCR_PROCESSOR_ID',
@@ -399,21 +355,23 @@ export class DocumentAIService {
       console.log(`🟦 [DocumentAI][TEST] Location: ${this.location}`);
       
       // Test processor availability
-      const generalProcessorId = process.env.DOCUMENT_AI_GENERAL_PROCESSOR_ID;
       const layoutProcessorId = process.env.DOCUMENT_AI_LAYOUT_PROCESSOR_ID;
+      const formProcessorId = process.env.DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID;
+      const ocrProcessorId = process.env.DOCUMENT_AI_OCR_PROCESSOR_ID;
       
-      if (!generalProcessorId && !layoutProcessorId) {
+      if (!layoutProcessorId && !formProcessorId && !ocrProcessorId) {
         throw new Error('No Document AI processor IDs configured. Please set at least one processor ID.');
       }
       
-      console.log(`🟦 [DocumentAI][TEST] General Processor ID: ${generalProcessorId || 'Not configured'}`);
       console.log(`🟦 [DocumentAI][TEST] Layout Processor ID: ${layoutProcessorId || 'Not configured'}`);
+      console.log(`🟦 [DocumentAI][TEST] Form Parser Processor ID: ${formProcessorId || 'Not configured'}`);
+      console.log(`🟦 [DocumentAI][TEST] OCR Processor ID: ${ocrProcessorId || 'Not configured'}`);
       
       // Test with a minimal document
       const testBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n4 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Test Document) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000204 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n364\n%%EOF');
       
       const result = await this.processDocument(testBuffer, 'test.pdf', {
-        processorType: 'GENERAL',
+        processorType: 'LAYOUT_PARSER',
         enableOCR: false,
       });
       
