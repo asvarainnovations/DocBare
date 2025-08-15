@@ -7,6 +7,8 @@ const PROCESSOR_TYPES = {
   GENERAL: 'general-document-processor',
   // Legal document specific processors
   LEGAL_DOCUMENT: 'legal-document-processor',
+  // Layout parser for document structure
+  LAYOUT_PARSER: 'layout-parser-processor',
   // Form processing
   FORM_PARSER: 'form-parser-processor',
   // OCR for scanned documents
@@ -160,6 +162,11 @@ export class DocumentAIService {
       return 'FORM_PARSER';
     }
     
+    // For complex documents with layouts, use layout parser
+    if (this.isComplexDocument(fileName)) {
+      return 'LAYOUT_PARSER';
+    }
+    
     // Default to general processor
     return 'GENERAL';
   }
@@ -192,13 +199,37 @@ export class DocumentAIService {
   }
 
   /**
+   * Check if document appears to be a complex document with layouts
+   */
+  private isComplexDocument(fileName: string): boolean {
+    const complexKeywords = [
+      'contract', 'agreement', 'proposal', 'report', 'manual',
+      'handbook', 'guide', 'specification', 'technical', 'layout',
+      'blueprint', 'diagram', 'chart', 'presentation'
+    ];
+    
+    const fileNameLower = fileName.toLowerCase();
+    return complexKeywords.some(keyword => fileNameLower.includes(keyword));
+  }
+
+  /**
    * Get the full processor name
    */
   private getProcessorName(processorType: keyof typeof PROCESSOR_TYPES): string {
-    const processorId = process.env[`DOCUMENT_AI_${processorType}_PROCESSOR_ID`];
+    // Map processor types to environment variable names
+    const envVarMap: Record<keyof typeof PROCESSOR_TYPES, string> = {
+      GENERAL: 'DOCUMENT_AI_GENERAL_PROCESSOR_ID',
+      LEGAL_DOCUMENT: 'DOCUMENT_AI_LEGAL_DOCUMENT_PROCESSOR_ID',
+      LAYOUT_PARSER: 'DOCUMENT_AI_LAYOUT_PROCESSOR_ID',
+      FORM_PARSER: 'DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID',
+      OCR: 'DOCUMENT_AI_OCR_PROCESSOR_ID',
+    };
+    
+    const envVarName = envVarMap[processorType];
+    const processorId = process.env[envVarName];
     
     if (!processorId) {
-      throw new Error(`Document AI processor ID not configured for ${processorType}`);
+      throw new Error(`Document AI processor ID not configured for ${processorType} (${envVarName})`);
     }
     
     return `projects/${this.projectId}/locations/${this.location}/processors/${processorId}`;
@@ -369,11 +400,14 @@ export class DocumentAIService {
       
       // Test processor availability
       const generalProcessorId = process.env.DOCUMENT_AI_GENERAL_PROCESSOR_ID;
-      if (!generalProcessorId) {
-        throw new Error('DOCUMENT_AI_GENERAL_PROCESSOR_ID not configured');
+      const layoutProcessorId = process.env.DOCUMENT_AI_LAYOUT_PROCESSOR_ID;
+      
+      if (!generalProcessorId && !layoutProcessorId) {
+        throw new Error('No Document AI processor IDs configured. Please set at least one processor ID.');
       }
       
-      console.log(`🟦 [DocumentAI][TEST] General Processor ID: ${generalProcessorId}`);
+      console.log(`🟦 [DocumentAI][TEST] General Processor ID: ${generalProcessorId || 'Not configured'}`);
+      console.log(`🟦 [DocumentAI][TEST] Layout Processor ID: ${layoutProcessorId || 'Not configured'}`);
       
       // Test with a minimal document
       const testBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n4 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Test Document) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000204 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n364\n%%EOF');

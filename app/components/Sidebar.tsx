@@ -55,8 +55,7 @@ export default function Sidebar({
   const { data: session, status } = useSession();
   const router = useRouter();
   const { chats, updateChat, removeChat, refreshTrigger, addChat } = useChat();
-  
-  
+
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -73,32 +72,30 @@ export default function Sidebar({
   // Import usePathname to detect current route
   const pathname = usePathname();
 
-           // Fetch chat sessions for the current user
-    useEffect(() => {
-      if (status !== "authenticated" || !session?.user?.id) {
-        return;
+  // Fetch chat sessions for the current user
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) {
+      return;
+    }
+
+    async function fetchChats() {
+      try {
+        const res = await axios.get("/api/user_chats", {
+          params: { userId: session?.user?.id },
+        });
+
+        // Update chats through context
+        if (res.data.chats) {
+          res.data.chats.forEach((chat: any) => {
+            addChat(chat);
+          });
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch chats:", err);
       }
-
-         async function fetchChats() {
-       try {
-         const res = await axios.get("/api/user_chats", {
-           params: { userId: session?.user?.id },
-         });
-
-         // Update chats through context
-         if (res.data.chats) {
-           res.data.chats.forEach((chat: any) => {
-             addChat(chat);
-           });
-         }
-             } catch (err: any) {
-         console.error("Failed to fetch chats:", err);
-       }
     }
     fetchChats();
   }, [status, session?.user?.id, refreshTrigger]);
-
-
 
   // Remove router.events code
 
@@ -114,12 +111,12 @@ export default function Sidebar({
       const chatsRes = await axios.get("/api/user_chats", {
         params: { userId: session.user.id },
       });
-             // Update chats through context
-       if (chatsRes.data.chats) {
-         chatsRes.data.chats.forEach((chat: any) => {
-           addChat(chat);
-         });
-       }
+      // Update chats through context
+      if (chatsRes.data.chats) {
+        chatsRes.data.chats.forEach((chat: any) => {
+          addChat(chat);
+        });
+      }
       onSelectChat?.(chatId);
     } catch (err) {}
   }
