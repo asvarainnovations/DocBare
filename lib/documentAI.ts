@@ -1,14 +1,14 @@
-import { DocumentProcessorServiceClient } from '@google-cloud/documentai';
-import { Storage } from '@google-cloud/storage';
+import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
+import { Storage } from "@google-cloud/storage";
 
 // Document AI processor types for legal documents
 const PROCESSOR_TYPES = {
   // Layout parser for document structure (general purpose)
-  LAYOUT_PARSER: 'layout-parser-processor',
+  LAYOUT_PARSER: "layout-parser-processor",
   // Form processing
-  FORM_PARSER: 'form-parser-processor',
+  FORM_PARSER: "form-parser-processor",
   // OCR for scanned documents
-  OCR: 'ocr-processor',
+  OCR: "ocr-processor",
 } as const;
 
 interface DocumentAIResult {
@@ -53,8 +53,9 @@ export class DocumentAIService {
 
     this.client = new DocumentProcessorServiceClient(config);
     this.storage = new Storage(config);
-    this.projectId = process.env.FIRESTORE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID!;
-    this.location = process.env.DOCUMENT_AI_LOCATION || 'us';
+    this.projectId =
+      process.env.FIRESTORE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID!;
+    this.location = process.env.DOCUMENT_AI_LOCATION || "us";
   }
 
   /**
@@ -67,17 +68,17 @@ export class DocumentAIService {
     options: ProcessingOptions = {}
   ): Promise<DocumentAIResult> {
     const startTime = Date.now();
-    
+
     try {
       console.log(`🟦 [DocumentAI][INFO] Processing document: ${fileName}`);
-      
+
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
       const processorName = this.getProcessorName(processorType);
-      
+
       console.log(`🟦 [DocumentAI][INFO] Using processor: ${processorType}`);
       console.log(`🟦 [DocumentAI][INFO] Processor name: ${processorName}`);
-      
+
       // Get the processor to verify it exists
       try {
         const getProcessorRequest = {
@@ -86,15 +87,19 @@ export class DocumentAIService {
         const [processor] = await this.client.getProcessor(getProcessorRequest);
         console.log(`🟩 [DocumentAI][INFO] Processor found: ${processor.name}`);
       } catch (processorError) {
-        console.error(`🟥 [DocumentAI][ERROR] Processor not found: ${processorName}`);
-        throw new Error(`Document AI processor not found. Please create the processor in Google Cloud Console.`);
+        console.error(
+          `🟥 [DocumentAI][ERROR] Processor not found: ${processorName}`
+        );
+        throw new Error(
+          `Document AI processor not found. Please create the processor in Google Cloud Console.`
+        );
       }
-      
+
       // Configure the process request following official documentation
       const request = {
         name: processorName,
         rawDocument: {
-          content: fileBuffer.toString('base64'),
+          content: fileBuffer.toString("base64"),
           mimeType: this.getMimeType(fileName),
         },
         // Add process options for better results
@@ -112,29 +117,40 @@ export class DocumentAIService {
       const { document } = result;
 
       if (!document) {
-        throw new Error('No document returned from Document AI');
+        throw new Error("No document returned from Document AI");
       }
 
       // Extract text content
-      const text = document.text || '';
-      
+      const text = document.text || "";
+
       // Calculate confidence based on text quality and length
-      const confidence = this.calculateConfidence(text, document.pages?.length || 1);
-      
+      const confidence = this.calculateConfidence(
+        text,
+        document.pages?.length || 1
+      );
+
       // Extract entities if requested
-      const entities = options.extractEntities ? this.extractEntities(document) : [];
-      
+      const entities = options.extractEntities
+        ? this.extractEntities(document)
+        : [];
+
       // Extract tables if requested
       const tables = options.extractTables ? this.extractTables(document) : [];
-      
+
       const processingTime = Date.now() - startTime;
-      
+
       console.log(`🟩 [DocumentAI][SUCCESS] Document processed successfully`);
-      console.log(`🟦 [DocumentAI][INFO] Text length: ${text.length} characters`);
-      console.log(`🟦 [DocumentAI][INFO] Pages: ${document.pages?.length || 1}`);
-      console.log(`🟦 [DocumentAI][INFO] Confidence: ${confidence.toFixed(2)}%`);
+      console.log(
+        `🟦 [DocumentAI][INFO] Text length: ${text.length} characters`
+      );
+      console.log(
+        `🟦 [DocumentAI][INFO] Pages: ${document.pages?.length || 1}`
+      );
+      console.log(
+        `🟦 [DocumentAI][INFO] Confidence: ${confidence.toFixed(2)}%`
+      );
       console.log(`🟦 [DocumentAI][INFO] Processing time: ${processingTime}ms`);
-      
+
       return {
         text,
         confidence,
@@ -143,11 +159,13 @@ export class DocumentAIService {
         tables,
         processingTime,
       };
-      
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      console.error(`🟥 [DocumentAI][ERROR] Failed to process document:`, error);
-      
+      console.error(
+        `🟥 [DocumentAI][ERROR] Failed to process document:`,
+        error
+      );
+
       // Return fallback result
       return {
         text: `Document Content - ${fileName} (Document AI processing failed)`,
@@ -163,21 +181,24 @@ export class DocumentAIService {
   /**
    * Determine the optimal processor type based on file type and options
    */
-  private getOptimalProcessorType(fileName: string, options: ProcessingOptions): keyof typeof PROCESSOR_TYPES {
-    const fileExtension = fileName.toLowerCase().split('.').pop();
-    
+  private getOptimalProcessorType(
+    fileName: string,
+    options: ProcessingOptions
+  ): keyof typeof PROCESSOR_TYPES {
+    const fileExtension = fileName.toLowerCase().split(".").pop();
+
     // If OCR is explicitly enabled, use OCR processor
     if (options.enableOCR) {
-      return 'OCR';
+      return "OCR";
     }
-    
+
     // For forms, use form parser
     if (this.isFormDocument(fileName)) {
-      return 'FORM_PARSER';
+      return "FORM_PARSER";
     }
-    
+
     // For all other documents, use layout parser (general purpose)
-    return 'LAYOUT_PARSER';
+    return "LAYOUT_PARSER";
   }
 
   /**
@@ -185,32 +206,42 @@ export class DocumentAIService {
    */
   private isFormDocument(fileName: string): boolean {
     const formKeywords = [
-      'form', 'application', 'questionnaire', 'survey',
-      'tax', 'registration', 'license', 'permit'
+      "form",
+      "application",
+      "questionnaire",
+      "survey",
+      "tax",
+      "registration",
+      "license",
+      "permit",
     ];
-    
+
     const fileNameLower = fileName.toLowerCase();
-    return formKeywords.some(keyword => fileNameLower.includes(keyword));
+    return formKeywords.some((keyword) => fileNameLower.includes(keyword));
   }
 
   /**
    * Get the full processor name following Google Cloud documentation
    */
-  private getProcessorName(processorType: keyof typeof PROCESSOR_TYPES): string {
+  private getProcessorName(
+    processorType: keyof typeof PROCESSOR_TYPES
+  ): string {
     // Map processor types to environment variable names
     const envVarMap: Record<keyof typeof PROCESSOR_TYPES, string> = {
-      LAYOUT_PARSER: 'DOCUMENT_AI_LAYOUT_PROCESSOR_ID',
-      FORM_PARSER: 'DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID',
-      OCR: 'DOCUMENT_AI_OCR_PROCESSOR_ID',
+      LAYOUT_PARSER: "DOCUMENT_AI_LAYOUT_PROCESSOR_ID",
+      FORM_PARSER: "DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID",
+      OCR: "DOCUMENT_AI_OCR_PROCESSOR_ID",
     };
-    
+
     const envVarName = envVarMap[processorType];
     const processorId = process.env[envVarName];
-    
+
     if (!processorId) {
-      throw new Error(`Document AI processor ID not configured for ${processorType} (${envVarName})`);
+      throw new Error(
+        `Document AI processor ID not configured for ${processorType} (${envVarName})`
+      );
     }
-    
+
     // Format: projects/{project_id}/locations/{location}/processors/{processor_id}
     return `projects/${this.projectId}/locations/${this.location}/processors/${processorId}`;
   }
@@ -219,27 +250,27 @@ export class DocumentAIService {
    * Get MIME type based on file extension
    */
   private getMimeType(fileName: string): string {
-    const extension = fileName.toLowerCase().split('.').pop();
-    
+    const extension = fileName.toLowerCase().split(".").pop();
+
     switch (extension) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'tiff':
-      case 'tif':
-        return 'image/tiff';
-      case 'gif':
-        return 'image/gif';
-      case 'bmp':
-        return 'image/bmp';
-      case 'webp':
-        return 'image/webp';
+      case "pdf":
+        return "application/pdf";
+      case "png":
+        return "image/png";
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "tiff":
+      case "tif":
+        return "image/tiff";
+      case "gif":
+        return "image/gif";
+      case "bmp":
+        return "image/bmp";
+      case "webp":
+        return "image/webp";
       default:
-        return 'application/pdf'; // Default to PDF
+        return "application/pdf"; // Default to PDF
     }
   }
 
@@ -252,35 +283,49 @@ export class DocumentAIService {
     }
 
     let confidence = 0;
-    
+
     // Base confidence on text length (more text = higher confidence)
     const textLengthScore = Math.min(text.length / 1000, 1) * 30;
     confidence += textLengthScore;
-    
+
     // Bonus for multiple pages
     const pageScore = Math.min(pages * 5, 20);
     confidence += pageScore;
-    
+
     // Bonus for structured content (paragraphs, sentences)
-    const paragraphs = text.split('\n\n').length;
+    const paragraphs = text.split("\n\n").length;
     const sentences = text.split(/[.!?]+/).length;
-    
+
     if (paragraphs > 1) confidence += 10;
     if (sentences > 5) confidence += 10;
-    
+
     // Bonus for legal terminology
     const legalTerms = [
-      'whereas', 'therefore', 'hereby', 'herein', 'hereof', 'hereto',
-      'party', 'parties', 'agreement', 'contract', 'shall', 'may',
-      'pursuant', 'according', 'subject', 'provided', 'except'
+      "whereas",
+      "therefore",
+      "hereby",
+      "herein",
+      "hereof",
+      "hereto",
+      "party",
+      "parties",
+      "agreement",
+      "contract",
+      "shall",
+      "may",
+      "pursuant",
+      "according",
+      "subject",
+      "provided",
+      "except",
     ];
-    
-    const legalTermCount = legalTerms.filter(term => 
+
+    const legalTermCount = legalTerms.filter((term) =>
       text.toLowerCase().includes(term)
     ).length;
-    
+
     confidence += Math.min(legalTermCount * 2, 20);
-    
+
     // Cap at 100%
     return Math.min(confidence, 100);
   }
@@ -288,66 +333,71 @@ export class DocumentAIService {
   /**
    * Extract entities from the document
    */
-  private extractEntities(document: any): Array<{ type: string; text: string; confidence: number }> {
-    const entities: Array<{ type: string; text: string; confidence: number }> = [];
-    
+  private extractEntities(
+    document: any
+  ): Array<{ type: string; text: string; confidence: number }> {
+    const entities: Array<{ type: string; text: string; confidence: number }> =
+      [];
+
     if (document.entities) {
       for (const entity of document.entities) {
         entities.push({
-          type: entity.type || 'unknown',
-          text: entity.mentionText || '',
+          type: entity.type || "unknown",
+          text: entity.mentionText || "",
           confidence: entity.confidence || 0,
         });
       }
     }
-    
+
     return entities;
   }
 
   /**
    * Extract tables from the document
    */
-  private extractTables(document: any): Array<{ rows: number; columns: number; text: string }> {
+  private extractTables(
+    document: any
+  ): Array<{ rows: number; columns: number; text: string }> {
     const tables: Array<{ rows: number; columns: number; text: string }> = [];
-    
+
     if (document.pages) {
       for (const page of document.pages) {
         if (page.tables) {
           for (const table of page.tables) {
-            let tableText = '';
+            let tableText = "";
             let maxRows = 0;
             let maxCols = 0;
-            
+
             if (table.headerRows) {
               for (const row of table.headerRows) {
                 if (row.cells) {
                   maxCols = Math.max(maxCols, row.cells.length);
                   for (const cell of row.cells) {
                     if (cell.text) {
-                      tableText += cell.text + '\t';
+                      tableText += cell.text + "\t";
                     }
                   }
-                  tableText += '\n';
+                  tableText += "\n";
                   maxRows++;
                 }
               }
             }
-            
+
             if (table.bodyRows) {
               for (const row of table.bodyRows) {
                 if (row.cells) {
                   maxCols = Math.max(maxCols, row.cells.length);
                   for (const cell of row.cells) {
                     if (cell.text) {
-                      tableText += cell.text + '\t';
+                      tableText += cell.text + "\t";
                     }
                   }
-                  tableText += '\n';
+                  tableText += "\n";
                   maxRows++;
                 }
               }
             }
-            
+
             if (tableText.trim()) {
               tables.push({
                 rows: maxRows,
@@ -359,7 +409,7 @@ export class DocumentAIService {
         }
       }
     }
-    
+
     return tables;
   }
 
@@ -368,42 +418,63 @@ export class DocumentAIService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      console.log('🔍 [DocumentAI][TEST] Testing Document AI connection...');
-      
+      console.log("🔍 [DocumentAI][TEST] Testing Document AI connection...");
+
       // Test basic client initialization
       if (!this.projectId) {
-        throw new Error('FIRESTORE_PROJECT_ID or GOOGLE_CLOUD_PROJECT_ID not configured');
+        throw new Error(
+          "FIRESTORE_PROJECT_ID or GOOGLE_CLOUD_PROJECT_ID not configured"
+        );
       }
-      
+
       console.log(`🟦 [DocumentAI][TEST] Project ID: ${this.projectId}`);
       console.log(`🟦 [DocumentAI][TEST] Location: ${this.location}`);
-      
+
       // Test processor availability
       const layoutProcessorId = process.env.DOCUMENT_AI_LAYOUT_PROCESSOR_ID;
       const formProcessorId = process.env.DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID;
       const ocrProcessorId = process.env.DOCUMENT_AI_OCR_PROCESSOR_ID;
-      
+
       if (!layoutProcessorId && !formProcessorId && !ocrProcessorId) {
-        throw new Error('No Document AI processor IDs configured. Please set at least one processor ID.');
+        throw new Error(
+          "No Document AI processor IDs configured. Please set at least one processor ID."
+        );
       }
-      
-      console.log(`🟦 [DocumentAI][TEST] Layout Processor ID: ${layoutProcessorId || 'Not configured'}`);
-      console.log(`🟦 [DocumentAI][TEST] Form Parser Processor ID: ${formProcessorId || 'Not configured'}`);
-      console.log(`🟦 [DocumentAI][TEST] OCR Processor ID: ${ocrProcessorId || 'Not configured'}`);
-      
+
+      console.log(
+        `🟦 [DocumentAI][TEST] Layout Processor ID: ${
+          layoutProcessorId || "Not configured"
+        }`
+      );
+      console.log(
+        `🟦 [DocumentAI][TEST] Form Parser Processor ID: ${
+          formProcessorId || "Not configured"
+        }`
+      );
+      console.log(
+        `🟦 [DocumentAI][TEST] OCR Processor ID: ${
+          ocrProcessorId || "Not configured"
+        }`
+      );
+
       // Test with a minimal document
-      const testBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n4 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Test Document) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000204 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n364\n%%EOF');
-      
-      const result = await this.processDocument(testBuffer, 'test.pdf', {
-        processorType: 'LAYOUT_PARSER',
+      const testBuffer = Buffer.from(
+        "%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n4 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Test Document) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000204 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n364\n%%EOF"
+      );
+
+      const result = await this.processDocument(testBuffer, "test.pdf", {
+        processorType: "LAYOUT_PARSER",
         enableOCR: false,
       });
-      
+
       console.log(`🟩 [DocumentAI][TEST] Connection test successful`);
-      console.log(`🟦 [DocumentAI][TEST] Test result: ${result.text.length} characters, ${result.confidence.toFixed(2)}% confidence`);
-      
+      console.log(
+        `🟦 [DocumentAI][TEST] Test result: ${
+          result.text.length
+        } characters, ${result.confidence.toFixed(2)}% confidence`
+      );
+
       return true;
-      
     } catch (error) {
       console.error(`🟥 [DocumentAI][TEST] Connection test failed:`, error);
       return false;
