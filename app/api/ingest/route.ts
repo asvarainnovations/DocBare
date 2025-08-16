@@ -302,158 +302,303 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const userId = formData.get("userId") as string;
+    // Check if request is FormData or JSON
+    const contentType = request.headers.get('content-type') || '';
+    
+    let file: File | null = null;
+    let userId: string | null = null;
+    let documentId: string | null = null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData request (direct file upload)
+      const formData = await request.formData();
+      file = formData.get("file") as File;
+      userId = formData.get("userId") as string;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: "No user ID provided" },
-        { status: 400 }
-      );
-    }
-
-    console.log(
-      `🟦 [ingest][INFO] Processing file: ${file.name} for user: ${userId}`
-    );
-
-    // Upload file to GCS
-    const fileName = `${userId}/${Date.now()}-${file.name}`;
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    const gcsFile = bucket.file(fileName);
-    await gcsFile.save(fileBuffer, {
-      metadata: {
-        contentType: file.type,
-      },
-    });
-
-    console.log(`🟩 [ingest][SUCCESS] File uploaded to GCS: ${fileName}`);
-
-    // Extract text using Document AI
-    const extractionResult = await extractTextWithDocumentAI(
-      `gs://${process.env.GCS_BUCKET_NAME}/${fileName}`,
-      file.type,
-      fileName
-    );
-
-    const { text: extractedText, confidence, method } = extractionResult;
-    console.log(`🟦 [ingest][INFO] Text extraction method: ${method}`);
-    console.log(
-      `🟦 [ingest][INFO] Confidence level: ${confidence.level} (${confidence.score}/100)`
-    );
-
-    if (confidence.level === "low") {
-      console.warn(
-        `🟨 [ingest][WARN] Low confidence extraction:`,
-        confidence.reasons
-      );
-    }
-
-    // Split text into chunks
-    const chunks = splitIntoChunks(extractedText);
-    console.log(`🟦 [ingest][INFO] Split into ${chunks.length} chunks`);
-
-    // Generate embeddings for each chunk
-    const embeddings = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkText = chunks[i];
-      console.log(
-        `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
-          chunks.length
-        }`
-      );
-
-      // Generate embeddings with retry logic
-      let embeddingResp: any;
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      while (retryCount < maxRetries) {
-        try {
-          embeddingResp = await openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: chunkText,
-          });
-          break; // Success, exit retry loop
-        } catch (embeddingError) {
-          retryCount++;
-          console.warn(
-            `🟨 [ingest][WARN] Embedding generation failed (attempt ${retryCount}/${maxRetries}):`,
-            embeddingError
-          );
-          if (retryCount >= maxRetries) {
-            console.error(
-              `🟥 [ingest][ERROR] Failed to generate embedding after ${maxRetries} attempts`
-            );
-            throw embeddingError;
-          }
-          // Wait before retry (exponential backoff)
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * retryCount)
-          );
-        }
+      if (!file) {
+        return NextResponse.json({ error: "No file provided" }, { status: 400 });
       }
 
-      const embedding = embeddingResp.data[0].embedding;
-      embeddings.push(embedding);
+      if (!userId) {
+        return NextResponse.json(
+          { error: "No user ID provided" },
+          { status: 400 }
+        );
+      }
 
-      // Store chunk and embedding in Firestore
-      await firestore.collection("document_chunks").add({
-        userId,
-        documentId: fileName,
-        chunkIndex: i,
-        text: chunkText,
-        embedding,
+      console.log(
+        `🟦 [ingest][INFO] Processing file: ${file.name} for user: ${userId}`
+      );
+
+      // Upload file to GCS
+      const fileName = `${userId}/${Date.now()}-${file.name}`;
+      const fileBuffer = Buffer.from(await file.arrayBuffer());
+
+      const gcsFile = bucket.file(fileName);
+      await gcsFile.save(fileBuffer, {
         metadata: {
+          contentType: file.type,
+        },
+      });
+
+      console.log(`🟩 [ingest][SUCCESS] File uploaded to GCS: ${fileName}`);
+
+      // Extract text using Document AI
+      const extractionResult = await extractTextWithDocumentAI(
+        `gs://${process.env.GCS_BUCKET_NAME}/${fileName}`,
+        file.type,
+        fileName
+      );
+
+      const { text: extractedText, confidence, method } = extractionResult;
+      console.log(`🟦 [ingest][INFO] Text extraction method: ${method}`);
+      console.log(
+        `🟦 [ingest][INFO] Confidence level: ${confidence.level} (${confidence.score}/100)`
+      );
+
+      if (confidence.level === "low") {
+        console.warn(
+          `🟨 [ingest][WARN] Low confidence extraction:`,
+          confidence.reasons
+        );
+      }
+
+      // Split text into chunks
+      const chunks = splitIntoChunks(extractedText);
+      console.log(`🟦 [ingest][INFO] Split into ${chunks.length} chunks`);
+
+      // Generate embeddings for each chunk
+      const embeddings = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkText = chunks[i];
+        console.log(
+          `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
+            chunks.length
+          }`
+        );
+
+        // Generate embeddings with retry logic
+        let embeddingResp: any;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (retryCount < maxRetries) {
+          try {
+            embeddingResp = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: chunkText,
+            });
+            break; // Success, exit retry loop
+          } catch (embeddingError) {
+            retryCount++;
+            console.warn(
+              `🟨 [ingest][WARN] Embedding generation failed (attempt ${retryCount}/${maxRetries}):`,
+              embeddingError
+            );
+            if (retryCount >= maxRetries) {
+              throw new Error(
+                `Failed to generate embeddings after ${maxRetries} attempts`
+              );
+            }
+            // Wait before retry
+            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+          }
+        }
+
+        const embedding = embeddingResp.data[0].embedding;
+        embeddings.push(embedding);
+
+        // Store chunk and embedding in Firestore
+        await firestore.collection("document_chunks").add({
+          userId,
+          documentId: fileName,
+          chunkIndex: i,
+          text: chunkText,
+          embedding,
+          metadata: {
+            fileName: file.name,
+            fileType: file.type,
+            fileSize: file.size,
+            confidence: confidence.score,
+            extractionMethod: method,
+            timestamp: new Date(),
+          },
+        });
+
+        console.log(
+          `🟩 [ingest][SUCCESS] Stored chunk ${i + 1}/${chunks.length}`
+        );
+      }
+
+      // Store document metadata in PostgreSQL
+      const document = await prisma.document.create({
+        data: {
+          userId,
           fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          confidence: confidence.score,
-          extractionMethod: method,
-          timestamp: new Date(),
+          path: fileName,
+          originalName: file.name,
+          mimeType: file.type,
         },
       });
 
       console.log(
-        `🟩 [ingest][SUCCESS] Stored chunk ${i + 1}/${chunks.length}`
+        `🟩 [ingest][SUCCESS] Document processing completed successfully`
       );
+      console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
+      console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
+      console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
+
+      return NextResponse.json({
+        success: true,
+        message: "Document processed successfully",
+        data: {
+          fileName: file.name,
+          chunks: chunks.length,
+          characters: extractedText.length,
+          confidence: confidence.score,
+          method,
+          suggestions: confidence.suggestions,
+        },
+      });
+
+    } else {
+      // Handle JSON request (process existing document)
+      const body = await request.json();
+      documentId = body.documentId;
+      userId = body.userId;
+
+      if (!documentId) {
+        return NextResponse.json({ error: "No document ID provided" }, { status: 400 });
+      }
+
+      if (!userId) {
+        return NextResponse.json({ error: "No user ID provided" }, { status: 400 });
+      }
+
+      console.log(
+        `🟦 [ingest][INFO] Processing existing document: ${documentId} for user: ${userId}`
+      );
+
+      // Get document from database
+      const document = await prisma.document.findUnique({
+        where: { id: documentId, userId }
+      });
+
+      if (!document) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      }
+
+      // Download file from GCS
+      const gcsFile = bucket.file(document.path);
+      const [fileBuffer] = await gcsFile.download();
+
+      // Extract text using Document AI
+      const extractionResult = await extractTextWithDocumentAI(
+        `gs://${process.env.GCS_BUCKET_NAME}/${document.path}`,
+        document.mimeType,
+        document.fileName
+      );
+
+      const { text: extractedText, confidence, method } = extractionResult;
+      console.log(`🟦 [ingest][INFO] Text extraction method: ${method}`);
+      console.log(
+        `🟦 [ingest][INFO] Confidence level: ${confidence.level} (${confidence.score}/100)`
+      );
+
+      if (confidence.level === "low") {
+        console.warn(
+          `🟨 [ingest][WARN] Low confidence extraction:`,
+          confidence.reasons
+        );
+      }
+
+      // Split text into chunks
+      const chunks = splitIntoChunks(extractedText);
+      console.log(`🟦 [ingest][INFO] Split into ${chunks.length} chunks`);
+
+      // Generate embeddings for each chunk
+      const embeddings = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkText = chunks[i];
+        console.log(
+          `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
+            chunks.length
+          }`
+        );
+
+        // Generate embeddings with retry logic
+        let embeddingResp: any;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (retryCount < maxRetries) {
+          try {
+            embeddingResp = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: chunkText,
+            });
+            break; // Success, exit retry loop
+          } catch (embeddingError) {
+            retryCount++;
+            console.warn(
+              `🟨 [ingest][WARN] Embedding generation failed (attempt ${retryCount}/${maxRetries}):`,
+              embeddingError
+            );
+            if (retryCount >= maxRetries) {
+              throw new Error(
+                `Failed to generate embeddings after ${maxRetries} attempts`
+              );
+            }
+            // Wait before retry
+            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+          }
+        }
+
+        const embedding = embeddingResp.data[0].embedding;
+        embeddings.push(embedding);
+
+        // Store chunk and embedding in Firestore
+        await firestore.collection("document_chunks").add({
+          userId,
+          documentId: documentId,
+          chunkIndex: i,
+          text: chunkText,
+          embedding,
+          metadata: {
+            fileName: document.fileName,
+            fileType: document.mimeType,
+            fileSize: fileBuffer.length,
+            confidence: confidence.score,
+            extractionMethod: method,
+            timestamp: new Date(),
+          },
+        });
+
+        console.log(
+          `🟩 [ingest][SUCCESS] Stored chunk ${i + 1}/${chunks.length}`
+        );
+      }
+
+      console.log(
+        `🟩 [ingest][SUCCESS] Document processing completed successfully`
+      );
+      console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
+      console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
+      console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
+
+      return NextResponse.json({
+        success: true,
+        message: "Document processed successfully",
+        data: {
+          fileName: document.fileName,
+          chunks: chunks.length,
+          characters: extractedText.length,
+          confidence: confidence.score,
+          method,
+          suggestions: confidence.suggestions,
+        },
+      });
     }
-
-    // Store document metadata in PostgreSQL
-    await prisma.document.create({
-      data: {
-        userId,
-        fileName: file.name,
-        path: fileName,
-        originalName: file.name,
-        mimeType: file.type,
-      },
-    });
-
-    console.log(
-      `🟩 [ingest][SUCCESS] Document processing completed successfully`
-    );
-    console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
-    console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
-    console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
-
-    return NextResponse.json({
-      success: true,
-      message: "Document processed successfully",
-      data: {
-        fileName: file.name,
-        chunks: chunks.length,
-        characters: extractedText.length,
-        confidence: confidence.score,
-        method,
-        suggestions: confidence.suggestions,
-      },
-    });
   } catch (error) {
     console.error("🟥 [ingest][ERROR] Error processing document:", error);
     const errorMessage =

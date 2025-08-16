@@ -41,7 +41,6 @@ export async function GET(req: NextRequest) {
       where: { userId: session.user.id },
       select: {
         id: true,
-        sessionName: true,
         createdAt: true,
         updatedAt: true
       },
@@ -54,10 +53,9 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         fileName: true,
-        fileSize: true,
-        fileType: true,
-        createdAt: true,
-        updatedAt: true
+        originalName: true,
+        mimeType: true,
+        createdAt: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -68,7 +66,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         rating: true,
-        comment: true,
+        comments: true,
         createdAt: true
       },
       orderBy: { createdAt: 'desc' }

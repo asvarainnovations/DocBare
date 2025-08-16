@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId,
         fileName,
-        path: url,
+        path: fileName, // Store just the fileName, not the full URL
         originalName: file.name,
         mimeType: file.type,
       },

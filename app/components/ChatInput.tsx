@@ -244,7 +244,7 @@ export default function ChatInput({
           }
 
           try {
-            await axios.post(
+            const ingestResponse = await axios.post(
               "/api/ingest",
               {
                 documentId: response.data.results[0].document?.id,
@@ -256,18 +256,19 @@ export default function ChatInput({
             );
             console.info("🟦 [chat_input][SUCCESS] Document ingestion completed");
             
-            // Handle confidence-based feedback
-            if (response.data.confidence) {
-              const { level, score, reasons, suggestions } = response.data.confidence;
+            // Handle confidence-based feedback from ingest response
+            if (ingestResponse.data.data && ingestResponse.data.data.confidence) {
+              const confidence = ingestResponse.data.data.confidence;
+              const suggestions = ingestResponse.data.data.suggestions || [];
               
-              if (level === 'high') {
+              if (confidence >= 80) {
                 toast.success("Document processed successfully");
-              } else if (level === 'medium') {
-                toast.success(`Document processed with medium confidence (${score}/100)`, {
+              } else if (confidence >= 50) {
+                toast.success(`Document processed with medium confidence (${confidence}/100)`, {
                   description: "Consider re-uploading in DOCX format for better results"
                 });
               } else {
-                toast.warning(`Document processed with low confidence (${score}/100)`, {
+                toast.warning(`Document processed with low confidence (${confidence}/100)`, {
                   description: suggestions.slice(0, 2).join('. ')
                 });
               }
