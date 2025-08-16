@@ -42,9 +42,18 @@ export class DocumentAIService {
   private location: string;
 
   constructor() {
-    this.client = new DocumentProcessorServiceClient();
-    this.storage = new Storage();
-    this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID!;
+    // Configure authentication same as GCS
+    const config: any = {
+      projectId: process.env.FIRESTORE_PROJECT_ID,
+    };
+
+    if (process.env.GOOGLE_CLOUD_KEY_FILE) {
+      config.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
+    }
+
+    this.client = new DocumentProcessorServiceClient(config);
+    this.storage = new Storage(config);
+    this.projectId = process.env.FIRESTORE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID!;
     this.location = process.env.DOCUMENT_AI_LOCATION || 'us';
   }
 
@@ -346,10 +355,10 @@ export class DocumentAIService {
     try {
       console.log('🔍 [DocumentAI][TEST] Testing Document AI connection...');
       
-      // Test basic client initialization
-      if (!this.projectId) {
-        throw new Error('GOOGLE_CLOUD_PROJECT_ID not configured');
-      }
+             // Test basic client initialization
+       if (!this.projectId) {
+         throw new Error('FIRESTORE_PROJECT_ID or GOOGLE_CLOUD_PROJECT_ID not configured');
+       }
       
       console.log(`🟦 [DocumentAI][TEST] Project ID: ${this.projectId}`);
       console.log(`🟦 [DocumentAI][TEST] Location: ${this.location}`);

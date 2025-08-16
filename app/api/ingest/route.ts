@@ -239,10 +239,12 @@ async function extractTextWithDocumentAI(
         const file = bucket.file(fileName);
         const [buffer] = await file.download();
         const bufferString = buffer.toString("utf8");
-        const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
-        const textMatches = bufferString.match(/[\x20-\x7E]{10,}/g);
+        
+        // Try multiple extraction methods
         let extractedText = "";
-
+        
+        // Method 1: Extract text streams (most common for text-based PDFs)
+        const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
         if (textStreams && textStreams.length > 0) {
           const streamText = textStreams
             .join(" ")
@@ -253,13 +255,49 @@ async function extractTextWithDocumentAI(
             .replace(/\s+/g, " ")
             .trim();
 
-          if (streamText.length > 50) {
+          if (streamText.length > 100 && !streamText.includes("PDF") && !streamText.includes("obj")) {
             extractedText = streamText.substring(0, 3000);
           }
         }
 
-        if (!extractedText && textMatches && textMatches.length > 0) {
-          extractedText = textMatches.join(" ").substring(0, 2000);
+        // Method 2: Extract readable text patterns
+        if (!extractedText) {
+          const textMatches = bufferString.match(/[\x20-\x7E]{20,}/g);
+          if (textMatches && textMatches.length > 0) {
+            const readableText = textMatches
+              .filter(text => 
+                text.length > 20 && 
+                !text.includes("PDF") && 
+                !text.includes("obj") && 
+                !text.includes("stream") &&
+                !text.includes("endstream") &&
+                !text.includes("xref") &&
+                !text.includes("trailer")
+              )
+              .join(" ");
+            
+            if (readableText.length > 100) {
+              extractedText = readableText.substring(0, 2000);
+            }
+          }
+        }
+
+        // Method 3: Extract content streams
+        if (!extractedText) {
+          const contentStreams = bufferString.match(/stream[\s\S]*?endstream/g);
+          if (contentStreams && contentStreams.length > 0) {
+            const contentText = contentStreams
+              .map(stream => stream.replace(/stream|endstream/g, ""))
+              .join(" ")
+              .replace(/[0-9]+ [0-9]+ Td/g, " ")
+              .replace(/[0-9]+ [0-9]+ Tj/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+            
+            if (contentText.length > 100 && !contentText.includes("PDF")) {
+              extractedText = contentText.substring(0, 2000);
+            }
+          }
         }
 
         if (extractedText) {
@@ -272,6 +310,8 @@ async function extractTextWithDocumentAI(
             buffer.length
           );
           return { text: extractedText, confidence, method: "fallback" };
+        } else {
+          console.warn(`🟨 [ingest][WARN] No readable text found in PDF - likely image-based or corrupted`);
         }
       } catch (fallbackError) {
         console.warn(
