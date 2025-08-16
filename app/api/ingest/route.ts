@@ -230,7 +230,7 @@ async function extractTextWithDocumentAI(
       throw new Error("Document AI returned zero confidence");
     }
   } catch (error) {
-    console.error(`🟥 [ingest][ERROR] Document AI processing failed:`, error);
+    console.warn(`🟨 [ingest][WARN] Document AI processing failed, using fallback:`, error instanceof Error ? error.message : 'Unknown error');
 
     // Fallback to basic text extraction for PDFs
     if (mimeType === "application/pdf") {
