@@ -33,6 +33,7 @@
     "test:all-scripts": "npm run test:memory && npm run test:migration && npm run test:api && npm run test:continuity",
     "test:query-api": "ts-node --project tsconfig.scripts.json scripts/test-query-api.ts",
     "test:vertex-ai": "ts-node --project tsconfig.scripts.json scripts/test-vertex-ai.ts",
+    "test:document-ai": "ts-node --project tsconfig.scripts.json scripts/test-document-ai.ts",
     "deploy:firestore-indexes": "node scripts/deploy-firestore-indexes.js"
   },
   "dependencies": {

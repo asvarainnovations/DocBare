@@ -243,44 +243,69 @@ async function extractTextWithDocumentAI(
         // Try multiple extraction methods
         let extractedText = "";
         
-        // Method 1: Extract text streams (most common for text-based PDFs)
-        const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
-        if (textStreams && textStreams.length > 0) {
-          const streamText = textStreams
-            .join(" ")
-            .replace(/BT|ET/g, "")
-            .replace(/\[[^\]]*\]/g, " ")
-            .replace(/[0-9]+ [0-9]+ Td/g, " ")
-            .replace(/[0-9]+ [0-9]+ Tj/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+                 // Method 1: Extract text streams with aggressive filtering
+         const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
+         if (textStreams && textStreams.length > 0) {
+           const streamText = textStreams
+             .join(" ")
+             .replace(/BT|ET/g, "")
+             .replace(/\[[^\]]*\]/g, " ")
+             .replace(/[0-9]+ [0-9]+ Td/g, " ")
+             .replace(/[0-9]+ [0-9]+ Tj/g, " ")
+             .replace(/\/[A-Za-z]+/g, " ") // Remove PDF commands
+             .replace(/[0-9]+ [0-9]+ [0-9]+ [0-9]+/g, " ") // Remove coordinates
+             .replace(/CreationDate|ModDate|Producer|Creator/g, " ") // Remove metadata
+             .replace(/Times-Roman|Helvetica|Courier/g, " ") // Remove font names
+             .replace(/\s+/g, " ")
+             .trim();
 
-          if (streamText.length > 100 && !streamText.includes("PDF") && !streamText.includes("obj")) {
-            extractedText = streamText.substring(0, 3000);
-          }
-        }
+           // Only accept if it looks like real text
+           if (streamText.length > 100 && 
+               !streamText.includes("PDF") && 
+               !streamText.includes("obj") &&
+               !streamText.includes("stream") &&
+               !streamText.includes("xref") &&
+               /[a-zA-Z]{3,}/.test(streamText)) { // Must contain actual words
+             extractedText = streamText.substring(0, 3000);
+           }
+         }
 
-        // Method 2: Extract readable text patterns
-        if (!extractedText) {
-          const textMatches = bufferString.match(/[\x20-\x7E]{20,}/g);
-          if (textMatches && textMatches.length > 0) {
-            const readableText = textMatches
-              .filter(text => 
-                text.length > 20 && 
-                !text.includes("PDF") && 
-                !text.includes("obj") && 
-                !text.includes("stream") &&
-                !text.includes("endstream") &&
-                !text.includes("xref") &&
-                !text.includes("trailer")
-              )
-              .join(" ");
-            
-            if (readableText.length > 100) {
-              extractedText = readableText.substring(0, 2000);
-            }
-          }
-        }
+                 // Method 2: Extract readable text patterns with enhanced filtering
+         if (!extractedText) {
+           const textMatches = bufferString.match(/[\x20-\x7E]{20,}/g);
+           if (textMatches && textMatches.length > 0) {
+             const readableText = textMatches
+               .filter(text => 
+                 text.length > 20 && 
+                 !text.includes("PDF") && 
+                 !text.includes("obj") && 
+                 !text.includes("stream") &&
+                 !text.includes("endstream") &&
+                 !text.includes("xref") &&
+                 !text.includes("trailer") &&
+                 !text.includes("CreationDate") &&
+                 !text.includes("ModDate") &&
+                 !text.includes("Producer") &&
+                 !text.includes("Creator") &&
+                 !text.includes("Times-Roman") &&
+                 !text.includes("Helvetica") &&
+                 !text.includes("Courier") &&
+                 !text.includes("/Type/") &&
+                 !text.includes("/Filter/") &&
+                 !text.includes("/Length") &&
+                 !text.includes("/Font") &&
+                 !text.includes("/MediaBox") &&
+                 !text.includes("/Resources") &&
+                 !text.includes("/Contents") &&
+                 /[a-zA-Z]{3,}/.test(text) // Must contain actual words
+               )
+               .join(" ");
+             
+             if (readableText.length > 100) {
+               extractedText = readableText.substring(0, 2000);
+             }
+           }
+         }
 
         // Method 3: Extract content streams
         if (!extractedText) {

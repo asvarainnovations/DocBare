@@ -59,6 +59,7 @@ export class DocumentAIService {
 
   /**
    * Process a document using Google Document AI
+   * Following the official Google Cloud documentation pattern
    */
   async processDocument(
     fileBuffer: Buffer,
@@ -75,23 +76,36 @@ export class DocumentAIService {
       const processorName = this.getProcessorName(processorType);
       
       console.log(`🟦 [DocumentAI][INFO] Using processor: ${processorType}`);
+      console.log(`🟦 [DocumentAI][INFO] Processor name: ${processorName}`);
       
-      // Convert the image data to base64
-      const encodedImage = fileBuffer.toString('base64');
+      // Get the processor to verify it exists
+      try {
+        const getProcessorRequest = {
+          name: processorName,
+        };
+        const [processor] = await this.client.getProcessor(getProcessorRequest);
+        console.log(`🟩 [DocumentAI][INFO] Processor found: ${processor.name}`);
+      } catch (processorError) {
+        console.error(`🟥 [DocumentAI][ERROR] Processor not found: ${processorName}`);
+        throw new Error(`Document AI processor not found. Please create the processor in Google Cloud Console.`);
+      }
       
-      // Configure the process request
+      // Configure the process request following official documentation
       const request = {
         name: processorName,
         rawDocument: {
-          content: encodedImage,
+          content: fileBuffer.toString('base64'),
           mimeType: this.getMimeType(fileName),
         },
+        // Add process options for better results
         processOptions: {
           individualPageSelector: {
-            pages: [1], // Process all pages
+            pages: [1], // Process first page for testing
           },
         },
       };
+
+      console.log(`🟦 [DocumentAI][INFO] Sending request to Document AI...`);
 
       // Process the document
       const [result] = await this.client.processDocument(request);
@@ -180,7 +194,7 @@ export class DocumentAIService {
   }
 
   /**
-   * Get the full processor name
+   * Get the full processor name following Google Cloud documentation
    */
   private getProcessorName(processorType: keyof typeof PROCESSOR_TYPES): string {
     // Map processor types to environment variable names
@@ -197,6 +211,7 @@ export class DocumentAIService {
       throw new Error(`Document AI processor ID not configured for ${processorType} (${envVarName})`);
     }
     
+    // Format: projects/{project_id}/locations/{location}/processors/{processor_id}
     return `projects/${this.projectId}/locations/${this.location}/processors/${processorId}`;
   }
 
@@ -355,10 +370,10 @@ export class DocumentAIService {
     try {
       console.log('🔍 [DocumentAI][TEST] Testing Document AI connection...');
       
-             // Test basic client initialization
-       if (!this.projectId) {
-         throw new Error('FIRESTORE_PROJECT_ID or GOOGLE_CLOUD_PROJECT_ID not configured');
-       }
+      // Test basic client initialization
+      if (!this.projectId) {
+        throw new Error('FIRESTORE_PROJECT_ID or GOOGLE_CLOUD_PROJECT_ID not configured');
+      }
       
       console.log(`🟦 [DocumentAI][TEST] Project ID: ${this.projectId}`);
       console.log(`🟦 [DocumentAI][TEST] Location: ${this.location}`);
