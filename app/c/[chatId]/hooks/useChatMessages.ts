@@ -9,6 +9,11 @@ interface Message {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: Date;
+  documents?: Array<{
+    documentId: string;
+    fileName: string;
+    firestoreId?: string;
+  }>;
 }
 
 export function useChatMessages(chatId: string, userId?: string) {

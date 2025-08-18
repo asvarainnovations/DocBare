@@ -15,6 +15,11 @@ interface Message {
   role: "USER" | "ASSISTANT";
   content: string;
   createdAt: Date;
+  documents?: Array<{
+    documentId: string;
+    fileName: string;
+    firestoreId?: string;
+  }>;
 }
 
 interface ChatMessageProps {
@@ -50,6 +55,15 @@ export default function ChatMessage({
   isThinking,
   thinkingContent,
 }: ChatMessageProps) {
+  // Debug logging for user messages with documents
+  if (message.role === 'USER' && message.documents && message.documents.length > 0) {
+    console.log('🟦 [ChatMessage][DEBUG] User message with documents:', {
+      messageId: message.id,
+      content: message.content.substring(0, 50),
+      documents: message.documents
+    });
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -221,6 +235,25 @@ export default function ChatMessage({
             <div className="text-sm md:text-base leading-relaxed break-words font-legal-content whitespace-pre-wrap">
               {message.content}
             </div>
+            
+            {/* Document attachments for user messages */}
+            {message.documents && message.documents.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-blue-500">
+                <div className="flex flex-wrap gap-2">
+                  {message.documents.map((doc, idx) => (
+                    <div key={idx} className="flex items-center bg-blue-700/50 rounded-lg px-3 py-2 gap-2 text-xs border border-blue-600/30">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white font-bold text-xs">
+                        {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
+                      </span>
+                      <span className="truncate max-w-[120px] text-white font-medium">{doc.fileName}</span>
+                      <span className="text-blue-300 text-xs opacity-75">
+                        {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -11,6 +11,13 @@ const PROCESSOR_TYPES = {
   OCR: "ocr-processor",
 } as const;
 
+// Google Cloud Document AI processor type constants
+const GOOGLE_PROCESSOR_TYPES = {
+  LAYOUT_PARSER: "LAYOUT_PARSER_PROCESSOR",
+  FORM_PARSER: "FORM_PARSER_PROCESSOR",
+  OCR: "OCR_PROCESSOR",
+} as const;
+
 interface DocumentAIResult {
   text: string;
   confidence: number;
@@ -33,6 +40,13 @@ interface ProcessingOptions {
   enableOCR?: boolean;
   extractTables?: boolean;
   extractEntities?: boolean;
+}
+
+interface ProcessorInfo {
+  name: string;
+  id: string;
+  type: string;
+  location: string;
 }
 
 export class DocumentAIService {
@@ -59,6 +73,132 @@ export class DocumentAIService {
   }
 
   /**
+   * Get or create a processor for the specified type
+   */
+  private async getOrCreateProcessor(
+    processorType: keyof typeof PROCESSOR_TYPES
+  ): Promise<ProcessorInfo> {
+    try {
+      // First, check if a processor of this type already exists
+      const existingProcessors = await this.listProcessors();
+      const existingProcessor = existingProcessors.find(
+        (p) => p.type === GOOGLE_PROCESSOR_TYPES[processorType]
+      );
+
+      if (existingProcessor) {
+        console.log(
+          `🟦 [DocumentAI][INFO] Using existing processor: ${existingProcessor.id}`
+        );
+        return existingProcessor;
+      }
+
+      // Try to create new processor if none exists
+      console.log(
+        `🟦 [DocumentAI][INFO] No existing processor found, attempting to create new ${processorType} processor`
+      );
+      try {
+        return await this.createProcessor(processorType);
+      } catch (createError) {
+        console.warn(
+          `🟨 [DocumentAI][WARN] Failed to create processor: ${
+            createError instanceof Error ? createError.message : "Unknown error"
+          }`
+        );
+        console.log(
+          `🟦 [DocumentAI][INFO] Falling back to basic processor usage`
+        );
+
+        // Fallback: Use a default processor name pattern
+        const defaultProcessorId =
+          process.env[`DOCUMENT_AI_${processorType}_PROCESSOR_ID`];
+        if (defaultProcessorId) {
+          return {
+            name: `projects/${this.projectId}/locations/${this.location}/processors/${defaultProcessorId}`,
+            id: defaultProcessorId,
+            type: GOOGLE_PROCESSOR_TYPES[processorType],
+            location: this.location,
+          };
+        }
+
+        throw new Error(
+          `No processor available for ${processorType}. Please create one manually in Google Cloud Console or set DOCUMENT_AI_${processorType}_PROCESSOR_ID environment variable.`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[DocumentAI][ERROR] Failed to get or create processor:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * List existing processors
+   */
+  private async listProcessors(): Promise<ProcessorInfo[]> {
+    try {
+      const parent = `projects/${this.projectId}/locations/${this.location}`;
+      const [response] = await this.client.listProcessors({ parent });
+
+      return (response || []).map((processor: any) => ({
+        name: processor.name || "",
+        id: processor.name?.split("/").pop() || "",
+        type: processor.type || "",
+        location: this.location,
+      }));
+    } catch (error) {
+      console.error("[DocumentAI][ERROR] Failed to list processors:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Create a new processor instance
+   */
+  private async createProcessor(
+    processorType: keyof typeof PROCESSOR_TYPES
+  ): Promise<ProcessorInfo> {
+    try {
+      const parent = `projects/${this.projectId}/locations/${this.location}`;
+      const googleProcessorType = GOOGLE_PROCESSOR_TYPES[processorType];
+
+      console.log(
+        `🟦 [DocumentAI][INFO] Creating processor: ${googleProcessorType}`
+      );
+
+      const [operation] = await this.client.createProcessor({
+        parent,
+        processor: {
+          type: googleProcessorType,
+          displayName: `DocBare-${processorType}-${Date.now()}`,
+        },
+      });
+
+      // Wait for the operation to complete
+      const [processor] = await (operation as any).promise();
+
+      if (!processor.name) {
+        throw new Error("Failed to create processor - no name returned");
+      }
+
+      const processorId = processor.name.split("/").pop() || "";
+
+      console.log(`🟩 [DocumentAI][SUCCESS] Processor created: ${processorId}`);
+
+      return {
+        name: processor.name,
+        id: processorId,
+        type: processor.type || googleProcessorType,
+        location: this.location,
+      };
+    } catch (error) {
+      console.error("[DocumentAI][ERROR] Failed to create processor:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Process a document using Google Document AI
    * Following the official Google Cloud documentation pattern
    */
@@ -74,30 +214,16 @@ export class DocumentAIService {
 
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
-      const processorName = this.getProcessorName(processorType);
+
+      // Get or create the processor automatically
+      const processor = await this.getOrCreateProcessor(processorType);
 
       console.log(`🟦 [DocumentAI][INFO] Using processor: ${processorType}`);
-      console.log(`🟦 [DocumentAI][INFO] Processor name: ${processorName}`);
-
-      // Get the processor to verify it exists
-      try {
-        const getProcessorRequest = {
-          name: processorName,
-        };
-        const [processor] = await this.client.getProcessor(getProcessorRequest);
-        console.log(`🟩 [DocumentAI][INFO] Processor found: ${processor.name}`);
-      } catch (processorError) {
-        console.error(
-          `🟥 [DocumentAI][ERROR] Processor not found: ${processorName}`
-        );
-        throw new Error(
-          `Document AI processor not found. Please create the processor in Google Cloud Console.`
-        );
-      }
+      console.log(`🟦 [DocumentAI][INFO] Processor name: ${processor.name}`);
 
       // Configure the process request following official documentation
       const request = {
-        name: processorName,
+        name: processor.name,
         rawDocument: {
           content: fileBuffer.toString("base64"),
           mimeType: this.getMimeType(fileName),
@@ -122,6 +248,21 @@ export class DocumentAIService {
 
       // Extract text content
       const text = document.text || "";
+
+      // Log OCR processor results
+      console.log(`🟦 [DocumentAI][INFO] OCR Processor Results:`);
+      console.log(`🟦 [DocumentAI][INFO] Raw text length: ${text.length}`);
+      console.log(
+        `🟦 [DocumentAI][INFO] Text preview: ${text.substring(0, 200)}...`
+      );
+      console.log(
+        `🟦 [DocumentAI][INFO] Document pages: ${document.pages?.length || 0}`
+      );
+      console.log(
+        `🟦 [DocumentAI][INFO] Document entities: ${
+          document.entities?.length || 0
+        }`
+      );
 
       // Calculate confidence based on text quality and length
       const confidence = this.calculateConfidence(
@@ -166,6 +307,15 @@ export class DocumentAIService {
         error
       );
 
+      // Add detailed error information
+      console.error(`🟥 [DocumentAI][INFO] Error details:`, {
+        fileName,
+        processorType: "OCR (default)",
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorStack: error instanceof Error ? error.stack : undefined,
+        processingTime,
+      });
+
       // Return fallback result
       return {
         text: `Document Content - ${fileName} (Document AI processing failed)`,
@@ -185,6 +335,14 @@ export class DocumentAIService {
     fileName: string,
     options: ProcessingOptions
   ): keyof typeof PROCESSOR_TYPES {
+    // Use OCR processor as the default for better text extraction
+    console.log(
+      `🟦 [DocumentAI][INFO] Using OCR processor for optimal text extraction`
+    );
+    return "OCR";
+
+    // Alternative logic (commented out - OCR works better for most documents):
+    /*
     const fileExtension = fileName.toLowerCase().split(".").pop();
 
     // If OCR is explicitly enabled, use OCR processor
@@ -199,6 +357,7 @@ export class DocumentAIService {
 
     // For all other documents, use layout parser (general purpose)
     return "LAYOUT_PARSER";
+    */
   }
 
   /**
@@ -222,6 +381,7 @@ export class DocumentAIService {
 
   /**
    * Get the full processor name following Google Cloud documentation
+   * @deprecated Use getOrCreateProcessor instead
    */
   private getProcessorName(
     processorType: keyof typeof PROCESSOR_TYPES
@@ -430,32 +590,19 @@ export class DocumentAIService {
       console.log(`🟦 [DocumentAI][TEST] Project ID: ${this.projectId}`);
       console.log(`🟦 [DocumentAI][TEST] Location: ${this.location}`);
 
-      // Test processor availability
-      const layoutProcessorId = process.env.DOCUMENT_AI_LAYOUT_PROCESSOR_ID;
-      const formProcessorId = process.env.DOCUMENT_AI_FORM_PARSER_PROCESSOR_ID;
-      const ocrProcessorId = process.env.DOCUMENT_AI_OCR_PROCESSOR_ID;
+      // Test processor availability and auto-creation
+      console.log(`🟦 [DocumentAI][TEST] Testing processor auto-creation...`);
 
-      if (!layoutProcessorId && !formProcessorId && !ocrProcessorId) {
-        throw new Error(
-          "No Document AI processor IDs configured. Please set at least one processor ID."
+      try {
+        const processor = await this.getOrCreateProcessor("LAYOUT_PARSER");
+        console.log(`🟩 [DocumentAI][TEST] Processor ready: ${processor.id}`);
+      } catch (processorError) {
+        console.error(
+          `🟥 [DocumentAI][TEST] Processor creation failed:`,
+          processorError
         );
+        throw processorError;
       }
-
-      console.log(
-        `🟦 [DocumentAI][TEST] Layout Processor ID: ${
-          layoutProcessorId || "Not configured"
-        }`
-      );
-      console.log(
-        `🟦 [DocumentAI][TEST] Form Parser Processor ID: ${
-          formProcessorId || "Not configured"
-        }`
-      );
-      console.log(
-        `🟦 [DocumentAI][TEST] OCR Processor ID: ${
-          ocrProcessorId || "Not configured"
-        }`
-      );
 
       // Test with a minimal document
       const testBuffer = Buffer.from(

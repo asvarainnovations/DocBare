@@ -10,6 +10,7 @@ interface Message {
   content: string;
   reasoningContent?: string; // Add reasoning content for AI messages
   createdAt: Date;
+  documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>; // Add documents to message
 }
 
 interface ThinkingState {
@@ -28,6 +29,32 @@ export function useChatAI(chatId: string, userId?: string) {
   const [thinkingStates, setThinkingStates] = useState<{ [messageId: string]: ThinkingState }>({});
   const autoResponseGeneratedRef = useRef(false);
 
+  // Cleanup thinking states for old messages (keep only last 5 messages)
+  const cleanupThinkingStates = useCallback(() => {
+    setThinkingStates(prev => {
+      const messageIds = Object.keys(prev);
+      if (messageIds.length <= 5) return prev;
+      
+      // Keep only the 5 most recent thinking states
+      const sortedIds = messageIds.sort((a, b) => {
+        const aTime = parseInt(a.split('-')[1]);
+        const bTime = parseInt(b.split('-')[1]);
+        return bTime - aTime; // Most recent first
+      });
+      
+      const idsToKeep = sortedIds.slice(0, 5);
+      const cleanedStates: { [messageId: string]: ThinkingState } = {};
+      
+      idsToKeep.forEach(id => {
+        if (prev[id]) {
+          cleanedStates[id] = prev[id];
+        }
+      });
+      
+      return cleanedStates;
+    });
+  }, []);
+
   // Generate AI response with proper streaming display
   const generateAIResponse = useCallback(async (message: string, addMessage: (message: Message) => void, updateMessage: (messageId: string, updates: Partial<Message>) => void, removeMessage: (messageId: string) => void) => {
     if (!userId) {
@@ -39,6 +66,9 @@ export function useChatAI(chatId: string, userId?: string) {
     let aiMessage: Message | null = null;
 
     try {
+      // Cleanup old thinking states before starting new response
+      cleanupThinkingStates();
+
       const requestBody = {
         query: message.trim(),
         sessionId: chatId,
@@ -78,11 +108,11 @@ export function useChatAI(chatId: string, userId?: string) {
       // Add the AI message immediately to show "AI is thinking..." state
       addMessage(aiMessage);
 
-      // Initialize thinking state for this message
-              setThinkingStates(prev => ({
-          ...prev,
-          [aiMessage!.id]: { isThinking: true, content: '' }
-        }));
+      // Initialize thinking state for this message with empty content
+      setThinkingStates(prev => ({
+        ...prev,
+        [aiMessage!.id]: { isThinking: true, content: '' }
+      }));
 
       const decoder = new TextDecoder();
       let closed = false;
@@ -167,10 +197,16 @@ export function useChatAI(chatId: string, userId?: string) {
     } finally {
       setLoadingAI(false);
     }
-  }, [chatId, userId]);
+  }, [chatId, userId, cleanupThinkingStates]);
 
   // Handle sending messages
-  const handleSend = useCallback(async (message: string, addMessage: (message: Message) => void, updateMessage: (messageId: string, updates: Partial<Message>) => void, removeMessage: (messageId: string) => void) => {
+  const handleSend = useCallback(async (
+    message: string, 
+    addMessage: (message: Message) => void, 
+    updateMessage: (messageId: string, updates: Partial<Message>) => void, 
+    removeMessage: (messageId: string) => void,
+    documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>
+  ) => {
     if (!userId) {
       console.error('🟥 [chat_ui][ERROR] No user ID');
       toast.error('Please log in to send messages');
@@ -187,6 +223,7 @@ export function useChatAI(chatId: string, userId?: string) {
       userId: userId,
       role: 'USER',
       content: message.trim(),
+      documents: documents || [],
       createdAt: new Date()
     };
 
@@ -198,7 +235,8 @@ export function useChatAI(chatId: string, userId?: string) {
         sessionId: chatId,
         userId: userId,
         role: 'USER',
-        content: message.trim()
+        content: message.trim(),
+        documents: documents || []
       });
       console.info('🟩 [chat_ui][SUCCESS] User message saved to database');
     } catch (saveError) {
@@ -392,6 +430,8 @@ export function useChatAI(chatId: string, userId?: string) {
   // Reset auto-response flag when chat ID changes
   useEffect(() => {
     autoResponseGeneratedRef.current = false;
+    // Clear all thinking states when switching chats
+    setThinkingStates({});
   }, [chatId]);
 
   return {
@@ -400,6 +440,7 @@ export function useChatAI(chatId: string, userId?: string) {
     handleSend,
     generateAIResponse,
     checkAndGenerateAutoResponse,
-    thinkingStates
+    thinkingStates,
+    clearThinkingStates: cleanupThinkingStates
   };
 } 

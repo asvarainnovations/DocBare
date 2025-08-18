@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -19,7 +19,6 @@ import { useChatAI } from "./hooks/useChatAI";
 // Components
 import ChatHeader from "./components/ChatHeader";
 import ChatMessage from "./components/ChatMessage";
-import UploadedFilesDisplay from "./components/UploadedFilesDisplay";
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { sidebarOpen } = useSidebar();
@@ -52,23 +51,75 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { uploadedFiles, handleFileUpload, handleFileRemove } = useFileUpload(
     session?.user?.id
   );
-  const { loadingAI, sendError, handleSend, checkAndGenerateAutoResponse, thinkingStates } =
-    useChatAI(params.chatId, session?.user?.id);
+  const {
+    loadingAI,
+    sendError,
+    handleSend,
+    checkAndGenerateAutoResponse,
+    thinkingStates,
+    clearThinkingStates,
+  } = useChatAI(params.chatId, session?.user?.id);
+
+  // Enhanced file upload handler that clears thinking states
+  const handleFileUploadWithCleanup = useCallback(
+    async (file: {
+      name: string;
+      status: "uploading" | "processing" | "done" | "error";
+      url?: string;
+      error?: string;
+      documentId?: string;
+      prismaId?: string;
+      firestoreId?: string;
+      abortController?: AbortController;
+    }) => {
+      // Clear thinking states when a new document is uploaded
+      clearThinkingStates();
+
+      // Call the original file upload handler
+      return await handleFileUpload(file);
+    },
+    [handleFileUpload, clearThinkingStates]
+  );
+
+  // Convert session document context to attachment card format
+  const sessionDocuments = useMemo(() => {
+    if (
+      !sessionMeta?.documentContext ||
+      !Array.isArray(sessionMeta.documentContext)
+    ) {
+      return [];
+    }
+
+    return sessionMeta.documentContext.map((doc: any) => ({
+      name: doc.fileName || "Unknown Document",
+      status: "done" as const,
+      documentId: doc.documentId,
+      prismaId: doc.documentId,
+      firestoreId: doc.firestoreId,
+    }));
+  }, [sessionMeta?.documentContext]);
 
   // Check if any documents are still processing
-  const isAnyDocumentProcessing = uploadedFiles.some(file => 
-    file.status === 'uploading' || file.status === 'processing'
+  const isAnyDocumentProcessing = uploadedFiles.some(
+    (file) => file.status === "uploading" || file.status === "processing"
   );
+
+  // Combine uploaded files with session documents for display
+  const allDocuments = useMemo(() => {
+    return [...uploadedFiles, ...sessionDocuments];
+  }, [uploadedFiles, sessionDocuments]);
 
   // Track streaming state - check if any message is currently thinking
   useEffect(() => {
-    const anyThinking = Object.values(thinkingStates).some(state => state.isThinking);
+    const anyThinking = Object.values(thinkingStates).some(
+      (state) => state.isThinking
+    );
     setIsStreaming(loadingAI || anyThinking);
   }, [loadingAI, thinkingStates]);
 
   // Essential logging for chat page state (only in development)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.info("🟦 [chat_ui][INFO] Chat page state:", {
         chatId: params.chatId,
         messagesCount: messages.length,
@@ -83,9 +134,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     if (sessionMeta && !loadingMeta) {
       addChat({
         id: params.chatId,
-        sessionName: sessionMeta.sessionName || 'New Chat',
+        sessionName: sessionMeta.sessionName || "New Chat",
         createdAt: new Date(sessionMeta.createdAt),
-        updatedAt: new Date(sessionMeta.createdAt)
+        updatedAt: new Date(sessionMeta.createdAt),
       });
     }
   }, [sessionMeta, loadingMeta, params.chatId, addChat]);
@@ -95,19 +146,21 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     if (!sessionMeta?.sessionName && !loadingMeta) {
       const pollInterval = setInterval(async () => {
         try {
-          const response = await fetch(`/api/sessions/${params.chatId}/metadata`);
+          const response = await fetch(
+            `/api/sessions/${params.chatId}/metadata`
+          );
           if (response.ok) {
             const data = await response.json();
-            if (data.sessionName && data.sessionName !== 'New Chat') {
+            if (data.sessionName && data.sessionName !== "New Chat") {
               updateChat(params.chatId, {
                 sessionName: data.sessionName,
-                updatedAt: new Date(data.createdAt)
+                updatedAt: new Date(data.createdAt),
               });
               clearInterval(pollInterval);
             }
           }
         } catch (error) {
-          console.error('Failed to poll for session name:', error);
+          console.error("Failed to poll for session name:", error);
         }
       }, 2000); // Poll every 2 seconds
 
@@ -164,8 +217,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   // Clear loading state from home page when chat page loads
   useEffect(() => {
     // Clear any loading state that might be set from the home page
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('docbare_creating_chat');
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("docbare_creating_chat");
     }
   }, []);
 
@@ -174,10 +227,44 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     async (message: string) => {
       if (!message.trim()) return;
       
+      // Convert uploaded files to document format for the message
+      const documents = uploadedFiles.map(file => ({
+        documentId: file.documentId || '',
+        fileName: file.name,
+        firestoreId: file.firestoreId
+      }));
+      
+      // Debug logging
+      console.log('🟦 [chat_ui][DEBUG] Sending message with documents:', {
+        message: message.substring(0, 100),
+        documents,
+        uploadedFilesCount: uploadedFiles.length
+      });
+      
       setInput("");
-      await handleSend(message, addMessage, updateMessage, removeMessage);
+      await handleSend(
+        message,
+        addMessage,
+        updateMessage,
+        removeMessage,
+        documents
+      );
+
+      // Clear all uploaded files after sending
+      const fileCount = uploadedFiles.length;
+      for (let i = fileCount - 1; i >= 0; i--) {
+        handleFileRemove(i);
+      }
     },
-    [handleSend, addMessage, updateMessage, removeMessage, setInput]
+    [
+      handleSend,
+      addMessage,
+      updateMessage,
+      removeMessage,
+      setInput,
+      uploadedFiles,
+      handleFileRemove,
+    ]
   );
 
   // Handle regenerating state changes
@@ -212,6 +299,26 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     return <LoadingSkeleton message="Loading chat..." />;
   }
 
+  // Debug function to test document attachment display
+  const testDocumentAttachment = () => {
+    const testMessage = {
+      id: 'test-' + Date.now(),
+      sessionId: params.chatId,
+      userId: session?.user?.id || '',
+      role: 'USER' as const,
+      content: 'Test message with document attachment',
+      documents: [
+        {
+          documentId: 'test-doc-1',
+          fileName: 'test-document.pdf',
+          firestoreId: 'test-firestore-id'
+        }
+      ],
+      createdAt: new Date()
+    };
+    addMessage(testMessage);
+  };
+
   return (
     <div className="min-h-screen flex">
       {/* Main area */}
@@ -222,6 +329,16 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           loadingMeta={loadingMeta}
           errorMeta={errorMeta}
         /> */}
+        
+        {/* Debug test button - remove in production */}
+        <div className="p-4">
+          <button 
+            onClick={testDocumentAttachment}
+            className="bg-red-500 text-white px-4 py-2 rounded"
+          >
+            Test Document Attachment
+          </button>
+        </div>
         {/* Chat history */}
         <div
           ref={chatRef}
@@ -247,24 +364,27 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
-                  {msg.role === 'ASSISTANT' && thinkingStates[msg.id] && (thinkingStates[msg.id].isThinking || thinkingStates[msg.id].content) && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="w-full flex justify-start mb-4"
-                    >
-                      <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
-                        <ThinkingDisplay
-                          isThinking={thinkingStates[msg.id].isThinking}
-                          thinkingContent={thinkingStates[msg.id].content}
-                          onComplete={() => {
-                            // Thinking display will auto-hide after completion
-                          }}
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                  
+                  {msg.role === "ASSISTANT" &&
+                    thinkingStates[msg.id] &&
+                    (thinkingStates[msg.id].isThinking ||
+                      thinkingStates[msg.id].content) && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="w-full flex justify-start mb-4"
+                      >
+                        <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
+                          <ThinkingDisplay
+                            isThinking={thinkingStates[msg.id].isThinking}
+                            thinkingContent={thinkingStates[msg.id].content}
+                            onComplete={() => {
+                              // Thinking display will auto-hide after completion
+                            }}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+
                   <ChatMessage
                     message={msg}
                     index={idx}
@@ -279,7 +399,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     onFeedback={handleFeedback}
                     isStreaming={isStreaming && idx === messages.length - 1}
                     isThinking={thinkingStates[msg.id]?.isThinking || false}
-                    thinkingContent={thinkingStates[msg.id]?.content || ''}
+                    thinkingContent={thinkingStates[msg.id]?.content || ""}
                   />
                 </div>
               ))}
@@ -288,15 +408,51 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         </div>
       </div>
 
-      {/* Uploaded Files Display */}
-      <UploadedFilesDisplay
-        uploadedFiles={uploadedFiles}
-        onRemoveFile={handleFileRemove}
-      />
-
       {/* Fixed ChatInput at bottom */}
-      <div className={`fixed bottom-0 left-0 right-0 z-30 bg-main-bg transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-30 bg-main-bg transition-all duration-300 ${
+          sidebarOpen ? "ml-64" : "ml-0"
+        }`}
+      >
         <div className="max-w-3xl mx-auto px-4 pb-4">
+          {/* Show uploaded files that haven't been sent yet */}
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4 w-full justify-start">
+              {uploadedFiles.map((file, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center bg-[#23242b] rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 gap-1.5 sm:gap-2 shadow border border-gray-700"
+                >
+                  <span className="inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
+                    {file.name.split(".").pop()?.toUpperCase() || "DOC"}
+                  </span>
+                  <span className="truncate max-w-[80px] sm:max-w-[120px] text-xs text-white">
+                    {file.name}
+                  </span>
+                  {file.status === "uploading" && (
+                    <span className="text-blue-400 text-xs">Uploading…</span>
+                  )}
+                  {file.status === "processing" && (
+                    <span className="text-yellow-400 text-xs">Processing…</span>
+                  )}
+                  {file.status === "done" && (
+                    <span className="text-green-400 text-xs">Ready</span>
+                  )}
+                  {file.status === "error" && (
+                    <span className="text-red-400 text-xs">Error</span>
+                  )}
+                  <button
+                    className="ml-1 text-gray-400 hover:text-red-400 text-xs"
+                    onClick={() => handleFileRemove(idx)}
+                    aria-label="Remove attachment"
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <ChatInput
             variant="chat"
             onSend={handleSendMessage}
@@ -310,7 +466,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
               setInput(value);
             }}
             userId={session?.user?.id}
-            onFileUpload={handleFileUpload}
+            onFileUpload={handleFileUploadWithCleanup}
           />
         </div>
       </div>

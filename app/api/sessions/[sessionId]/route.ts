@@ -18,11 +18,43 @@ export async function GET(
       
       const messages = snapshot.docs.map((doc: any) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        documents: doc.data().documents || null, // Include document information
       }));
 
+      // Debug logging for each message
+      messages.forEach((msg, idx) => {
+        console.log(`🟦 [sessions][DEBUG] Message ${idx}:`, {
+          id: msg.id,
+          role: msg.role,
+          content: msg.content.substring(0, 50),
+          documents: msg.documents,
+          createdAt: msg.createdAt
+        });
+      });
+
       // Sort in memory to avoid index requirements
-      messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      messages.sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        
+        // Debug logging for sorting
+        if (Math.abs(aTime - bTime) < 1000) { // If messages are within 1 second
+          console.log(`🟦 [sessions][DEBUG] Messages with similar timestamps:`, {
+            aId: a.id,
+            aRole: a.role,
+            aTime: aTime,
+            aCreatedAt: a.createdAt,
+            bId: b.id,
+            bRole: b.role,
+            bTime: bTime,
+            bCreatedAt: b.createdAt,
+            diff: aTime - bTime
+          });
+        }
+        
+        return aTime - bTime;
+      });
 
       apiLogger.info('Session messages retrieved from Firestore', { 
         sessionId: params.sessionId,

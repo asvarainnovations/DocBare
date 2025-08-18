@@ -9,6 +9,12 @@ interface SessionMetadata {
     name: string;
   };
   createdAt: string;
+  documentContext?: Array<{
+    documentId: string;
+    fileName: string;
+    firestoreId?: string;
+  }>;
+  documentIds?: string[];
 }
 
 export function useSessionMetadata(chatId: string) {

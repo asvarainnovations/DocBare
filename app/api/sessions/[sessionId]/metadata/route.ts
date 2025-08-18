@@ -34,6 +34,8 @@ export async function GET(
         sessionName: sessionData?.sessionName,
         createdAt: sessionData?.createdAt?.toDate?.() || sessionData?.createdAt,
         updatedAt: sessionData?.updatedAt?.toDate?.() || sessionData?.updatedAt,
+        documentContext: sessionData?.documentContext || [],
+        documentIds: sessionData?.documentIds || [],
         user: {
           id: sessionData?.userId,
           name: sessionData?.userName || sessionData?.userEmail,
@@ -77,6 +79,8 @@ export async function GET(
         id: session.id,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
+        documentContext: [], // Prisma doesn't store document context
+        documentIds: [],
         user: {
           id: session.user.id,
           name: session.user.name || session.user.email,
