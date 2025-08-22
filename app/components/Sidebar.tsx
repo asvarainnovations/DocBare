@@ -54,7 +54,7 @@ export default function Sidebar({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { chats, updateChat, removeChat, refreshTrigger, addChat } = useChat();
+  const { chats, updateChat, removeChat, refreshTrigger, addChat, setChatsFromAPI } = useChat();
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -86,9 +86,7 @@ export default function Sidebar({
 
         // Update chats through context
         if (res.data.chats) {
-          res.data.chats.forEach((chat: any) => {
-            addChat(chat);
-          });
+          setChatsFromAPI(res.data.chats);
         }
       } catch (err: any) {
         console.error("Failed to fetch chats:", err);
@@ -96,30 +94,6 @@ export default function Sidebar({
     }
     fetchChats();
   }, [status, session?.user?.id, refreshTrigger]);
-
-  // Remove router.events code
-
-  async function handleNewChat() {
-    if (!session?.user?.id) return;
-    try {
-      const res = await axios.post("/api/create_chat_session", {
-        firstMessage: "",
-        userId: session.user.id,
-      });
-      const chatId = res.data.chatId;
-      // Refetch chats after creating
-      const chatsRes = await axios.get("/api/user_chats", {
-        params: { userId: session.user.id },
-      });
-      // Update chats through context
-      if (chatsRes.data.chats) {
-        chatsRes.data.chats.forEach((chat: any) => {
-          addChat(chat);
-        });
-      }
-      onSelectChat?.(chatId);
-    } catch (err) {}
-  }
 
   // Handle rename functionality
   const handleRename = async (chatId: string, newTitle: string) => {

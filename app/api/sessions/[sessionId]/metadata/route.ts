@@ -24,6 +24,14 @@ export async function GET(
 
       const sessionData = sessionDoc.data();
       
+      console.log('🟦 [session_metadata][DEBUG] Firestore session data:', {
+        sessionId: params.sessionId,
+        documentContext: sessionData?.documentContext,
+        documentIds: sessionData?.documentIds,
+        hasDocumentContext: !!sessionData?.documentContext,
+        documentContextLength: sessionData?.documentContext?.length || 0
+      });
+      
       apiLogger.info('Session metadata retrieved from Firestore', { 
         sessionId: params.sessionId,
         userId: sessionData?.userId 

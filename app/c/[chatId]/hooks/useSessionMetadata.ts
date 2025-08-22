@@ -28,6 +28,11 @@ export function useSessionMetadata(chatId: string) {
       if (!chatId) return;
       try {
         const res = await axios.get(`/api/sessions/${chatId}/metadata`);
+        console.log('🟦 [session_metadata][DEBUG] Retrieved session metadata:', {
+          chatId,
+          sessionMeta: res.data,
+          documentContext: res.data?.documentContext
+        });
         setSessionMeta(res.data);
       } catch (err: any) {
         const errorMessage = err.response?.data?.error || 'Failed to load session info';

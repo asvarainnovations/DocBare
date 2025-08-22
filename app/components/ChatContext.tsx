@@ -18,6 +18,7 @@ interface ChatContextType {
   chats: Chat[];
   setChats: (chats: Chat[]) => void;
   addChat: (chat: Chat) => void;
+  setChatsFromAPI: (chats: Chat[]) => void;
   updateChat: (chatId: string, updates: Partial<Chat>) => void;
   removeChat: (chatId: string) => void;
   refreshChats: () => void;
@@ -37,8 +38,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (exists) {
         return prev;
       }
+      // Add new chat to the top (beginning) of the list
       return [chat, ...prev];
     });
+  }, []);
+
+  const setChatsFromAPI = useCallback((chats: Chat[]) => {
+    setChats(chats);
   }, []);
 
   const updateChat = useCallback((chatId: string, updates: Partial<Chat>) => {
@@ -62,6 +68,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         chats,
         setChats,
         addChat,
+        setChatsFromAPI,
         updateChat,
         removeChat,
         refreshChats,

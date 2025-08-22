@@ -30,8 +30,27 @@ export async function GET(req: NextRequest) {
         updatedAt: doc.data().lastAccessed?.toDate?.() || doc.data().lastAccessed || doc.data().createdAt?.toDate?.() || doc.data().createdAt
       }));
 
-      // Sort in memory to avoid index requirements
-      firestoreChats.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Sort in memory to avoid index requirements - newest first
+      firestoreChats.sort((a, b) => {
+        // Handle Firestore timestamps properly
+        const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
+        const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+        
+        console.log(`🟦 [user_chats][DEBUG] Sorting chats:`, {
+          aId: a.id,
+          aSessionName: a.sessionName,
+          aTime: aTime,
+          aCreatedAt: a.createdAt,
+          bId: b.id,
+          bSessionName: b.sessionName,
+          bTime: bTime,
+          bCreatedAt: b.createdAt,
+          diff: bTime - aTime,
+          sortOrder: bTime - aTime > 0 ? 'b (newer) before a (older)' : 'a (older) before b (newer)'
+        });
+        
+        return bTime - aTime; // Descending order - newest first
+      });
 
       apiLogger.info('Chats retrieved from Firestore', { 
         userId, 

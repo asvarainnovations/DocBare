@@ -238,7 +238,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       console.log('🟦 [chat_ui][DEBUG] Sending message with documents:', {
         message: message.substring(0, 100),
         documents,
-        uploadedFilesCount: uploadedFiles.length
+        uploadedFilesCount: uploadedFiles.length,
+        sessionMeta: sessionMeta,
+        sessionDocumentContext: sessionMeta?.documentContext
       });
       
       setInput("");
@@ -247,7 +249,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         addMessage,
         updateMessage,
         removeMessage,
-        documents
+        documents,
+        sessionMeta
       );
 
       // Clear all uploaded files after sending
@@ -299,26 +302,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     return <LoadingSkeleton message="Loading chat..." />;
   }
 
-  // Debug function to test document attachment display
-  const testDocumentAttachment = () => {
-    const testMessage = {
-      id: 'test-' + Date.now(),
-      sessionId: params.chatId,
-      userId: session?.user?.id || '',
-      role: 'USER' as const,
-      content: 'Test message with document attachment',
-      documents: [
-        {
-          documentId: 'test-doc-1',
-          fileName: 'test-document.pdf',
-          firestoreId: 'test-firestore-id'
-        }
-      ],
-      createdAt: new Date()
-    };
-    addMessage(testMessage);
-  };
-
   return (
     <div className="min-h-screen flex">
       {/* Main area */}
@@ -331,14 +314,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         /> */}
         
         {/* Debug test button - remove in production */}
-        <div className="p-4">
-          <button 
-            onClick={testDocumentAttachment}
-            className="bg-red-500 text-white px-4 py-2 rounded"
-          >
-            Test Document Attachment
-          </button>
-        </div>
+        
         {/* Chat history */}
         <div
           ref={chatRef}

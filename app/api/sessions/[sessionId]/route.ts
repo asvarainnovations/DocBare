@@ -22,6 +22,29 @@ export async function GET(
         documents: doc.data().documents || null, // Include document information
       }));
 
+      // Get session metadata to add document context to old messages
+      let sessionDocumentContext = [];
+      try {
+        const sessionDoc = await firestore.collection('chat_sessions').doc(params.sessionId).get();
+        if (sessionDoc.exists) {
+          const sessionData = sessionDoc.data();
+          sessionDocumentContext = sessionData?.documentContext || [];
+        }
+      } catch (sessionError) {
+        console.log('🟦 [sessions][DEBUG] Could not retrieve session metadata for document context');
+      }
+
+      // Add document context to old messages that don't have it
+      messages.forEach((msg) => {
+        if (msg.role === 'USER' && (!msg.documents || msg.documents.length === 0) && sessionDocumentContext.length > 0) {
+          msg.documents = sessionDocumentContext;
+          console.log(`🟦 [sessions][DEBUG] Added document context to old message:`, {
+            messageId: msg.id,
+            documents: msg.documents
+          });
+        }
+      });
+
       // Debug logging for each message
       messages.forEach((msg, idx) => {
         console.log(`🟦 [sessions][DEBUG] Message ${idx}:`, {
@@ -29,29 +52,29 @@ export async function GET(
           role: msg.role,
           content: msg.content.substring(0, 50),
           documents: msg.documents,
-          createdAt: msg.createdAt
+          createdAt: msg.createdAt,
+          timestamp: msg.createdAt?.toDate?.() ? msg.createdAt.toDate().getTime() : new Date(msg.createdAt).getTime()
         });
       });
 
       // Sort in memory to avoid index requirements
       messages.sort((a, b) => {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
+        // Handle Firestore timestamps properly
+        const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
+        const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
         
-        // Debug logging for sorting
-        if (Math.abs(aTime - bTime) < 1000) { // If messages are within 1 second
-          console.log(`🟦 [sessions][DEBUG] Messages with similar timestamps:`, {
-            aId: a.id,
-            aRole: a.role,
-            aTime: aTime,
-            aCreatedAt: a.createdAt,
-            bId: b.id,
-            bRole: b.role,
-            bTime: bTime,
-            bCreatedAt: b.createdAt,
-            diff: aTime - bTime
-          });
-        }
+        console.log(`🟦 [sessions][DEBUG] Sorting messages:`, {
+          aId: a.id,
+          aRole: a.role,
+          aTime: aTime,
+          aCreatedAt: a.createdAt,
+          bId: b.id,
+          bRole: b.role,
+          bTime: bTime,
+          bCreatedAt: b.createdAt,
+          diff: aTime - bTime,
+          sortOrder: aTime - bTime < 0 ? 'a before b' : 'b before a'
+        });
         
         return aTime - bTime;
       });

@@ -205,7 +205,8 @@ export function useChatAI(chatId: string, userId?: string) {
     addMessage: (message: Message) => void, 
     updateMessage: (messageId: string, updates: Partial<Message>) => void, 
     removeMessage: (messageId: string) => void,
-    documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>
+    documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>,
+    sessionMetadata?: any
   ) => {
     if (!userId) {
       console.error('🟥 [chat_ui][ERROR] No user ID');
@@ -217,14 +218,27 @@ export function useChatAI(chatId: string, userId?: string) {
       return;
     }
 
+    // Combine documents from uploaded files and session context
+    const allDocuments = [
+      ...(documents || []),
+      ...(sessionMetadata?.documentContext || [])
+    ];
+
+    console.log('🟦 [chat_ui][DEBUG] Document information for user message:', {
+      uploadedDocuments: documents || [],
+      sessionDocumentContext: sessionMetadata?.documentContext || [],
+      combinedDocuments: allDocuments,
+      sessionId: chatId
+    });
+
     const userMessage: Message = {
       id: generateUniqueId('user'),
       sessionId: chatId,
       userId: userId,
       role: 'USER',
       content: message.trim(),
-      documents: documents || [],
-      createdAt: new Date()
+      documents: allDocuments,
+      createdAt: new Date(Date.now() - 1000) // Ensure user message is 1 second earlier
     };
 
     addMessage(userMessage);
@@ -236,7 +250,7 @@ export function useChatAI(chatId: string, userId?: string) {
         userId: userId,
         role: 'USER',
         content: message.trim(),
-        documents: documents || []
+        documents: allDocuments
       });
       console.info('🟩 [chat_ui][SUCCESS] User message saved to database');
     } catch (saveError) {
@@ -287,7 +301,7 @@ export function useChatAI(chatId: string, userId?: string) {
         userId: userId,
         role: 'ASSISTANT',
         content: '',
-        createdAt: new Date()
+        createdAt: new Date() // AI message gets current timestamp
       };
 
       // Add the AI message immediately

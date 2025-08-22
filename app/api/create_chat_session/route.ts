@@ -35,7 +35,9 @@ export async function POST(req: NextRequest) {
       console.info('🟦 [chat_session][INFO] Received:', { 
         firstMessage: firstMessage.substring(0, 100), 
         userId,
-        documentContext: documentContext || []
+        documentContext: documentContext || [],
+        hasDocumentContext: !!(documentContext && documentContext.length > 0),
+        documentCount: documentContext?.length || 0
       });
     }
     if (!userId) {
@@ -103,9 +105,15 @@ export async function POST(req: NextRequest) {
         userId,
         role: 'USER',
         content: firstMessage,
+        documents: documentContext || [], // Include document information
         createdAt: now,
       });
-      console.info('🟩 [chat_session][SUCCESS] Added first message to Firestore:', { sessionId: session.id, userId });
+      console.info('🟩 [chat_session][SUCCESS] Added first message to Firestore:', { 
+        sessionId: session.id, 
+        userId,
+        hasDocuments: !!(documentContext && documentContext.length > 0),
+        documentCount: documentContext?.length || 0
+      });
     }
 
     return NextResponse.json({ chatId: session.id });

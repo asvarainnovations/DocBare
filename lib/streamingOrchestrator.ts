@@ -309,6 +309,7 @@ export class StreamingOrchestrator {
           let hasStartedFinalResponse = false;
           let lastReasoningChunk = '';
           let reasoningChunkBuffer = '';
+          let jsonBuffer = ''; // Buffer for incomplete JSON chunks
           
           try {
             while (true) {
@@ -325,7 +326,25 @@ export class StreamingOrchestrator {
                     const jsonStr = line.slice(6); // Remove 'data: ' prefix
                     if (jsonStr.trim() === '[DONE]') continue;
                     
-                    const jsonData = JSON.parse(jsonStr);
+                    // Add to buffer and try to parse
+                    jsonBuffer += jsonStr;
+                    
+                    // Safety check: prevent buffer from growing too large
+                    if (jsonBuffer.length > 10000) {
+                      console.warn('🟨 [streaming][WARN] JSON buffer too large, clearing:', jsonBuffer.length);
+                      jsonBuffer = '';
+                      continue;
+                    }
+                    
+                    // Try to parse the buffered JSON
+                    let jsonData;
+                    try {
+                      jsonData = JSON.parse(jsonBuffer);
+                      jsonBuffer = ''; // Clear buffer on successful parse
+                    } catch (bufferError) {
+                      // If buffer parsing fails, it might be incomplete - continue to next chunk
+                      continue;
+                    }
                     
                     // Handle reasoning_content (thinking content) - following DeepSeek pattern
                     if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.reasoning_content) {
@@ -369,6 +388,8 @@ export class StreamingOrchestrator {
                     if (process.env.NODE_ENV === 'development') {
                       console.warn('🟨 [streaming][WARN] Failed to parse streaming chunk:', parseError);
                     }
+                    // Continue processing other chunks
+                    continue;
                   }
                 }
               }
