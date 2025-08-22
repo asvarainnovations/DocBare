@@ -164,29 +164,27 @@ export function useChatAI(chatId: string, userId?: string) {
         }
 
         const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('THINKING:')) {
-            const thinkingContent = line.slice(9); // Remove 'THINKING:' prefix
-            setThinkingStates(prev => ({
-              ...prev,
-              [aiMessage!.id]: { 
-                isThinking: true, 
-                content: prev[aiMessage!.id]?.content + thinkingContent 
-              }
-            }));
-          } else if (line.startsWith('FINAL:')) {
-            // Switch from thinking to final response
-            setThinkingStates(prev => ({
-              ...prev,
-              [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
-            }));
-          } else if (line.trim() && !line.startsWith('THINKING:') && !line.startsWith('FINAL:')) {
-            // Regular content
-            aiResponse += line;
-            updateMessage(aiMessage!.id, { content: aiResponse });
-          }
+        
+        // Handle character-by-character streaming (not line-by-line)
+        if (chunk.startsWith('THINKING:')) {
+          const thinkingContent = chunk.slice(9); // Remove 'THINKING:' prefix
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: { 
+              isThinking: true, 
+              content: prev[aiMessage!.id]?.content + thinkingContent 
+            }
+          }));
+        } else if (chunk.startsWith('FINAL:')) {
+          // Switch from thinking to final response
+          setThinkingStates(prev => ({
+            ...prev,
+            [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
+          }));
+        } else if (chunk.trim() && !chunk.startsWith('THINKING:') && !chunk.startsWith('FINAL:')) {
+          // Regular content - this is the actual AI response
+          aiResponse += chunk;
+          updateMessage(aiMessage!.id, { content: aiResponse });
         }
       }
 
