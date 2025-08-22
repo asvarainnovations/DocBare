@@ -180,9 +180,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     ) {
       checkAndGenerateAutoResponse(
         messages,
-        sessionMeta,
-        loadingMessages,
-        loadingMeta,
         addMessage,
         updateMessage,
         removeMessage
@@ -198,6 +195,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     addMessage,
     updateMessage,
     removeMessage,
+    checkAndGenerateAutoResponse
   ]);
 
   // Auto-scroll to bottom when new messages arrive

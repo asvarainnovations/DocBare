@@ -61,7 +61,12 @@ export function useChatAI(chatId: string, userId?: string) {
   // Cleanup function for AbortController
   const cleanupAbortController = useCallback(() => {
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      try {
+        abortControllerRef.current.abort();
+      } catch (error) {
+        // Ignore errors if controller is already closed
+        console.log('🟦 [chat_ui][INFO] AbortController cleanup error (ignored):', error);
+      }
       abortControllerRef.current = null;
     }
   }, []);
@@ -185,6 +190,13 @@ export function useChatAI(chatId: string, userId?: string) {
         }
       }
 
+      // Release the reader lock
+      try {
+        reader.releaseLock();
+      } catch (error) {
+        console.log('🟦 [chat_ui][INFO] Reader release error (ignored):', error);
+      }
+
       // Finalize thinking state
       setThinkingStates(prev => ({
         ...prev,
@@ -221,7 +233,7 @@ export function useChatAI(chatId: string, userId?: string) {
       toast.error('Failed to generate AI response. Please try again.');
 
       // Remove the AI message if it was added
-      if (aiMessage) {
+      if (aiMessage && removeMessage) {
         removeMessage(aiMessage.id);
       }
     } finally {

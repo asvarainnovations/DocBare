@@ -230,7 +230,10 @@ async function extractTextWithDocumentAI(
       throw new Error("Document AI returned zero confidence");
     }
   } catch (error) {
-    console.warn(`🟨 [ingest][WARN] Document AI processing failed, using fallback:`, error instanceof Error ? error.message : 'Unknown error');
+    console.warn(
+      `🟨 [ingest][WARN] Document AI processing failed, using fallback:`,
+      error instanceof Error ? error.message : "Unknown error"
+    );
 
     // Fallback to basic text extraction for PDFs
     if (mimeType === "application/pdf") {
@@ -239,86 +242,90 @@ async function extractTextWithDocumentAI(
         const file = bucket.file(fileName);
         const [buffer] = await file.download();
         const bufferString = buffer.toString("utf8");
-        
+
         // Try multiple extraction methods
         let extractedText = "";
-        
-                 // Method 1: Extract text streams with aggressive filtering
-         const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
-         if (textStreams && textStreams.length > 0) {
-           const streamText = textStreams
-             .join(" ")
-             .replace(/BT|ET/g, "")
-             .replace(/\[[^\]]*\]/g, " ")
-             .replace(/[0-9]+ [0-9]+ Td/g, " ")
-             .replace(/[0-9]+ [0-9]+ Tj/g, " ")
-             .replace(/\/[A-Za-z]+/g, " ") // Remove PDF commands
-             .replace(/[0-9]+ [0-9]+ [0-9]+ [0-9]+/g, " ") // Remove coordinates
-             .replace(/CreationDate|ModDate|Producer|Creator/g, " ") // Remove metadata
-             .replace(/Times-Roman|Helvetica|Courier/g, " ") // Remove font names
-             .replace(/\s+/g, " ")
-             .trim();
 
-           // Only accept if it looks like real text
-           if (streamText.length > 100 && 
-               !streamText.includes("PDF") && 
-               !streamText.includes("obj") &&
-               !streamText.includes("stream") &&
-               !streamText.includes("xref") &&
-               /[a-zA-Z]{3,}/.test(streamText)) { // Must contain actual words
-             extractedText = streamText.substring(0, 3000);
-           }
-         }
+        // Method 1: Extract text streams with aggressive filtering
+        const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
+        if (textStreams && textStreams.length > 0) {
+          const streamText = textStreams
+            .join(" ")
+            .replace(/BT|ET/g, "")
+            .replace(/\[[^\]]*\]/g, " ")
+            .replace(/[0-9]+ [0-9]+ Td/g, " ")
+            .replace(/[0-9]+ [0-9]+ Tj/g, " ")
+            .replace(/\/[A-Za-z]+/g, " ") // Remove PDF commands
+            .replace(/[0-9]+ [0-9]+ [0-9]+ [0-9]+/g, " ") // Remove coordinates
+            .replace(/CreationDate|ModDate|Producer|Creator/g, " ") // Remove metadata
+            .replace(/Times-Roman|Helvetica|Courier/g, " ") // Remove font names
+            .replace(/\s+/g, " ")
+            .trim();
 
-                 // Method 2: Extract readable text patterns with enhanced filtering
-         if (!extractedText) {
-           const textMatches = bufferString.match(/[\x20-\x7E]{20,}/g);
-           if (textMatches && textMatches.length > 0) {
-             const readableText = textMatches
-               .filter(text => 
-                 text.length > 20 && 
-                 !text.includes("PDF") && 
-                 !text.includes("obj") && 
-                 !text.includes("stream") &&
-                 !text.includes("endstream") &&
-                 !text.includes("xref") &&
-                 !text.includes("trailer") &&
-                 !text.includes("CreationDate") &&
-                 !text.includes("ModDate") &&
-                 !text.includes("Producer") &&
-                 !text.includes("Creator") &&
-                 !text.includes("Times-Roman") &&
-                 !text.includes("Helvetica") &&
-                 !text.includes("Courier") &&
-                 !text.includes("/Type/") &&
-                 !text.includes("/Filter/") &&
-                 !text.includes("/Length") &&
-                 !text.includes("/Font") &&
-                 !text.includes("/MediaBox") &&
-                 !text.includes("/Resources") &&
-                 !text.includes("/Contents") &&
-                 /[a-zA-Z]{3,}/.test(text) // Must contain actual words
-               )
-               .join(" ");
-             
-             if (readableText.length > 100) {
-               extractedText = readableText.substring(0, 2000);
-             }
-           }
-         }
+          // Only accept if it looks like real text
+          if (
+            streamText.length > 100 &&
+            !streamText.includes("PDF") &&
+            !streamText.includes("obj") &&
+            !streamText.includes("stream") &&
+            !streamText.includes("xref") &&
+            /[a-zA-Z]{3,}/.test(streamText)
+          ) {
+            // Must contain actual words
+            extractedText = streamText.substring(0, 3000);
+          }
+        }
+
+        // Method 2: Extract readable text patterns with enhanced filtering
+        if (!extractedText) {
+          const textMatches = bufferString.match(/[\x20-\x7E]{20,}/g);
+          if (textMatches && textMatches.length > 0) {
+            const readableText = textMatches
+              .filter(
+                (text) =>
+                  text.length > 20 &&
+                  !text.includes("PDF") &&
+                  !text.includes("obj") &&
+                  !text.includes("stream") &&
+                  !text.includes("endstream") &&
+                  !text.includes("xref") &&
+                  !text.includes("trailer") &&
+                  !text.includes("CreationDate") &&
+                  !text.includes("ModDate") &&
+                  !text.includes("Producer") &&
+                  !text.includes("Creator") &&
+                  !text.includes("Times-Roman") &&
+                  !text.includes("Helvetica") &&
+                  !text.includes("Courier") &&
+                  !text.includes("/Type/") &&
+                  !text.includes("/Filter/") &&
+                  !text.includes("/Length") &&
+                  !text.includes("/Font") &&
+                  !text.includes("/MediaBox") &&
+                  !text.includes("/Resources") &&
+                  !text.includes("/Contents") &&
+                  /[a-zA-Z]{3,}/.test(text) // Must contain actual words
+              )
+              .join(" ");
+
+            if (readableText.length > 100) {
+              extractedText = readableText.substring(0, 2000);
+            }
+          }
+        }
 
         // Method 3: Extract content streams
         if (!extractedText) {
           const contentStreams = bufferString.match(/stream[\s\S]*?endstream/g);
           if (contentStreams && contentStreams.length > 0) {
             const contentText = contentStreams
-              .map(stream => stream.replace(/stream|endstream/g, ""))
+              .map((stream) => stream.replace(/stream|endstream/g, ""))
               .join(" ")
               .replace(/[0-9]+ [0-9]+ Td/g, " ")
               .replace(/[0-9]+ [0-9]+ Tj/g, " ")
               .replace(/\s+/g, " ")
               .trim();
-            
+
             if (contentText.length > 100 && !contentText.includes("PDF")) {
               extractedText = contentText.substring(0, 2000);
             }
@@ -336,7 +343,9 @@ async function extractTextWithDocumentAI(
           );
           return { text: extractedText, confidence, method: "fallback" };
         } else {
-          console.warn(`🟨 [ingest][WARN] No readable text found in PDF - likely image-based or corrupted`);
+          console.warn(
+            `🟨 [ingest][WARN] No readable text found in PDF - likely image-based or corrupted`
+          );
         }
       } catch (fallbackError) {
         console.warn(
@@ -368,20 +377,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if request is FormData or JSON
-    const contentType = request.headers.get('content-type') || '';
-    
+    const contentType = request.headers.get("content-type") || "";
+
     let file: File | null = null;
     let userId: string | null = null;
     let documentId: string | null = null;
 
-    if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes("multipart/form-data")) {
       // Handle FormData request (direct file upload)
       const formData = await request.formData();
       file = formData.get("file") as File;
       userId = formData.get("userId") as string;
 
       if (!file) {
-        return NextResponse.json({ error: "No file provided" }, { status: 400 });
+        return NextResponse.json(
+          { error: "No file provided" },
+          { status: 400 }
+        );
       }
 
       if (!userId) {
@@ -434,8 +446,8 @@ export async function POST(request: NextRequest) {
 
       // Generate embeddings for each chunk
       const embeddings = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkText = chunks[i];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkText = chunks[i];
         console.log(
           `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
             chunks.length
@@ -466,7 +478,9 @@ export async function POST(request: NextRequest) {
               );
             }
             // Wait before retry
-            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * retryCount)
+            );
           }
         }
 
@@ -477,8 +491,8 @@ export async function POST(request: NextRequest) {
         await firestore.collection("document_chunks").add({
           userId,
           documentId: fileName,
-      chunkIndex: i,
-      text: chunkText,
+          chunkIndex: i,
+          text: chunkText,
           embedding,
           metadata: {
             fileName: file.name,
@@ -510,7 +524,9 @@ export async function POST(request: NextRequest) {
         `🟩 [ingest][SUCCESS] Document processing completed successfully`
       );
       console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
-      console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
+      console.log(
+        `🟦 [ingest][INFO] Total characters: ${extractedText.length}`
+      );
       console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
 
       return NextResponse.json({
@@ -525,7 +541,6 @@ export async function POST(request: NextRequest) {
           suggestions: confidence.suggestions,
         },
       });
-
     } else {
       // Handle JSON request (process existing document)
       const body = await request.json();
@@ -533,11 +548,17 @@ export async function POST(request: NextRequest) {
       userId = body.userId;
 
       if (!documentId) {
-        return NextResponse.json({ error: "No document ID provided" }, { status: 400 });
+        return NextResponse.json(
+          { error: "No document ID provided" },
+          { status: 400 }
+        );
       }
 
       if (!userId) {
-        return NextResponse.json({ error: "No user ID provided" }, { status: 400 });
+        return NextResponse.json(
+          { error: "No user ID provided" },
+          { status: 400 }
+        );
       }
 
       console.log(
@@ -546,11 +567,14 @@ export async function POST(request: NextRequest) {
 
       // Get document from database
       const document = await prisma.document.findUnique({
-        where: { id: documentId, userId }
+        where: { id: documentId, userId },
       });
 
       if (!document) {
-        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Document not found" },
+          { status: 404 }
+        );
       }
 
       // Download file from GCS
@@ -600,8 +624,8 @@ export async function POST(request: NextRequest) {
           try {
             embeddingResp = await openai.embeddings.create({
               model: "text-embedding-3-small",
-      input: chunkText,
-    });
+              input: chunkText,
+            });
             break; // Success, exit retry loop
           } catch (embeddingError) {
             retryCount++;
@@ -615,7 +639,9 @@ export async function POST(request: NextRequest) {
               );
             }
             // Wait before retry
-            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * retryCount)
+            );
           }
         }
 
@@ -648,7 +674,9 @@ export async function POST(request: NextRequest) {
         `🟩 [ingest][SUCCESS] Document processing completed successfully`
       );
       console.log(`🟦 [ingest][INFO] Total chunks: ${chunks.length}`);
-      console.log(`🟦 [ingest][INFO] Total characters: ${extractedText.length}`);
+      console.log(
+        `🟦 [ingest][INFO] Total characters: ${extractedText.length}`
+      );
       console.log(`🟦 [ingest][INFO] Confidence: ${confidence.score}/100`);
 
       return NextResponse.json({
