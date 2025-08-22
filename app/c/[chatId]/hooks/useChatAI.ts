@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import axios from 'axios';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 interface Message {
   id: string;
   sessionId: string;
-  userId: string;
-  role: 'USER' | 'ASSISTANT';
+  userId?: string;
+  role: 'USER' | 'ASSISTANT' | 'SYSTEM';
   content: string;
-  reasoningContent?: string; // Add reasoning content for AI messages
+  documents?: Array<{
+    documentId: string;
+    fileName: string;
+    firestoreId?: string;
+  }>;
   createdAt: Date;
-  documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>; // Add documents to message
 }
 
 interface ThinkingState {
@@ -18,7 +21,6 @@ interface ThinkingState {
   content: string;
 }
 
-// Generate unique message ID
 const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
@@ -28,6 +30,7 @@ export function useChatAI(chatId: string, userId?: string) {
   const [sendError, setSendError] = useState<string | null>(null);
   const [thinkingStates, setThinkingStates] = useState<{ [messageId: string]: ThinkingState }>({});
   const autoResponseGeneratedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Cleanup thinking states for old messages (keep only last 5 messages)
   const cleanupThinkingStates = useCallback(() => {
@@ -55,60 +58,90 @@ export function useChatAI(chatId: string, userId?: string) {
     });
   }, []);
 
+  // Cleanup function for AbortController
+  const cleanupAbortController = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount or chatId change
+  useEffect(() => {
+    return () => {
+      cleanupAbortController();
+      cleanupThinkingStates();
+    };
+  }, [chatId, cleanupAbortController, cleanupThinkingStates]);
+
   // Generate AI response with proper streaming display
-  const generateAIResponse = useCallback(async (message: string, addMessage: (message: Message) => void, updateMessage: (messageId: string, updates: Partial<Message>) => void, removeMessage: (messageId: string) => void) => {
+  const generateAIResponse = useCallback(async (
+    message: string,
+    addMessage: (message: Message) => void,
+    updateMessage: (messageId: string, updates: Partial<Message>) => void,
+    removeMessage: (messageId: string) => void,
+    documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>
+  ) => {
     if (!userId) {
       console.error('🟥 [chat_ui][ERROR] No user ID');
+      toast.error('Please log in to send messages');
       return;
     }
 
-    setLoadingAI(true);
+    // Cleanup previous AbortController
+    cleanupAbortController();
+
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController();
+
     let aiMessage: Message | null = null;
 
     try {
-      // Cleanup old thinking states before starting new response
-      cleanupThinkingStates();
-
       const requestBody = {
         query: message.trim(),
         sessionId: chatId,
         userId: userId,
       };
       
+      // Send message to API
       const response = await fetch('/api/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🟥 [chat_ui][ERROR] Auto-response API error:', errorText);
+        console.error('🟥 [chat_ui][ERROR] API error:', errorText);
+        const errorMessage = errorText || 'Failed to send message';
+        setSendError(errorMessage);
+        toast.error(errorMessage);
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        console.error('🟥 [chat_ui][ERROR] No response body reader for auto-response');
+        console.error('🟥 [chat_ui][ERROR] No response body reader');
         return;
       }
 
       let aiResponse = '';
       aiMessage = {
-        id: generateUniqueId('ai-auto'),
+        id: generateUniqueId('ai'),
         sessionId: chatId,
         userId: userId,
         role: 'ASSISTANT',
         content: '',
-        createdAt: new Date()
+        createdAt: new Date() // AI message gets current timestamp
       };
 
-      // Add the AI message immediately to show "AI is thinking..." state
+      // Add the AI message immediately
       addMessage(aiMessage);
 
-      // Initialize thinking state for this message with empty content
+      // Initialize thinking state for this message
       setThinkingStates(prev => ({
         ...prev,
         [aiMessage!.id]: { isThinking: true, content: '' }
@@ -116,88 +149,86 @@ export function useChatAI(chatId: string, userId?: string) {
 
       const decoder = new TextDecoder();
       let closed = false;
-      let hasStartedStreaming = false;
 
       while (!closed) {
         const { done, value } = await reader.read();
+        
         if (done) {
           closed = true;
           break;
         }
 
         const chunk = decoder.decode(value);
-        
-        // Handle thinking and final response separation
-        if (chunk.startsWith('THINKING:')) {
-          const thinkingData = chunk.replace('THINKING:', '');
-          setThinkingStates(prev => ({
-            ...prev,
-            [aiMessage!.id]: {
-              ...prev[aiMessage!.id],
-              content: (prev[aiMessage!.id]?.content || '') + thinkingData
-            }
-          }));
-        } else if (chunk.startsWith('FINAL:')) {
-          setThinkingStates(prev => ({
-            ...prev,
-            [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-          }));
-          const finalData = chunk.replace('FINAL:', '');
-          aiResponse += finalData;
-          hasStartedStreaming = true;
-          updateMessage(aiMessage!.id, { content: aiResponse });
-        } else {
-          // Handle any remaining plain text content (fallback for multi-agent mode)
-          if (chunk.trim()) {
-            aiResponse += chunk;
-            hasStartedStreaming = true;
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('THINKING:')) {
+            const thinkingContent = line.slice(9); // Remove 'THINKING:' prefix
+            setThinkingStates(prev => ({
+              ...prev,
+              [aiMessage!.id]: { 
+                isThinking: true, 
+                content: prev[aiMessage!.id]?.content + thinkingContent 
+              }
+            }));
+          } else if (line.startsWith('FINAL:')) {
+            // Switch from thinking to final response
+            setThinkingStates(prev => ({
+              ...prev,
+              [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
+            }));
+          } else if (line.trim() && !line.startsWith('THINKING:') && !line.startsWith('FINAL:')) {
+            // Regular content
+            aiResponse += line;
             updateMessage(aiMessage!.id, { content: aiResponse });
           }
         }
       }
 
-      reader.releaseLock();
-      if (aiMessage) {
-        setThinkingStates(prev => ({
-          ...prev,
-          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-        }));
+      // Finalize thinking state
+      setThinkingStates(prev => ({
+        ...prev,
+        [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
+      }));
+
+      // Save AI message to database
+      try {
+        await axios.post('/api/chat', {
+          sessionId: chatId,
+          userId: userId,
+          role: 'ASSISTANT',
+          content: aiResponse,
+          reasoningContent: thinkingStates[aiMessage!.id]?.content || ''
+        });
+        console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
+      } catch (saveError) {
+        console.error('🟥 [chat_ui][ERROR] Failed to save AI message:', saveError);
       }
 
-      // Save the AI message to the database
-      if (aiResponse.trim()) {
-        try {
-          // Get the reasoning content for this message
-          const reasoningContent = thinkingStates[aiMessage!.id]?.content || '';
-          
-          await axios.post('/api/chat', {
-            sessionId: chatId,
-            userId: userId,
-            role: 'ASSISTANT',
-            content: aiResponse.trim(),
-            reasoningContent: reasoningContent.trim() || null
-          });
-          if (process.env.NODE_ENV === 'development') {
-            console.info('🟩 [chat_ui][SUCCESS] AI message saved to database with reasoning content');
-          }
-        } catch (saveError) {
-          console.error('🟥 [chat_ui][ERROR] Failed to save auto AI message:', saveError);
-          // Don't fail the entire request if saving fails
-        }
-      }
+      // Cleanup thinking states after a delay
+      setTimeout(() => {
+        cleanupThinkingStates();
+      }, 5000);
+
     } catch (error: any) {
-      console.error('🟥 [chat_ui][ERROR] Failed to generate auto AI response:', error.message);
+      if (error.name === 'AbortError') {
+        console.log('🟦 [chat_ui][INFO] Request was aborted');
+        return;
+      }
+
+      console.error('🟥 [chat_ui][ERROR] AI response generation failed:', error);
+      setSendError('Failed to generate AI response');
+      toast.error('Failed to generate AI response. Please try again.');
+
+      // Remove the AI message if it was added
       if (aiMessage) {
-        setThinkingStates(prev => ({
-          ...prev,
-          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-        }));
-        removeMessage(aiMessage!.id);
+        removeMessage(aiMessage.id);
       }
     } finally {
       setLoadingAI(false);
+      cleanupAbortController();
     }
-  }, [chatId, userId, cleanupThinkingStates]);
+  }, [userId, chatId, cleanupAbortController, cleanupThinkingStates]);
 
   // Handle sending messages
   const handleSend = useCallback(async (
@@ -261,200 +292,45 @@ export function useChatAI(chatId: string, userId?: string) {
     setLoadingAI(true);
     setSendError(null);
 
-    let aiMessage: Message | null = null;
+    // Generate AI response
+    await generateAIResponse(message, addMessage, updateMessage, removeMessage, allDocuments);
+  }, [userId, chatId, generateAIResponse]);
 
-    try {
-      const requestBody = {
-        query: message.trim(),
-        sessionId: chatId,
-        userId: userId,
-      };
-      
-      // Send message to API
-      const response = await fetch('/api/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🟥 [chat_ui][ERROR] API error:', errorText);
-        const errorMessage = errorText || 'Failed to send message';
-        setSendError(errorMessage);
-        toast.error(errorMessage);
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        console.error('🟥 [chat_ui][ERROR] No response body reader');
-        return;
-      }
-
-      let aiResponse = '';
-      aiMessage = {
-        id: generateUniqueId('ai'),
-        sessionId: chatId,
-        userId: userId,
-        role: 'ASSISTANT',
-        content: '',
-        createdAt: new Date() // AI message gets current timestamp
-      };
-
-      // Add the AI message immediately
-      addMessage(aiMessage);
-
-      // Initialize thinking state for this message
-      setThinkingStates(prev => ({
-        ...prev,
-        [aiMessage!.id]: { isThinking: true, content: '' }
-      }));
-
-      const decoder = new TextDecoder();
-      let closed = false;
-
-      while (!closed) {
-        const { done, value } = await reader.read();
-        if (done) {
-          closed = true;
-          break;
-        }
-
-        const chunk = decoder.decode(value);
-        
-        // Handle thinking and final response separation
-        if (chunk.startsWith('THINKING:')) {
-          const thinkingData = chunk.replace('THINKING:', '');
-          setThinkingStates(prev => ({
-            ...prev,
-            [aiMessage!.id]: {
-              ...prev[aiMessage!.id],
-              content: (prev[aiMessage!.id]?.content || '') + thinkingData
-            }
-          }));
-        } else if (chunk.startsWith('FINAL:')) {
-          setThinkingStates(prev => ({
-            ...prev,
-            [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-          }));
-          const finalData = chunk.replace('FINAL:', '');
-          aiResponse += finalData;
-          updateMessage(aiMessage!.id, { content: aiResponse });
-        } else {
-          // Handle any remaining plain text content (fallback for multi-agent mode)
-          if (chunk.trim()) {
-            aiResponse += chunk;
-            updateMessage(aiMessage!.id, { content: aiResponse });
-          }
-        }
-      }
-
-      reader.releaseLock();
-      if (aiMessage) {
-        setThinkingStates(prev => ({
-          ...prev,
-          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-        }));
-      }
-
-      // Save the AI message to the database
-      if (aiResponse.trim()) {
-        try {
-          // Get the reasoning content for this message
-          const reasoningContent = thinkingStates[aiMessage!.id]?.content || '';
-          
-          await axios.post('/api/chat', {
-            sessionId: chatId,
-            userId: userId,
-            role: 'ASSISTANT',
-            content: aiResponse.trim(),
-            reasoningContent: reasoningContent.trim() || null
-          });
-          console.info('🟩 [chat_ui][SUCCESS] AI message saved to database with reasoning content');
-        } catch (saveError) {
-          console.error('🟥 [chat_ui][ERROR] Failed to save AI message:', saveError);
-          // Don't fail the entire request if saving fails
-        }
-      }
-    } catch (error: any) {
-      console.error('🟥 [chat_ui][ERROR] Failed to send message:', error.message);
-      if (aiMessage) {
-        setThinkingStates(prev => ({
-          ...prev,
-          [aiMessage!.id]: { ...prev[aiMessage!.id], isThinking: false }
-        }));
-        removeMessage(aiMessage!.id);
-      }
-      const errorMessage = error.message || 'Failed to send message';
-      setSendError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoadingAI(false);
-    }
-  }, [chatId, userId]);
-
-  // Auto-generate AI response for first message if it's a new chat
+  // Check and generate auto-response for new chats
   const checkAndGenerateAutoResponse = useCallback(async (
-    messages: Message[], 
-    sessionMeta: any, 
-    loadingMessages: boolean, 
-    loadingMeta: boolean,
-    addMessage: (message: Message) => void, 
-    updateMessage: (messageId: string, updates: Partial<Message>) => void, 
+    messages: Message[],
+    addMessage: (message: Message) => void,
+    updateMessage: (messageId: string, updates: Partial<Message>) => void,
     removeMessage: (messageId: string) => void
   ) => {
-    // Don't proceed if we're still loading or if we've already generated a response
-    if (!chatId || !userId || loadingMessages || loadingMeta || autoResponseGeneratedRef.current) {
+    if (autoResponseGeneratedRef.current || messages.length > 1 || !userId) {
       return;
     }
-    
-    // Wait for both messages and metadata to be fully loaded
-    if (loadingMessages || loadingMeta) {
-      return;
-    }
-    
-    // Check if this is a new chat with only one user message
-    const userMessages = messages.filter(msg => msg.role === 'USER');
-    const aiMessages = messages.filter(msg => msg.role === 'ASSISTANT');
-    
-    // Safety check: if we already have AI messages, don't generate more
-    if (aiMessages.length > 0) {
-      autoResponseGeneratedRef.current = true;
-      return;
-    }
-    
-    // Only generate auto-response if:
-    // 1. There's exactly one user message
-    // 2. No AI messages exist
-    if (userMessages.length === 1 && aiMessages.length === 0) {
-      const firstUserMessage = userMessages[0];
-      
-      // Generate AI response for the first user message
-      autoResponseGeneratedRef.current = true; // Prevent multiple auto-responses
-      if (process.env.NODE_ENV === 'development') {
-        console.info('🟦 [chat_ui][INFO] Auto-generating AI response for new chat');
-      }
-      await generateAIResponse(firstUserMessage.content, addMessage, updateMessage, removeMessage);
-    }
-  }, [chatId, userId, generateAIResponse]);
 
-  // Reset auto-response flag when chat ID changes
-  useEffect(() => {
-    autoResponseGeneratedRef.current = false;
-    // Clear all thinking states when switching chats
+    const firstMessage = messages[0];
+    if (firstMessage && firstMessage.role === 'USER' && firstMessage.content.trim()) {
+      autoResponseGeneratedRef.current = true;
+      await generateAIResponse(
+        firstMessage.content,
+        addMessage,
+        updateMessage,
+        removeMessage,
+        firstMessage.documents
+      );
+    }
+  }, [userId, generateAIResponse]);
+
+  // Clear thinking states (exposed for external use)
+  const clearThinkingStates = useCallback(() => {
     setThinkingStates({});
-  }, [chatId]);
+  }, []);
 
   return {
     loadingAI,
     sendError,
     handleSend,
-    generateAIResponse,
     checkAndGenerateAutoResponse,
     thinkingStates,
-    clearThinkingStates: cleanupThinkingStates
+    clearThinkingStates,
   };
 } 

@@ -19,6 +19,26 @@ function PatchedPrismaAdapter(prisma: PrismaClient) {
   return adapter;
 }
 
+// Input validation for credentials
+function validateCredentials(credentials: any) {
+  if (!credentials?.email || !credentials?.password) {
+    return { valid: false, error: 'Email and password are required' };
+  }
+  
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(credentials.email)) {
+    return { valid: false, error: 'Invalid email format' };
+  }
+  
+  // Password validation (minimum 8 characters)
+  if (credentials.password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters long' };
+  }
+  
+  return { valid: true };
+}
+
 export const authOptions: AuthOptions = {
   adapter: PatchedPrismaAdapter(prisma),
   providers: [
@@ -33,21 +53,56 @@ export const authOptions: AuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const user = await prisma.user.findUnique({ where: { email: credentials?.email } });
-        if (user && user.passwordHash && credentials?.password) {
-          const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-          if (isValid) return user;
+        try {
+          // Validate input
+          const validation = validateCredentials(credentials);
+          if (!validation.valid) {
+            console.warn('Invalid credentials format:', validation.error);
+            return null;
+          }
+
+          const user = await prisma.user.findUnique({ 
+            where: { email: credentials?.email },
+            select: {
+              id: true,
+              email: true,
+              passwordHash: true,
+              isActive: true,
+              role: true
+            }
+          });
+
+          // Check if user exists and is active
+          if (!user || !user.isActive) {
+            return null;
+          }
+
+          // Verify password
+          if (user.passwordHash && credentials?.password) {
+            const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+            if (isValid) {
+              return {
+                id: user.id,
+                email: user.email,
+                role: user.role
+              };
+            }
+          }
+          
+          return null;
+        } catch (error) {
+          console.error('Authentication error:', error);
+          return null;
         }
-        return null;
       },
     }),
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days - longer for cross-platform
+    maxAge: 7 * 24 * 60 * 60, // 7 days - reduced from 30 days for security
   },
   jwt: {
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 7 * 24 * 60 * 60, // 7 days
   },
   pages: {
     signIn: '/login',
@@ -98,7 +153,7 @@ export const authOptions: AuthOptions = {
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-  // Enable cross-platform cookies
+  // Enable cross-platform cookies with enhanced security
   cookies: {
     sessionToken: {
       name: `next-auth.session-token`,
@@ -107,7 +162,7 @@ export const authOptions: AuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
+        maxAge: 7 * 24 * 60 * 60, // 7 days
       }
     }
   }

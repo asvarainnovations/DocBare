@@ -2,62 +2,99 @@ import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiLogger } from './logger';
 
-// Base schemas
-export const UserSchema = z.object({
-  id: z.string().min(1, 'User ID is required'),
-  email: z.string().email('Invalid email format'),
-  name: z.string().optional(),
-});
+// Enhanced input sanitization
+export function sanitizeInput(input: string): string {
+  if (typeof input !== 'string') return '';
+  
+  // Remove potentially dangerous HTML/script tags
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .trim();
+}
 
+// Enhanced validation schemas
 export const MessageSchema = z.object({
-  sessionId: z.string().min(1, 'Session ID is required'),
-  userId: z.string().min(1, 'User ID is required'),
-  role: z.enum(['USER', 'ASSISTANT', 'SYSTEM'], {
-    errorMap: () => ({ message: 'Role must be USER, ASSISTANT, or SYSTEM' })
-  }),
-  content: z.string().min(1, 'Message content is required').max(10000, 'Message too long'),
-  createdAt: z.date().optional(),
+  content: z.string()
+    .min(1, 'Message cannot be empty')
+    .max(10000, 'Message too long (max 10,000 characters)')
+    .transform(sanitizeInput),
+  sessionId: z.string().uuid('Invalid session ID'),
+  role: z.enum(['USER', 'ASSISTANT', 'SYSTEM']),
+  documents: z.array(z.object({
+    documentId: z.string().uuid(),
+    fileName: z.string().max(255),
+    firestoreId: z.string().optional()
+  })).optional()
 });
 
 export const ChatSessionSchema = z.object({
-  id: z.string().min(1, 'Session ID is required'),
-  userId: z.string().min(1, 'User ID is required'),
-  title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
-  createdAt: z.date().optional(),
-  updatedAt: z.date().optional(),
+  firstMessage: z.string()
+    .min(1, 'First message cannot be empty')
+    .max(5000, 'First message too long (max 5,000 characters)')
+    .transform(sanitizeInput),
+  userId: z.string().uuid('Invalid user ID'),
+  documentContext: z.array(z.object({
+    documentId: z.string().uuid(),
+    fileName: z.string().max(255),
+    firestoreId: z.string().optional()
+  })).optional()
 });
 
-export const FeedbackSchema = z.object({
-  sessionId: z.string().min(1, 'Session ID is required'),
-  userId: z.string().min(1, 'User ID is required'),
-  messageId: z.string().min(1, 'Message ID is required'),
-  rating: z.enum(['good', 'bad'], {
-    errorMap: () => ({ message: 'Rating must be good or bad' })
-  }),
-  comment: z.string().max(1000, 'Comment too long').optional(),
-  createdAt: z.date().optional(),
+export const FileUploadSchema = z.object({
+  userId: z.string().uuid('Invalid user ID'),
+  file: z.instanceof(File, { message: 'File is required' })
+    .refine((file) => file.size <= 50 * 1024 * 1024, 'File size must be less than 50MB')
+    .refine((file) => {
+      const allowedTypes = [
+        'application/pdf',
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'image/gif'
+      ];
+      return allowedTypes.includes(file.type);
+    }, 'File type not supported')
 });
 
 export const QuerySchema = z.object({
-  query: z.string().min(1, 'Query is required').max(5000, 'Query too long'),
-  sessionId: z.string().min(1, 'Session ID is required'),
-  userId: z.string().min(1, 'User ID is required'),
+  query: z.string()
+    .min(1, 'Query cannot be empty')
+    .max(5000, 'Query too long (max 5,000 characters)')
+    .transform(sanitizeInput),
+  sessionId: z.string().uuid('Invalid session ID').optional(),
+  userId: z.string().uuid('Invalid user ID')
 });
 
-export const DocumentUploadSchema = z.object({
-  file: z.instanceof(File, { message: 'File is required' }),
-  userId: z.string().min(1, 'User ID is required'),
-  sessionId: z.string().optional(),
+export const FeedbackSchema = z.object({
+  sessionId: z.string().uuid('Invalid session ID'),
+  messageIndex: z.number().int().min(0).optional(),
+  rating: z.enum(['good', 'bad'], { message: 'Rating must be good or bad' }),
+  comments: z.string()
+    .max(1000, 'Comments too long (max 1,000 characters)')
+    .transform(sanitizeInput)
+    .optional()
 });
 
-export const CreateChatSessionSchema = z.object({
-  userId: z.string().min(1, 'User ID is required'),
-  title: z.string().optional(),
-  initialMessage: z.string().min(1, 'Initial message is required').max(5000, 'Message too long'),
+export const UserProfileSchema = z.object({
+  fullName: z.string()
+    .max(100, 'Name too long (max 100 characters)')
+    .transform(sanitizeInput)
+    .optional(),
+  gender: z.enum(['male', 'female', 'other', ''], { message: 'Invalid gender value' }).optional()
 });
 
-export const UpdateChatSessionSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
+export const PasswordChangeSchema = z.object({
+  currentPassword: z.string().min(8, 'Current password must be at least 8 characters'),
+  newPassword: z.string()
+    .min(8, 'New password must be at least 8 characters')
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain at least one lowercase letter, one uppercase letter, and one number')
 });
 
 // API request validation middleware
@@ -73,45 +110,36 @@ export function validateRequest<T extends z.ZodSchema>(
     try {
       let data: any = {};
 
-      // Validate request body
+      // Validate body
       if (options.body) {
-        const contentType = request.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
+        const contentType = request.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/json')) {
           const body = await request.json();
           data = { ...data, ...body };
-        } else if (contentType?.includes('multipart/form-data')) {
+        } else if (contentType.includes('multipart/form-data')) {
           const formData = await request.formData();
-          const body: any = {};
+          const formDataObj: any = {};
           for (const [key, value] of formData.entries()) {
-            body[key] = value;
+            formDataObj[key] = value;
           }
-          data = { ...data, ...body };
+          data = { ...data, ...formDataObj };
         }
       }
 
       // Validate query parameters
       if (options.query) {
-        const url = new URL(request.url);
-        const queryParams: any = {};
-        url.searchParams.forEach((value, key) => {
-          queryParams[key] = value;
-        });
-        data = { ...data, ...queryParams };
+        const { searchParams } = new URL(request.url);
+        const query: any = {};
+        for (const [key, value] of searchParams.entries()) {
+          query[key] = value;
+        }
+        data = { ...data, ...query };
       }
 
-      // Validate URL parameters (for dynamic routes)
+      // Validate path parameters
       if (options.params) {
-        const url = new URL(request.url);
-        const pathParts = url.pathname.split('/');
-        // Extract dynamic parameters based on route pattern
-        // This is a simplified version - you might need to adjust based on your route structure
-        const params: any = {};
-        if (pathParts.includes('c') && pathParts.length > 2) {
-          params.chatId = pathParts[pathParts.indexOf('c') + 1];
-        }
-        if (pathParts.includes('sessions') && pathParts.length > 2) {
-          params.sessionId = pathParts[pathParts.indexOf('sessions') + 1];
-        }
+        const params = request.nextUrl.pathname.split('/').filter(Boolean);
         data = { ...data, ...params };
       }
 
@@ -163,41 +191,27 @@ export function validateRequest<T extends z.ZodSchema>(
 // Utility functions for common validations
 export const validateMessage = validateRequest(MessageSchema);
 export const validateChatSession = validateRequest(ChatSessionSchema);
-export const validateFeedback = validateRequest(FeedbackSchema);
+export const validateFileUpload = validateRequest(FileUploadSchema);
 export const validateQuery = validateRequest(QuerySchema);
-export const validateDocumentUpload = validateRequest(DocumentUploadSchema);
-export const validateCreateChatSession = validateRequest(CreateChatSessionSchema);
-export const validateUpdateChatSession = validateRequest(UpdateChatSessionSchema);
+export const validateFeedback = validateRequest(FeedbackSchema);
+export const validateUserProfile = validateRequest(UserProfileSchema);
+export const validatePasswordChange = validateRequest(PasswordChangeSchema);
 
-// Sanitization helpers
-export function sanitizeString(input: string): string {
-  return input.trim().replace(/\s+/g, ' ');
+// CORS headers for API routes
+export function addCorsHeaders(response: NextResponse): NextResponse {
+  response.headers.set('Access-Control-Allow-Origin', process.env.NEXTAUTH_URL || 'http://localhost:3000');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
 }
 
-export function sanitizeEmail(email: string): string {
-  return email.toLowerCase().trim();
-}
-
-export function validateFileType(file: File, allowedTypes: string[]): boolean {
-  return allowedTypes.includes(file.type);
-}
-
-export function validateFileSize(file: File, maxSizeMB: number): boolean {
-  return file.size <= maxSizeMB * 1024 * 1024;
-}
-
-// Rate limiting validation
-export const RateLimitSchema = z.object({
-  identifier: z.string().min(1, 'Identifier is required'),
-  limit: z.number().min(1, 'Limit must be at least 1'),
-  windowMs: z.number().min(1000, 'Window must be at least 1 second'),
-});
-
-// Export types for use in other files
-export type Message = z.infer<typeof MessageSchema>;
-export type ChatSession = z.infer<typeof ChatSessionSchema>;
-export type Feedback = z.infer<typeof FeedbackSchema>;
-export type Query = z.infer<typeof QuerySchema>;
-export type DocumentUpload = z.infer<typeof DocumentUploadSchema>;
-export type CreateChatSession = z.infer<typeof CreateChatSessionSchema>;
-export type UpdateChatSession = z.infer<typeof UpdateChatSessionSchema>; 
+// Security headers for API routes
+export function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;");
+  return response;
+} 
