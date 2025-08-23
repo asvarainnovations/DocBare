@@ -230,8 +230,7 @@ export default function ChatMessage({
           )}
         </div>
       ) : (
-        <div className="w-full flex justify-end px-2 md:px-4 lg:px-0 py-2">
-          <div className="max-w-2xl">
+        <div className="w-full max-w-2xl mx-auto flex justify-end px-2 md:px-4 lg:px-0 py-2">
             <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md max-w-full">
               <div className="text-sm md:text-base leading-relaxed break-words font-legal-content whitespace-pre-wrap">
                 {message.content}
@@ -256,7 +255,6 @@ export default function ChatMessage({
                 </div>
               )}
             </div>
-          </div>
         </div>
       )}
     </motion.div>

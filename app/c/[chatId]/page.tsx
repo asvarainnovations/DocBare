@@ -206,6 +206,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [messages, shouldAutoScroll]);
 
+  // Auto-scroll to bottom when AI is streaming (to end of AI response)
+  useEffect(() => {
+    if (isStreaming && shouldAutoScroll && lastMsgRef.current) {
+      lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [isStreaming, shouldAutoScroll]);
+
   // Detect user scroll to disable auto-scroll
   useEffect(() => {
     const chatContainer = chatRef.current;
@@ -222,7 +229,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       }
     };
 
-    chatContainer.addEventListener("scroll", handleScroll);
+    // Use passive listener for better performance
+    chatContainer.addEventListener("scroll", handleScroll, { passive: true });
     return () => chatContainer.removeEventListener("scroll", handleScroll);
   }, []);
 

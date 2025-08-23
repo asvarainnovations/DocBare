@@ -11,6 +11,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
   const [isExpanded, setIsExpanded] = useState(true);
   const [displayContent, setDisplayContent] = useState('');
   const [thinkingTime, setThinkingTime] = useState(0);
+  const [userManuallyToggled, setUserManuallyToggled] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const accumulatedContentRef = useRef<string>('');
@@ -69,6 +70,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       // Format and display the accumulated content
       setDisplayContent(formatThinkingContent(accumulatedContentRef.current));
       setIsExpanded(true); // Keep expanded during thinking
+      setUserManuallyToggled(false); // Reset user interaction flag
     } else if (!isThinking && thinkingContent) {
       // Stop timing when thinking is complete
       if (intervalRef.current) {
@@ -87,13 +89,14 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       accumulatedContentRef.current = thinkingContent;
       setDisplayContent(formatThinkingContent(accumulatedContentRef.current));
       
-      // Don't auto-collapse - let user control the display
-      // setTimeout(() => {
-      //   setIsExpanded(false);
-      //   onComplete?.();
-      // }, 3000);
+      // Auto-close when AI response starts streaming (if user hasn't manually toggled)
+      if (!userManuallyToggled) {
+        setTimeout(() => {
+          setIsExpanded(false);
+        }, 1000); // Small delay to show completion
+      }
     }
-  }, [isThinking, thinkingContent, onComplete]);
+  }, [isThinking, thinkingContent, onComplete, userManuallyToggled]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -109,7 +112,10 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
   return (
     <div className="mb-4 border border-gray-600 rounded-lg bg-gray-800 shadow-sm">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => {
+          setIsExpanded(!isExpanded);
+          setUserManuallyToggled(true); // Mark that user has manually interacted
+        }}
         className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-white hover:bg-gray-700 transition-colors rounded-t-lg"
       >
         <span className="flex items-center">
