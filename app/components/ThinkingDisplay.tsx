@@ -68,6 +68,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       
       // Format and display the accumulated content
       setDisplayContent(formatThinkingContent(accumulatedContentRef.current));
+      setIsExpanded(true); // Keep expanded during thinking
     } else if (!isThinking && thinkingContent) {
       // Stop timing when thinking is complete
       if (intervalRef.current) {
@@ -86,11 +87,11 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
       accumulatedContentRef.current = thinkingContent;
       setDisplayContent(formatThinkingContent(accumulatedContentRef.current));
       
-      // Keep content visible for a few seconds after completion
-      setTimeout(() => {
-        setIsExpanded(false);
-        onComplete?.();
-      }, 3000);
+      // Don't auto-collapse - let user control the display
+      // setTimeout(() => {
+      //   setIsExpanded(false);
+      //   onComplete?.();
+      // }, 3000);
     }
   }, [isThinking, thinkingContent, onComplete]);
 

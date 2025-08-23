@@ -30,6 +30,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     [idx: number]: "good" | "bad" | undefined;
   }>({});
   const [isStreaming, setIsStreaming] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -195,15 +196,42 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     addMessage,
     updateMessage,
     removeMessage,
-    checkAndGenerateAutoResponse
+    checkAndGenerateAutoResponse,
   ]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (lastMsgRef.current) {
+    if (lastMsgRef.current && shouldAutoScroll) {
       lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, shouldAutoScroll]);
+
+  // Detect user scroll to disable auto-scroll
+  useEffect(() => {
+    const chatContainer = chatRef.current;
+    if (!chatContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50; // 50px threshold
+
+      if (!isAtBottom) {
+        setShouldAutoScroll(false);
+      } else {
+        setShouldAutoScroll(true);
+      }
+    };
+
+    chatContainer.addEventListener("scroll", handleScroll);
+    return () => chatContainer.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Re-enable auto-scroll when new messages are added
+  useEffect(() => {
+    if (messages.length > 0) {
+      setShouldAutoScroll(true);
+    }
+  }, [messages.length]);
 
   // Set page loading to false when messages are loaded
   useEffect(() => {
@@ -224,23 +252,23 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const handleSendMessage = useCallback(
     async (message: string) => {
       if (!message.trim()) return;
-      
+
       // Convert uploaded files to document format for the message
-      const documents = uploadedFiles.map(file => ({
-        documentId: file.documentId || '',
+      const documents = uploadedFiles.map((file) => ({
+        documentId: file.documentId || "",
         fileName: file.name,
-        firestoreId: file.firestoreId
+        firestoreId: file.firestoreId,
       }));
-      
+
       // Debug logging
-      console.log('🟦 [chat_ui][DEBUG] Sending message with documents:', {
+      console.log("🟦 [chat_ui][DEBUG] Sending message with documents:", {
         message: message.substring(0, 100),
         documents,
         uploadedFilesCount: uploadedFiles.length,
         sessionMeta: sessionMeta,
-        sessionDocumentContext: sessionMeta?.documentContext
+        sessionDocumentContext: sessionMeta?.documentContext,
       });
-      
+
       setInput("");
       await handleSend(
         message,
@@ -304,15 +332,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     <div className="min-h-screen flex">
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-main-bg pb-32">
-        {/* Chat session metadata */}
-        {/* <ChatHeader 
-          sessionMeta={sessionMeta}
-          loadingMeta={loadingMeta}
-          errorMeta={errorMeta}
-        /> */}
-        
-        {/* Debug test button - remove in production */}
-        
+
         {/* Chat history */}
         <div
           ref={chatRef}
@@ -340,8 +360,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
                   {msg.role === "ASSISTANT" &&
                     thinkingStates[msg.id] &&
-                    (thinkingStates[msg.id].isThinking ||
-                      thinkingStates[msg.id].content) && (
+                    thinkingStates[msg.id].content && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}

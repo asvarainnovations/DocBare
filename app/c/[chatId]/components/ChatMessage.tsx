@@ -230,30 +230,32 @@ export default function ChatMessage({
           )}
         </div>
       ) : (
-        <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2">
-          <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md max-w-full">
-            <div className="text-sm md:text-base leading-relaxed break-words font-legal-content whitespace-pre-wrap">
-              {message.content}
-            </div>
-            
-            {/* Document attachments for user messages */}
-            {message.documents && message.documents.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-blue-500">
-                <div className="flex flex-wrap gap-2">
-                  {message.documents.map((doc, idx) => (
-                    <div key={idx} className="flex items-center bg-blue-700/50 rounded-lg px-3 py-2 gap-2 text-xs border border-blue-600/30">
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white font-bold text-xs">
-                        {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
-                      </span>
-                      <span className="truncate max-w-[120px] text-white font-medium">{doc.fileName}</span>
-                      <span className="text-blue-300 text-xs opacity-75">
-                        {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+        <div className="w-full flex justify-end px-2 md:px-4 lg:px-0 py-2">
+          <div className="max-w-2xl">
+            <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md max-w-full">
+              <div className="text-sm md:text-base leading-relaxed break-words font-legal-content whitespace-pre-wrap">
+                {message.content}
               </div>
-            )}
+              
+              {/* Document attachments for user messages */}
+              {message.documents && message.documents.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-blue-500">
+                  <div className="flex flex-wrap gap-2">
+                    {message.documents.map((doc, idx) => (
+                      <div key={idx} className="flex items-center bg-blue-700/50 rounded-lg px-3 py-2 gap-2 text-xs border border-blue-600/30">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white font-bold text-xs">
+                          {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
+                        </span>
+                        <span className="truncate max-w-[120px] text-white font-medium">{doc.fileName}</span>
+                        <span className="text-blue-300 text-xs opacity-75">
+                          {doc.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
