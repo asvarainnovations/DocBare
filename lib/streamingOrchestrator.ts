@@ -3,6 +3,13 @@ import { USE_MULTI_AGENT, LOG_PREFIXES } from './config';
 import { aiLogger } from './logger';
 import { retrieveFromKB } from './vertexTool';
 import { ContextOptimizer } from './contextOptimizer';
+import { TokenManager } from './tokenManager';
+
+// Dynamic token limit calculation using TokenManager
+function calculateDynamicTokenLimit(query: string, documentContent?: string): number {
+  const hasDocument = !!(documentContent && documentContent.trim().length > 0);
+  return TokenManager.calculateMaxTokens(query, hasDocument);
+}
 
 // Import the callLLMStream function from the query route
 async function callLLMStream(query: string, memoryContext: string = '', documentContent: string = '') {
@@ -146,6 +153,9 @@ async function callLLMStream(query: string, memoryContext: string = '', document
   }
 
   try {
+    // Calculate dynamic max_tokens based on query complexity
+    const maxTokens = calculateDynamicTokenLimit(query, documentContent);
+    
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -165,7 +175,7 @@ async function callLLMStream(query: string, memoryContext: string = '', document
           },
         ],
         stream: true,
-        max_tokens: 4000,
+        max_tokens: maxTokens, // Dynamic token allocation
       }),
     });
 
