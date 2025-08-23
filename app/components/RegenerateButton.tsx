@@ -38,8 +38,12 @@ export default function RegenerateButton({
       }
 
       if (process.env.NODE_ENV === 'development') {
-      console.info('🟩 [regenerate][INFO] Regenerating response for message index:', messageIndex);
-    }
+        console.info('🟩 [regenerate][INFO] Regenerating response for message index:', messageIndex);
+        console.info('🟩 [regenerate][INFO] Previous user message:', {
+          content: previousUserMessage.content.substring(0, 100),
+          messageId: previousUserMessage.id
+        });
+      }
 
       const response = await fetch('/api/query', {
         method: 'POST',
@@ -55,25 +59,49 @@ export default function RegenerateButton({
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let accumulatedContent = '';
+      let aiResponse = '';
+      let thinkingContent = '';
+      let isThinking = false;
       
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         
         const chunk = decoder.decode(value);
-        accumulatedContent += chunk;
-        onRegenerate(accumulatedContent);
+        
+        // Handle character-by-character streaming (same as useChatAI.ts)
+        if (chunk.startsWith('THINKING:')) {
+          const thinkingChunk = chunk.slice(9); // Remove 'THINKING:' prefix
+          thinkingContent += thinkingChunk;
+          isThinking = true;
+          // Don't update the message content during thinking phase
+        } else if (chunk.startsWith('FINAL:')) {
+          // Switch from thinking to final response
+          isThinking = false;
+          // Don't update the message content for FINAL: prefix
+        } else if (chunk.trim() && !chunk.startsWith('THINKING:') && !chunk.startsWith('FINAL:')) {
+          // Regular content - this is the actual AI response
+          aiResponse += chunk;
+          onRegenerate(aiResponse);
+        }
       }
 
-      // Save the regenerated AI message to the database
-      if (accumulatedContent.trim()) {
+      // Save the regenerated AI message to the database (only the final response, not thinking content)
+      if (aiResponse.trim()) {
+        if (process.env.NODE_ENV === 'development') {
+          console.info('🟩 [regenerate][INFO] Final regenerated response:', {
+            responseLength: aiResponse.length,
+            thinkingContentLength: thinkingContent.length,
+            isThinking: isThinking
+          });
+        }
+        
         try {
           await axios.post('/api/chat', {
             sessionId,
             userId,
             role: 'ASSISTANT',
-            content: accumulatedContent.trim()
+            content: aiResponse.trim()
           });
           console.info('🟩 [regenerate][SUCCESS] Regenerated AI message saved to database');
         } catch (saveError) {

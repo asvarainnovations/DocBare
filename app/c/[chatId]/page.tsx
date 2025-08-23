@@ -180,9 +180,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     ) {
       checkAndGenerateAutoResponse(
         messages,
-        addMessage,
-        updateMessage,
-        removeMessage
+        addMessage as any,
+        updateMessage as any,
+        removeMessage as any
       );
     }
   }, [
@@ -244,9 +244,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       setInput("");
       await handleSend(
         message,
-        addMessage,
-        updateMessage,
-        removeMessage,
+        addMessage as any,
+        updateMessage as any,
+        removeMessage as any,
         documents,
         sessionMeta
       );
