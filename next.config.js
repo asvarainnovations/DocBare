@@ -14,12 +14,22 @@ const nextConfig = {
 
   // Webpack configuration for better code splitting
   webpack: (config, { dev, isServer }) => {
+    config.output.globalObject = 'this';
     // Fix module compatibility issues
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
       net: false,
       tls: false,
+      crypto: false,
+      stream: false,
+      url: false,
+      zlib: false,
+      http: false,
+      https: false,
+      assert: false,
+      os: false,
+      path: false,
     };
 
     // Handle problematic modules
@@ -31,7 +41,26 @@ const nextConfig = {
       },
     });
 
+    // Fix 'self is not defined' error
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        'canvas': 'canvas',
+        'jsdom': 'jsdom',
+      });
+    }
 
+    // Provide global variables for server-side
+    if (isServer) {
+      const webpack = require('webpack');
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          'typeof self': '"undefined"',
+          'typeof window': '"undefined"',
+          'typeof document': '"undefined"',
+        })
+      );
+    }
 
     // Optimize bundle splitting (only in production)
     if (!dev) {

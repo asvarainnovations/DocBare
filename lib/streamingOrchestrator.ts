@@ -1,4 +1,3 @@
-import { LangGraphOrchestrator } from './langgraphOrchestrator';
 import { USE_MULTI_AGENT, LOG_PREFIXES } from './config';
 import { aiLogger } from './logger';
 import { retrieveFromKB } from './vertexTool';
@@ -204,82 +203,8 @@ export class StreamingOrchestrator {
    * Main streaming method that routes to either single-agent or multi-agent based on feature flag
    */
   static async streamResponse(context: StreamingContext): Promise<ReadableStream> {
-    if (USE_MULTI_AGENT) {
-      aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using LangGraph multi-agent streaming mode`);
-      return await StreamingOrchestrator.streamMultiAgentResponse(context);
-    } else {
-      aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using single-agent streaming mode`);
-      return await StreamingOrchestrator.streamSingleAgentResponse(context);
-    }
-  }
-
-  /**
-   * Stream response using the LangGraph multi-agent system
-   */
-  private static async streamMultiAgentResponse(context: StreamingContext): Promise<ReadableStream> {
-    const encoder = new TextEncoder();
-    
-    return new ReadableStream({
-      async start(controller) {
-        try {
-          const orchestrator = new LangGraphOrchestrator();
-
-          aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Starting LangGraph multi-agent orchestration`);
-          
-          // Send initial status
-          controller.enqueue(encoder.encode('🎭 Starting multi-agent analysis...\n\n'));
-
-          // Create a streaming version of the multi-agent response
-          const streamResult = await orchestrator.streamResponse(
-            context.sessionId,
-            context.userId,
-            context.query,
-            context.documentContent,
-            context.documentName
-          );
-
-          // Read from the stream and forward to the controller
-          const reader = streamResult.getReader();
-          
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              controller.enqueue(value);
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          
-          controller.close();
-        } catch (error) {
-          aiLogger.error(`${LOG_PREFIXES.ORCHESTRATOR} LangGraph multi-agent streaming failed:`, error);
-          
-          try {
-            controller.enqueue(encoder.encode('❌ Multi-agent processing failed, falling back to standard mode...\n\n'));
-            
-            // Fallback to single agent
-            const fallbackStream = await StreamingOrchestrator.streamSingleAgentResponse(context);
-            const fallbackReader = fallbackStream.getReader();
-            
-            try {
-              while (true) {
-                const { done, value } = await fallbackReader.read();
-                if (done) break;
-                controller.enqueue(value);
-              }
-            } finally {
-              fallbackReader.releaseLock();
-            }
-          } catch (fallbackError) {
-            aiLogger.error(`${LOG_PREFIXES.FALLBACK} Fallback also failed:`, fallbackError);
-            controller.enqueue(encoder.encode('❌ Processing failed. Please try again.'));
-          }
-          
-          controller.close();
-        }
-      }
-    });
+    aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using single-agent streaming mode`);
+    return await StreamingOrchestrator.streamSingleAgentResponse(context);
   }
 
   /**
@@ -427,15 +352,13 @@ export class StreamingOrchestrator {
    * Check if multi-agent mode is enabled
    */
   static isMultiAgentEnabled(): boolean {
-    return USE_MULTI_AGENT;
+    return false; // Multi-agent mode disabled for production
   }
 
   /**
    * Get the current mode description
    */
   static getModeDescription(): string {
-    return USE_MULTI_AGENT 
-      ? 'Multi-Agent Mode (Analysis + Drafting Agents)' 
-      : 'Single-Agent Mode (Standard LLM)';
+    return 'Single-Agent Mode (Standard LLM)';
   }
 } 
