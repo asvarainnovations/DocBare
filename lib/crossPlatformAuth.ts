@@ -90,7 +90,7 @@ export async function getPlatformUserData(userId: string) {
     return {
       platform: 'docbare',
       chatSessions: docbareData.length,
-      totalMessages: docbareData.reduce((sum, session) => sum + session._count.messages, 0),
+      totalMessages: docbareData.reduce((sum: any, session: any) => sum + session._count.messages, 0),
       documents: documentCount,
       lastActivity: docbareData[0]?.updatedAt || null
     };

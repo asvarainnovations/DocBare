@@ -9,6 +9,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ providers: [] });
   }
   const accounts = await prisma.account.findMany({ where: { userId: session.user.id } });
-  const providers = accounts.map(a => a.provider);
+  const providers = accounts.map((a: any) => a.provider);
   return NextResponse.json({ providers });
 } 

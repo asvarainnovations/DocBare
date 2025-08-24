@@ -35,15 +35,15 @@ export async function GET(req: NextRequest) {
     });
 
     // Process users to get aggregated data
-    const processedUsers = users.map(user => {
+    const processedUsers = users.map((user: any) => {
       const feedbacks = user.feedbacks;
-      const totalChats = new Set(feedbacks.map(f => f.sessionId)).size;
-      const goodCount = feedbacks.filter(f => f.rating === 'good').length;
-      const badCount = feedbacks.filter(f => f.rating === 'bad').length;
+      const totalChats = new Set(feedbacks.map((f: any) => f.sessionId)).size;
+      const goodCount = feedbacks.filter((f: any) => f.rating === 'good').length;
+      const badCount = feedbacks.filter((f: any) => f.rating === 'bad').length;
       
       // Get last activity (most recent feedback)
-      const lastActivity = feedbacks.length > 0 
-        ? Math.max(...feedbacks.map(f => f.createdAt.getTime()))
+            const lastActivity = feedbacks.length > 0
+        ? Math.max(...feedbacks.map((f: any) => f.createdAt.getTime()))
         : 0;
 
       return {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Sort by last activity (most recent first)
-    processedUsers.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+    processedUsers.sort((a: any, b: any) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
     return NextResponse.json({
       users: processedUsers

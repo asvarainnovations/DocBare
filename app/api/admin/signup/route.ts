@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Use transaction to ensure data consistency
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Create or update user
       const user = await tx.user.upsert({
         where: { email },

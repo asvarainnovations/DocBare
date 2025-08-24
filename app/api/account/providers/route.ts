@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const providers = accounts.map(account => account.provider);
+    const providers = accounts.map((account: any) => account.provider);
 
     return NextResponse.json({
       success: true,

@@ -30,12 +30,12 @@ export async function GET(
     });
 
     // Process chat sessions to get feedback counts and generate titles
-    const processedChats = chatSessions.map(session => {
-      const goodCount = session.feedbacks.filter(f => f.rating === 'good').length;
-      const badCount = session.feedbacks.filter(f => f.rating === 'bad').length;
+    const processedChats = chatSessions.map((session: any) => {
+      const goodCount = session.feedbacks.filter((f: any) => f.rating === 'good').length;
+      const badCount = session.feedbacks.filter((f: any) => f.rating === 'bad').length;
       
       // Generate title from first user message
-      const firstUserMessage = session.messages.find(m => m.role === 'USER');
+      const firstUserMessage = session.messages.find((m: any) => m.role === 'USER');
       const title = firstUserMessage 
         ? firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
         : `Chat ${session.id.substring(0, 8)}`;

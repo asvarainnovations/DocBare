@@ -1,17 +1,28 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { useSession, signIn, signOut } from "next-auth/react";
 
-import ChatInput from './components/ChatInput';
-import LoadingSkeleton from './components/LoadingSkeleton';
-import { toast } from 'sonner';
+import ChatInput from "./components/ChatInput";
+import LoadingSkeleton from "./components/LoadingSkeleton";
+import { toast } from "sonner";
 
 export default function Home() {
-  const [input, setInput] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; status: 'uploading' | 'processing' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }[]>([]);
+  const [input, setInput] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<
+    {
+      name: string;
+      status: "uploading" | "processing" | "done" | "error";
+      url?: string;
+      error?: string;
+      documentId?: string;
+      prismaId?: string;
+      firestoreId?: string;
+      abortController?: AbortController;
+    }[]
+  >([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docActionMsg, setDocActionMsg] = useState<string | null>(null);
@@ -21,66 +32,90 @@ export default function Home() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   // Check if any documents are still processing
-  const isAnyDocumentProcessing = uploadedFiles.some(file => 
-    file.status === 'uploading' || file.status === 'processing'
+  const isAnyDocumentProcessing = uploadedFiles.some(
+    (file) => file.status === "uploading" || file.status === "processing"
   );
 
-  const handleFileUpload = useCallback((file: { name: string; status: 'uploading' | 'processing' | 'done' | 'error'; url?: string; error?: string; documentId?: string; prismaId?: string; firestoreId?: string; abortController?: AbortController }) => {
-    setUploadedFiles(prev => {
-      const existingIndex = prev.findIndex(f => f.name === file.name);
-      if (existingIndex >= 0) {
-        // Update existing file
-        const updated = [...prev];
-        updated[existingIndex] = file;
-        return updated;
-      } else {
-        // Add new file
-        return [...prev, file];
-      }
-    });
-  }, []);
+  const handleFileUpload = useCallback(
+    (file: {
+      name: string;
+      status: "uploading" | "processing" | "done" | "error";
+      url?: string;
+      error?: string;
+      documentId?: string;
+      prismaId?: string;
+      firestoreId?: string;
+      abortController?: AbortController;
+    }) => {
+      setUploadedFiles((prev) => {
+        const existingIndex = prev.findIndex((f) => f.name === file.name);
+        if (existingIndex >= 0) {
+          // Update existing file
+          const updated = [...prev];
+          updated[existingIndex] = file;
+          return updated;
+        } else {
+          // Add new file
+          return [...prev, file];
+        }
+      });
+    },
+    []
+  );
 
   // Handle file removal with backend cleanup
-  const handleFileRemove = useCallback(async (index: number) => {
-    const fileToRemove = uploadedFiles[index];
-    if (!fileToRemove) return;
+  const handleFileRemove = useCallback(
+    async (index: number) => {
+      const fileToRemove = uploadedFiles[index];
+      if (!fileToRemove) return;
 
-    // Remove from UI immediately
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+      // Remove from UI immediately
+      setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
 
-    try {
-      // Cancel ongoing upload/processing if it exists
-      if (fileToRemove.abortController) {
-        fileToRemove.abortController.abort();
-      }
+      try {
+        // Cancel ongoing upload/processing if it exists
+        if (fileToRemove.abortController) {
+          fileToRemove.abortController.abort();
+        }
 
-      // Delete from backend if the file was successfully uploaded
-      if (fileToRemove.status === 'done' && fileToRemove.prismaId && session?.user?.id) {
-        
-        await axios.delete('/api/documents/delete', {
-          params: {
-            userId: session.user.id,
-            documentId: fileToRemove.prismaId,
-          },
-        });
-        
-        console.info('🟦 [file_removal][SUCCESS] File deleted from backend:', fileToRemove.name);
-        toast.success(`File "${fileToRemove.name}" removed successfully`);
-      } else if (fileToRemove.status === 'uploading') {
-        toast.info(`Upload cancelled for "${fileToRemove.name}"`);
-      } else {
-        toast.info(`File "${fileToRemove.name}" removed from list`);
+        // Delete from backend if the file was successfully uploaded
+        if (
+          fileToRemove.status === "done" &&
+          fileToRemove.prismaId &&
+          session?.user?.id
+        ) {
+          await axios.delete("/api/documents/delete", {
+            params: {
+              userId: session.user.id,
+              documentId: fileToRemove.prismaId,
+            },
+          });
+
+          console.info(
+            "🟦 [file_removal][SUCCESS] File deleted from backend:",
+            fileToRemove.name
+          );
+          toast.success(`File "${fileToRemove.name}" removed successfully`);
+        } else if (fileToRemove.status === "uploading") {
+          toast.info(`Upload cancelled for "${fileToRemove.name}"`);
+        } else {
+          toast.info(`File "${fileToRemove.name}" removed from list`);
+        }
+      } catch (error: any) {
+        console.error(
+          "🟥 [file_removal][ERROR] Failed to delete file from backend:",
+          error
+        );
+
+        // Still show success since file is removed from UI
+        // Backend cleanup can be handled later if needed
+        if (fileToRemove.status === "done") {
+          toast.warning(`File removed from list but may need manual cleanup`);
+        }
       }
-    } catch (error: any) {
-      console.error('🟥 [file_removal][ERROR] Failed to delete file from backend:', error);
-      
-      // Still show success since file is removed from UI
-      // Backend cleanup can be handled later if needed
-      if (fileToRemove.status === 'done') {
-        toast.warning(`File removed from list but may need manual cleanup`);
-      }
-    }
-  }, [uploadedFiles, session?.user?.id]);
+    },
+    [uploadedFiles, session?.user?.id]
+  );
 
   // Fetch documents
   const fetchDocuments = useCallback(async () => {
@@ -92,7 +127,7 @@ export default function Home() {
       setDocuments(data.documents || []);
     } catch (err) {
       setDocuments([]);
-      toast.error('Failed to load documents');
+      toast.error("Failed to load documents");
     } finally {
       setLoadingDocs(false);
     }
@@ -104,26 +139,26 @@ export default function Home() {
 
   // After upload, refresh document list
   useEffect(() => {
-    if (uploadedFiles.some(f => f.status === 'done')) {
+    if (uploadedFiles.some((f) => f.status === "done")) {
       fetchDocuments();
     }
     // eslint-disable-next-line
   }, [uploadedFiles]);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace('/login');
+    if (status === "unauthenticated") {
+      router.replace("/login");
     }
   }, [status, router]);
 
   // Preload chat page route for snappier navigation
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      router.prefetch && router.prefetch('/c/placeholder');
+    if (typeof window !== "undefined") {
+      router.prefetch && router.prefetch("/c/placeholder");
     }
   }, [router]);
 
-  if (status !== 'authenticated') {
+  if (status !== "authenticated") {
     return null;
   }
 
@@ -134,51 +169,58 @@ export default function Home() {
     }
     setLoadingFirstPrompt(true);
     setSendError(null); // Clear previous errors
-    
+
     // Set a flag in localStorage to indicate we're transitioning
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('docbare_creating_chat', 'true');
+    if (typeof window !== "undefined") {
+      localStorage.setItem("docbare_creating_chat", "true");
     }
-    
+
     try {
       // Prepare document context for the chat session
       const documentContext = uploadedFiles
-        .filter(file => file.status === 'done' && file.prismaId)
-        .map(file => ({
+        .filter((file) => file.status === "done" && file.prismaId)
+        .map((file) => ({
           documentId: file.prismaId,
           fileName: file.name,
-          firestoreId: file.firestoreId
+          firestoreId: file.firestoreId,
         }));
 
       // Create the chat session with document context
-      const sessionRes = await axios.post('/api/create_chat_session', { 
-        firstMessage: msg, 
+      const sessionRes = await axios.post("/api/create_chat_session", {
+        firstMessage: msg,
         userId: session.user.id,
-        documentContext // Pass document information
+        documentContext, // Pass document information
       });
       const { chatId } = sessionRes.data;
-      
+
       // Navigate to the chat page immediately after creating the session
       // The AI response will be generated on the chat page with proper streaming
       router.push(`/c/${chatId}`);
-      
+
       // Keep loading state active - it will be cleared when the new page loads
       // This ensures the "Creating your chat..." animation stays visible during navigation
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create chat session';
+      const errorMessage =
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create chat session";
       setSendError(errorMessage);
       toast.error(errorMessage);
       setLoadingFirstPrompt(false); // Only clear loading on error
-      
+
       // Clear the transition flag on error
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('docbare_creating_chat');
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("docbare_creating_chat");
       }
     }
   }
 
   // Show loading skeleton when transitioning
-  if (loadingFirstPrompt || (typeof window !== 'undefined' && localStorage.getItem('docbare_creating_chat') === 'true')) {
+  if (
+    loadingFirstPrompt ||
+    (typeof window !== "undefined" &&
+      localStorage.getItem("docbare_creating_chat") === "true")
+  ) {
     return <LoadingSkeleton message="Creating your chat..." />;
   }
 
@@ -187,21 +229,36 @@ export default function Home() {
       {/* Desktop Layout - Centered Content */}
       <div className="hidden lg:flex flex-1 flex-col justify-center items-center px-4 sm:px-6 lg:px-8 -mt-24">
         <div className="flex flex-col items-center w-full max-w-4xl">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-medium text-white mb-4 sm:mb-6 text-center">What&apos;s on your mind today?</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-medium text-white mb-4 sm:mb-6 text-center">
+            What&apos;s on your mind today?
+          </h1>
           {/* Attachment pills/cards UI */}
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4 w-full max-w-2xl justify-start">
               {uploadedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 gap-1.5 sm:gap-2 shadow border border-gray-700">
+                <div
+                  key={idx}
+                  className="flex items-center bg-[#23242b] rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 gap-1.5 sm:gap-2 shadow border border-gray-700"
+                >
                   {/* File icon (PDF, etc.) */}
                   <span className="inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-pink-600 text-white font-bold text-xs">
-                    {file.name.split('.').pop()?.toUpperCase() || 'DOC'}
+                    {file.name.split(".").pop()?.toUpperCase() || "DOC"}
                   </span>
-                  <span className="truncate max-w-[80px] sm:max-w-[120px] text-xs text-white">{file.name}</span>
-                  {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
-                  {file.status === 'processing' && <span className="text-yellow-400 text-xs">Processing…</span>}
-                  {file.status === 'done' && <span className="text-green-400 text-xs">Ready</span>}
-                  {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
+                  <span className="truncate max-w-[80px] sm:max-w-[120px] text-xs text-white">
+                    {file.name}
+                  </span>
+                  {file.status === "uploading" && (
+                    <span className="text-blue-400 text-xs">Uploading…</span>
+                  )}
+                  {file.status === "processing" && (
+                    <span className="text-yellow-400 text-xs">Processing…</span>
+                  )}
+                  {file.status === "done" && (
+                    <span className="text-green-400 text-xs">Ready</span>
+                  )}
+                  {file.status === "error" && (
+                    <span className="text-red-400 text-xs">Error</span>
+                  )}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
                     onClick={() => handleFileRemove(idx)}
@@ -215,10 +272,10 @@ export default function Home() {
             </div>
           )}
           <div className="mx-auto w-full max-w-2xl">
-            <ChatInput 
+            <ChatInput
               variant="home"
-              onSend={handleFirstPrompt} 
-              loading={loadingFirstPrompt} 
+              onSend={handleFirstPrompt}
+              loading={loadingFirstPrompt}
               disabled={isAnyDocumentProcessing}
               error={sendError}
               showAttachments={true}
@@ -236,23 +293,38 @@ export default function Home() {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col justify-center items-center px-4">
           <div className="text-center">
-            <h1 className="text-2xl font-medium text-white mb-2">What&apos;s on your mind today?</h1>
+            <h1 className="text-2xl font-medium text-white mb-2">
+              What&apos;s on your mind today?
+            </h1>
             <p className="text-gray-400 text-sm">Ready when you are.</p>
           </div>
-          
+
           {/* Attachment pills/cards UI for mobile */}
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-6 w-full max-w-sm justify-center">
               {uploadedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center bg-[#23242b] rounded-lg px-2 py-1.5 gap-1.5 shadow border border-gray-700">
+                <div
+                  key={idx}
+                  className="flex items-center bg-[#23242b] rounded-lg px-2 py-1.5 gap-1.5 shadow border border-gray-700"
+                >
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pink-600 text-white font-bold text-xs">
-                    {file.name.split('.').pop()?.toUpperCase() || 'DOC'}
+                    {file.name.split(".").pop()?.toUpperCase() || "DOC"}
                   </span>
-                  <span className="truncate max-w-[60px] text-xs text-white">{file.name}</span>
-                  {file.status === 'uploading' && <span className="text-blue-400 text-xs">Uploading…</span>}
-                  {file.status === 'processing' && <span className="text-yellow-400 text-xs">Processing…</span>}
-                  {file.status === 'done' && <span className="text-green-400 text-xs">Ready</span>}
-                  {file.status === 'error' && <span className="text-red-400 text-xs">Error</span>}
+                  <span className="truncate max-w-[60px] text-xs text-white">
+                    {file.name}
+                  </span>
+                  {file.status === "uploading" && (
+                    <span className="text-blue-400 text-xs">Uploading…</span>
+                  )}
+                  {file.status === "processing" && (
+                    <span className="text-yellow-400 text-xs">Processing…</span>
+                  )}
+                  {file.status === "done" && (
+                    <span className="text-green-400 text-xs">Ready</span>
+                  )}
+                  {file.status === "error" && (
+                    <span className="text-red-400 text-xs">Error</span>
+                  )}
                   <button
                     className="ml-1 text-gray-400 hover:text-red-400 text-xs"
                     onClick={() => handleFileRemove(idx)}
@@ -269,10 +341,10 @@ export default function Home() {
 
         {/* Bottom ChatInput - Fixed at bottom */}
         <div className="p-4 border-t border-gray-700 bg-main-bg">
-          <ChatInput 
+          <ChatInput
             variant="chat"
-            onSend={handleFirstPrompt} 
-            loading={loadingFirstPrompt} 
+            onSend={handleFirstPrompt}
+            loading={loadingFirstPrompt}
             disabled={isAnyDocumentProcessing}
             error={sendError}
             showAttachments={true}
@@ -283,8 +355,6 @@ export default function Home() {
           />
         </div>
       </div>
-
-
     </div>
   );
 }

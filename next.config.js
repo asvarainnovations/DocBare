@@ -10,83 +10,86 @@ const nextConfig = {
       'react-markdown',
       'react-syntax-highlighter'
     ],
+    serverComponentsExternalPackages: ['@google-cloud/firestore', '@google-cloud/storage', '@google-cloud/documentai', '@google-cloud/aiplatform', 'google-auth-library'],
   },
 
   // Webpack configuration for better code splitting
-  webpack: (config, { dev, isServer }) => {
-    config.output.globalObject = 'this';
-    // Fix module compatibility issues
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      net: false,
-      tls: false,
-      crypto: false,
-      stream: false,
-      url: false,
-      zlib: false,
-      http: false,
-      https: false,
-      assert: false,
-      os: false,
-      path: false,
-    };
-
-    // Handle problematic modules
-    config.module.rules.push({
-      test: /\.m?js$/,
-      type: 'javascript/auto',
-      resolve: {
-        fullySpecified: false,
-      },
-    });
-
+  webpack: (config, { isServer }) => {
     // Fix 'self is not defined' error
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
         'canvas': 'canvas',
         'jsdom': 'jsdom',
+        'abort-controller': 'abort-controller',
+        '@google-cloud/firestore': 'commonjs @google-cloud/firestore',
+        '@google-cloud/storage': 'commonjs @google-cloud/storage',
+        '@google-cloud/documentai': 'commonjs @google-cloud/documentai',
+        '@google-cloud/aiplatform': 'commonjs @google-cloud/aiplatform',
+        'google-auth-library': 'commonjs google-auth-library',
       });
     }
 
-    // Provide global variables for server-side
-    if (isServer) {
-      const webpack = require('webpack');
-      config.plugins.push(
-        new webpack.DefinePlugin({
-          'typeof self': '"undefined"',
-          'typeof window': '"undefined"',
-          'typeof document': '"undefined"',
-        })
-      );
-    }
+    // Add fallbacks for missing modules
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      'dlv': false,
+      'has-flag': false,
+    };
+
+    // Add alias for dlv to provide a working implementation
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'dlv': require.resolve('./lib/dlv-polyfill.js'),
+    };
+
+    // Define global variables for server-side compilation
+    const webpack = require('webpack');
+    config.plugins.push(
+      new webpack.DefinePlugin({
+        'global': 'globalThis',
+        'self': 'globalThis',
+        'window': 'globalThis',
+        'document': 'undefined',
+        'navigator': 'undefined',
+        'location': 'undefined',
+      })
+    );
+
+    // Provide global variables
+    config.plugins.push(
+      new webpack.ProvidePlugin({
+        'global': 'global',
+        'self': 'globalThis',
+        'window': 'globalThis',
+        'document': 'undefined',
+        'navigator': 'undefined',
+        'location': 'undefined',
+      })
+    );
 
     // Optimize bundle splitting (only in production)
-    if (!dev) {
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all',
-          },
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            enforce: true,
-          },
+    config.optimization.splitChunks = {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
         },
-      };
-    }
+        common: {
+          name: 'common',
+          minChunks: 2,
+          chunks: 'all',
+          enforce: true,
+        },
+      },
+    };
 
     // Dynamic imports for heavy components
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
-        'react-syntax-highlighter': 'react-syntax-highlighter/dist/esm',
       };
     }
 

@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     const hasPrevPage = page > 1;
 
     return NextResponse.json({
-      feedbacks: feedbacks.map(feedback => ({
+      feedbacks: feedbacks.map((feedback: any) => ({
         id: feedback.id,
         sessionId: feedback.sessionId,
         userId: feedback.userId,

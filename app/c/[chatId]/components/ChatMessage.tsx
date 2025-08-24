@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import dynamic from 'next/dynamic';
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import AnimatedCopyButton from "@/app/components/AnimatedCopyButton";
+
+const SyntaxHighlighter = dynamic(() => import('react-syntax-highlighter').then(mod => mod.Prism), { ssr: false });
 import RegenerateButton from "@/app/components/RegenerateButton";
 import FeedbackSection from "@/app/components/FeedbackSection";
 import AIThinkingAnimation from "@/app/components/AIThinkingAnimation";

@@ -340,7 +340,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     <div className="min-h-screen flex">
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-screen transition-all ml-0 bg-main-bg pb-32">
-
         {/* Chat history */}
         <div
           ref={chatRef}

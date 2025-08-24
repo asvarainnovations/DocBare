@@ -28,15 +28,15 @@ export async function GET(
     }
 
     // Generate title from first user message
-    const firstUserMessage = chatSession.messages.find(m => m.role === 'USER');
+    const firstUserMessage = chatSession.messages.find((m: any) => m.role === 'USER');
     const title = firstUserMessage 
       ? firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
       : `Chat ${chatSession.id.substring(0, 8)}`;
 
     // Process messages to include feedback information
-    const processedMessages = chatSession.messages.map(message => {
+    const processedMessages = chatSession.messages.map((message: any) => {
       // Find feedback for this message (by messageIndex or by matching content)
-      const feedback = chatSession.feedbacks.find(f => 
+      const feedback = chatSession.feedbacks.find((f: any) => 
         f.messageIndex !== null && 
         chatSession.messages.indexOf(message) === f.messageIndex
       );

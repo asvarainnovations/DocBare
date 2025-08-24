@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-      invites: invites.map(invite => ({
+      invites: invites.map((invite: any) => ({
         code: invite.code,
         email: invite.email,
         createdAt: invite.createdAt.toISOString(),

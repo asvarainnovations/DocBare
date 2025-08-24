@@ -27,9 +27,9 @@ export async function GET(
     }
 
     const feedbacks = user.feedbacks;
-    const totalChats = new Set(feedbacks.map(f => f.sessionId)).size;
-    const goodCount = feedbacks.filter(f => f.rating === 'good').length;
-    const badCount = feedbacks.filter(f => f.rating === 'bad').length;
+    const totalChats = new Set(feedbacks.map((f: any) => f.sessionId)).size;
+    const goodCount = feedbacks.filter((f: any) => f.rating === 'good').length;
+    const badCount = feedbacks.filter((f: any) => f.rating === 'bad').length;
 
     return NextResponse.json({
       user: {

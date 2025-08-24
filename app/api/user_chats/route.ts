@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
         }
       });
 
-      const formattedChats = prismaChats.map(chat => ({
+      const formattedChats = prismaChats.map((chat: any) => ({
         id: chat.id,
         sessionName: `Chat ${chat.id.slice(0, 8)}`, // Fallback name
         createdAt: chat.createdAt,
