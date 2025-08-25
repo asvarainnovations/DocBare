@@ -75,7 +75,7 @@ export const QuerySchema = z.object({
 export const FeedbackSchema = z.object({
   sessionId: z.string().uuid('Invalid session ID'),
   messageIndex: z.number().int().min(0).optional(),
-  rating: z.enum(['good', 'bad'], { message: 'Rating must be good or bad' }),
+  rating: z.enum(['good', 'bad']),
   comments: z.string()
     .max(1000, 'Comments too long (max 1,000 characters)')
     .transform(sanitizeInput)
@@ -87,7 +87,7 @@ export const UserProfileSchema = z.object({
     .max(100, 'Name too long (max 100 characters)')
     .transform(sanitizeInput)
     .optional(),
-  gender: z.enum(['male', 'female', 'other', ''], { message: 'Invalid gender value' }).optional()
+  gender: z.enum(['male', 'female', 'other', '']).optional()
 });
 
 export const PasswordChangeSchema = z.object({

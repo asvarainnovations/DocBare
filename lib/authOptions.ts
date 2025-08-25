@@ -10,11 +10,18 @@ import { PrismaClient } from '@prisma/client';
 function PatchedPrismaAdapter(prisma: PrismaClient) {
   const adapter = PrismaAdapter(prisma);
   const originalCreateUser = adapter.createUser;
+  if (!originalCreateUser) {
+    throw new Error('Prisma adapter createUser method not found');
+  }
   adapter.createUser = async (data: any) => {
     if (!data.passwordHash) {
       data.passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
     }
-    return originalCreateUser(data);
+    const result = await originalCreateUser(data);
+    if (!result) {
+      throw new Error('Failed to create user');
+    }
+    return result;
   };
   return adapter;
 }

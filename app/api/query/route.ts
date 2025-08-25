@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use the streaming orchestrator to handle both single-agent and multi-agent modes
-    let stream;
+    let stream: any;
     let finalAnswer = "";
 
     try {

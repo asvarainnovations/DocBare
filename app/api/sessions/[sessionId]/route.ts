@@ -23,7 +23,7 @@ export async function GET(
       }));
 
       // Get session metadata to add document context to old messages
-      let sessionDocumentContext = [];
+      let sessionDocumentContext: any[] = [];
       try {
         const sessionDoc = await firestore.collection('chat_sessions').doc(params.sessionId).get();
         if (sessionDoc.exists) {

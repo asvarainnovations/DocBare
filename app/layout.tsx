@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 // import { Inter, Source_Sans_3, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import "@/lib/polyfills"; // Import polyfills for server-side compatibility
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import RootLayoutClient from "./components/RootLayoutClient";
