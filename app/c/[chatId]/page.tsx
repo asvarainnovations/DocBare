@@ -401,7 +401,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     isThinking={thinkingStates[msg.id]?.isThinking || false}
                     thinkingContent={thinkingStates[msg.id]?.content || ""}
                   />
-                </div>
+                    </div>
               ))}
             </AnimatePresence>
           )}
@@ -451,8 +451,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   </button>
                 </div>
               ))}
-            </div>
-          )}
+          </div>
+        )}
           <ChatInput
             variant="chat"
             onSend={handleSendMessage}
@@ -480,4 +480,4 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       />
     </div>
   );
-}
+} 

@@ -215,12 +215,21 @@ export default function Home() {
     }
   }
 
-  // Show loading skeleton when transitioning
-  if (
-    loadingFirstPrompt ||
-    (typeof window !== "undefined" &&
-      localStorage.getItem("docbare_creating_chat") === "true")
-  ) {
+    // Show loading skeleton when transitioning
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+   
+  useEffect(() => {
+    setIsClient(true);
+    if (typeof window !== "undefined") {
+      // Clear the flag when returning to home page
+      localStorage.removeItem("docbare_creating_chat");
+      setIsCreatingChat(false);
+    }
+  }, []);
+
+  // Only show loading skeleton if we're on client and actually loading
+  if (isClient && (loadingFirstPrompt || isCreatingChat)) {
     return <LoadingSkeleton message="Creating your chat..." />;
   }
 

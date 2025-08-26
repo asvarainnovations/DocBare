@@ -1,12 +1,48 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 
 interface LoadingSkeletonProps {
   message?: string;
 }
 
 export default function LoadingSkeleton({ message = "Loading chat..." }: LoadingSkeletonProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Prevent hydration mismatch by not rendering animations on server
+  if (!isClient) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-main-bg px-4">
+        <div className="flex flex-col items-center space-y-4 sm:space-y-6">
+          {/* Static dots for SSR */}
+          <div className="flex space-x-2">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2 h-2 sm:w-3 sm:h-3 bg-accent rounded-full opacity-50"
+              />
+            ))}
+          </div>
+          
+          {/* Loading message */}
+          <div className="text-white text-base sm:text-lg font-medium text-center">
+            {message}
+          </div>
+          
+          {/* Progress bar */}
+          <div className="w-48 sm:w-64 h-1 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full bg-accent rounded-full w-0" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-main-bg px-4">
       <div className="flex flex-col items-center space-y-4 sm:space-y-6">

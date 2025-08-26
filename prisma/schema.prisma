@@ -31,6 +31,13 @@ model User {
   chatSessions  ChatSession[]
   feedbacks     Feedback[]
   admin         Admin?
+  
+  // PleadSmart-specific relations
+  pleadsmartChatSessions    PleadSmartChatSession[]
+  pleadsmartDocuments       PleadSmartDocument[]
+  pleadsmartRagQueryLogs    PleadSmartRagQueryLog[]
+  pleadsmartAgentMemories   PleadSmartAgentMemory[]
+  pleadsmartFeedbacks       PleadSmartFeedback[]
 }
 
 model Admin {
@@ -351,6 +358,110 @@ model Feedback {
   // Relations for data integrity and admin access
   user         User     @relation(fields: [userId], references: [id])
   session      ChatSession @relation(fields: [sessionId], references: [id])
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@unique([userId, sessionId, messageIndex]) // Prevent duplicate feedback for same message
+}
+
+// ========================================
+// PLEADSMART-SPECIFIC MODELS
+// ========================================
+
+model PleadSmartChatSession {
+  id        String                    @id @default(uuid())
+  userId    String
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  messages  PleadSmartChatMessage[]
+  feedbacks PleadSmartFeedback[]
+  user      User                      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model PleadSmartChatMessage {
+  id              String                @id @default(uuid())
+  sessionId       String
+  role            MessageRole
+  content         String                @db.Text
+  reasoningContent String?              @db.Text // Store AI reasoning/thinking content
+  documents       String?               @db.Text // Store document information as JSON
+  createdAt       DateTime              @default(now())
+  session         PleadSmartChatSession @relation(fields: [sessionId], references: [id])
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model PleadSmartDocument {
+  id           String   @id @default(uuid())
+  userId       String
+  fileName     String
+  path         String
+  originalName String
+  mimeType     String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model PleadSmartRagQueryLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  query        String
+  answer       String
+  sources      Json
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model PleadSmartDocumentChunkMetadata {
+  id           String   @id @default(uuid())
+  chunkId      String   @unique
+  title        String?
+  fileName     String?
+  createdAt    DateTime @default(now())
+  
+  @@index([chunkId])
+}
+
+model PleadSmartAgentMemory {
+  id           String   @id @default(uuid())
+  sessionId    String
+  userId       String
+  type         String   // 'conversation' | 'reasoning' | 'decision' | 'context' | 'insight'
+  content      String   @db.Text
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  accessedAt   DateTime @default(now())
+  accessCount  Int      @default(1)
+  user         User     @relation(fields: [userId], references: [id])
+  
+  @@index([sessionId, userId])
+  @@index([type])
+  @@index([accessedAt])
+}
+
+model PleadSmartFeedback {
+  id           String                @id @default(uuid())
+  userId       String                // The user who submitted the feedback
+  sessionId    String
+  messageIndex Int?
+  rating       String                // 'good' | 'bad'
+  comments     String?
+  createdAt    DateTime              @default(now())
+  
+  // Relations for data integrity and admin access
+  user         User                  @relation(fields: [userId], references: [id])
+  session      PleadSmartChatSession @relation(fields: [sessionId], references: [id])
   
   @@index([userId])
   @@index([sessionId])
