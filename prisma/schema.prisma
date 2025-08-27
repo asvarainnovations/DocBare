@@ -23,6 +23,7 @@ model User {
   emailVerified DateTime?
   image         String?
   gender        String?
+  multiUser     Boolean       @default(false)  // Multi-user permission
   accounts      Account[]
   apiKeys       ApiKey[]
   auditLogs     AuditLog[]
@@ -31,6 +32,11 @@ model User {
   chatSessions  ChatSession[]
   feedbacks     Feedback[]
   admin         Admin?
+  
+  // Multi-user management relations
+  managedUsers  User[]        @relation("UserManagement")
+  managedBy     User?         @relation("UserManagement", fields: [managedById], references: [id])
+  managedById   String?
   
   // PleadSmart-specific relations
   pleadsmartChatSessions    PleadSmartChatSession[]
@@ -165,6 +171,7 @@ model VerificationToken {
 enum UserRole {
   USER
   ADMIN
+  ENTERPRISE
 }
 
 enum BillingInterval {

@@ -264,13 +264,21 @@ export default function ChatInput({
               if (confidence >= 80) {
                 toast.success("Document processed successfully");
               } else if (confidence >= 50) {
-                toast.success(`Document processed with medium confidence (${confidence}/100)`, {
-                  description: "Consider re-uploading in DOCX format for better results"
-                });
+                if (process.env.NODE_ENV === "development") {
+                  toast.success(`Document processed with medium confidence (${confidence}/100)`, {
+                    description: "Consider re-uploading in DOCX format for better results"
+                  });
+                } else {
+                  toast.success("Document processed successfully");
+                }
               } else {
-                toast.warning(`Document processed with low confidence (${confidence}/100)`, {
-                  description: suggestions.slice(0, 2).join('. ')
-                });
+                if (process.env.NODE_ENV === "development") {
+                  toast.warning(`Document processed with low confidence (${confidence}/100)`, {
+                    description: suggestions.slice(0, 2).join('. ')
+                  });
+                } else {
+                  toast.success("Document processed successfully");
+                }
               }
             } else {
               toast.success("Document processing completed");
