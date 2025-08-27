@@ -1,7 +1,3 @@
-# Multi-stage build for production optimization
-# Based on Asvara Innovations site best practices
-# Optimized for Next.js with Prisma and Cloud Run deployment
-
 # Install dependencies only when needed
 FROM node:20-slim AS deps
 WORKDIR /app

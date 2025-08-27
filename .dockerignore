@@ -13,11 +13,8 @@ build
 dist
 
 # Environment files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+!.env.production
 
 # Logs
 logs
@@ -108,7 +105,6 @@ Dockerfile
 docker-compose.yml
 
 # Documentation
-README.md
 *.md
 Docs/
 
@@ -125,11 +121,6 @@ playwright-report/
 scripts/
 commit.ps1
 
-# Secrets
-secrets/
-
-# Knowledge base data
-kb_data/
 
 # Firebase
 .firebaserc
@@ -137,8 +128,14 @@ firebase.json
 firestore.rules
 firestore.indexes.json
 
-# Prisma
-prisma/
+# Prisma - EXCLUDE but then INCLUDE specific files
+
+!prisma/
+!prisma/schema.prisma
+
+# Components - EXCLUDE but then INCLUDE
+!components/
+!components/**
 
 # TypeScript
 *.tsbuildinfo
