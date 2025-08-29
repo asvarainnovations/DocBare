@@ -6,6 +6,9 @@ import { authOptions } from "@/lib/authOptions";
 import RootLayoutClient from "./components/RootLayoutClient";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Providers from "./components/Providers";
+// import { Inter } from "next/font/google";
+// import { Source_Sans_3 } from "next/font/google";
+// import { JetBrains_Mono } from "next/font/google";
 
 // const inter = Inter({ 
 //   subsets: ["latin"],
@@ -38,7 +41,7 @@ export default async function RootLayout({
   const session = await getServerSession(authOptions);
 
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className="font-legal">
         <ErrorBoundary>
           <Providers session={session}>
