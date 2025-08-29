@@ -446,8 +446,8 @@ export async function POST(request: NextRequest) {
 
       // Generate embeddings for each chunk
       const embeddings = [];
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkText = chunks[i];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkText = chunks[i];
         console.log(
           `🟦 [ingest][INFO] Generating embedding for chunk ${i + 1}/${
             chunks.length
@@ -491,8 +491,8 @@ export async function POST(request: NextRequest) {
         await firestore.collection("document_chunks").add({
           userId,
           documentId: fileName,
-          chunkIndex: i,
-          text: chunkText,
+      chunkIndex: i,
+      text: chunkText,
           embedding,
           metadata: {
             fileName: file.name,
@@ -624,8 +624,8 @@ export async function POST(request: NextRequest) {
           try {
             embeddingResp = await openai.embeddings.create({
               model: "text-embedding-3-small",
-              input: chunkText,
-            });
+      input: chunkText,
+    });
             break; // Success, exit retry loop
           } catch (embeddingError) {
             retryCount++;

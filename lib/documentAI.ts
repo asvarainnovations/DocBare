@@ -335,29 +335,37 @@ export class DocumentAIService {
     fileName: string,
     options: ProcessingOptions
   ): keyof typeof PROCESSOR_TYPES {
-    // Use OCR processor as the default for better text extraction
-    console.log(
-      `🟦 [DocumentAI][INFO] Using OCR processor for optimal text extraction`
-    );
-    return "OCR";
-
-    // Alternative logic (commented out - OCR works better for most documents):
-    /*
     const fileExtension = fileName.toLowerCase().split(".").pop();
+    
+    console.log(`🟦 [DocumentAI][INFO] File extension: ${fileExtension}`);
+
+    // For DOCX, DOC, and other native document formats, use LAYOUT_PARSER
+    if (["docx", "doc", "odt", "rtf"].includes(fileExtension || "")) {
+      console.log(`🟦 [DocumentAI][INFO] Using LAYOUT_PARSER for native document format`);
+      return "LAYOUT_PARSER";
+    }
+
+    // For images (PNG, JPG, etc.), use OCR processor
+    if (["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp"].includes(fileExtension || "")) {
+      console.log(`🟦 [DocumentAI][INFO] Using OCR processor for image format`);
+      return "OCR";
+    }
 
     // If OCR is explicitly enabled, use OCR processor
     if (options.enableOCR) {
+      console.log(`🟦 [DocumentAI][INFO] Using OCR processor (explicitly enabled)`);
       return "OCR";
     }
 
     // For forms, use form parser
     if (this.isFormDocument(fileName)) {
+      console.log(`🟦 [DocumentAI][INFO] Using FORM_PARSER for form document`);
       return "FORM_PARSER";
     }
 
-    // For all other documents, use layout parser (general purpose)
+    // For PDFs and all other documents, use layout parser (general purpose)
+    console.log(`🟦 [DocumentAI][INFO] Using LAYOUT_PARSER for general document`);
     return "LAYOUT_PARSER";
-    */
   }
 
   /**
@@ -415,6 +423,14 @@ export class DocumentAIService {
     switch (extension) {
       case "pdf":
         return "application/pdf";
+      case "docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      case "doc":
+        return "application/msword";
+      case "odt":
+        return "application/vnd.oasis.opendocument.text";
+      case "rtf":
+        return "application/rtf";
       case "png":
         return "image/png";
       case "jpg":
