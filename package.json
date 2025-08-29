@@ -26,6 +26,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "@types/uuid": "^10.0.0",
+    "adm-zip": "^0.5.16",
     "axios": "1.6.2",
     "bcryptjs": "2.4.3",
     "class-variance-authority": "^0.7.1",

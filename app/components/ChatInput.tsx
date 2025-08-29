@@ -170,6 +170,22 @@ export default function ChatInput({
 
       const file = acceptedFiles[0];
 
+      // Check if file type is supported (only PDFs and images)
+      const supportedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg', 
+        'image/png',
+        'image/gif',
+        'image/bmp',
+        'image/webp'
+      ];
+      
+      if (!supportedTypes.includes(file.type)) {
+        toast.error("Currently only PDFs and Images are allowed");
+        return;
+      }
+
       // Create AbortController for this upload
       const abortController = new AbortController();
 
@@ -266,7 +282,7 @@ export default function ChatInput({
               } else if (confidence >= 50) {
                 if (process.env.NODE_ENV === "development") {
                   toast.success(`Document processed with medium confidence (${confidence}/100)`, {
-                    description: "Consider re-uploading in DOCX format for better results"
+                    description: "Consider re-uploading for better results"
                   });
                 } else {
                   toast.success("Document processed successfully");
@@ -457,7 +473,7 @@ export default function ChatInput({
                   tabIndex={-1}
                   onClick={handleFileButtonClick}
                   className="p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors"
-                  aria-label="Upload document or image"
+                  aria-label="Upload PDF or image"
                   disabled={uploading}
                 >
                   {uploading ? (
@@ -469,7 +485,7 @@ export default function ChatInput({
                   )}
                 </button>
                 <span className="absolute left-1/2 -translate-x-1/2 -top-8 bg-gray-900 text-xs text-white rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
-                  {uploading ? "Uploading..." : "Upload document or image"}
+                  {uploading ? "Uploading..." : "Upload PDF or image"}
                 </span>
               </div>
             )}
@@ -544,7 +560,7 @@ export default function ChatInput({
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.doc,.docx,.txt,.md"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp"
             onChange={handleFileInputChange}
             tabIndex={-1}
             className="hidden"
@@ -553,7 +569,7 @@ export default function ChatInput({
 
         {isDragActive && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-base sm:text-lg rounded-2xl">
-            Drop files to attach
+            Drop PDF or image to attach
           </div>
         )}
       </div>
