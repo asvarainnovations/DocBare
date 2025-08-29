@@ -235,16 +235,18 @@ async function extractTextWithDocumentAI(
       error instanceof Error ? error.message : "Unknown error"
     );
 
-    // Fallback to basic text extraction for PDFs
-    if (mimeType === "application/pdf") {
-      console.log(`🟦 [ingest][INFO] Trying fallback PDF text extraction`);
+    // Fallback to basic text extraction for PDFs and DOCX files
+    if (mimeType === "application/pdf" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      console.log(`🟦 [ingest][INFO] Trying fallback text extraction for ${mimeType}`);
       try {
         const file = bucket.file(fileName);
         const [buffer] = await file.download();
-        const bufferString = buffer.toString("utf8");
-
-        // Try multiple extraction methods
+        
         let extractedText = "";
+        
+        if (mimeType === "application/pdf") {
+          // PDF fallback extraction
+          const bufferString = buffer.toString("utf8");
 
         // Method 1: Extract text streams with aggressive filtering
         const textStreams = bufferString.match(/BT[\s\S]*?ET/g);
@@ -331,6 +333,59 @@ async function extractTextWithDocumentAI(
             }
           }
         }
+        
+        } else if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+          // DOCX fallback extraction - try to extract text from the ZIP structure
+          try {
+            // DOCX files are ZIP files containing XML
+            const bufferString = buffer.toString("utf8");
+            
+            // Look for common DOCX content patterns
+            const contentPatterns = [
+              /<w:t[^>]*>([^<]+)<\/w:t>/g,  // Word text elements
+              /<w:r[^>]*>([^<]+)<\/w:r>/g,  // Word run elements
+              /<p[^>]*>([^<]+)<\/p>/g,      // Paragraph elements
+              /<text[^>]*>([^<]+)<\/text>/g // Generic text elements
+            ];
+            
+            for (const pattern of contentPatterns) {
+              const matches = bufferString.match(pattern);
+              if (matches && matches.length > 0) {
+                const text = matches
+                  .map(match => match.replace(/<[^>]*>/g, " ")) // Remove XML tags
+                  .join(" ")
+                  .replace(/\s+/g, " ")
+                  .trim();
+                
+                if (text.length > 50 && /[a-zA-Z]{3,}/.test(text)) {
+                  extractedText = text.substring(0, 5000);
+                  console.log(`🟩 [ingest][SUCCESS] DOCX text extracted using pattern: ${text.length} characters`);
+                  break;
+                }
+              }
+            }
+            
+            // If no XML patterns found, try to extract any readable text
+            if (!extractedText) {
+              const readableText = bufferString
+                .replace(/[^\x20-\x7E]/g, " ") // Keep only printable ASCII
+                .replace(/\s+/g, " ")
+                .trim();
+              
+              // Extract meaningful text blocks
+              const textBlocks = readableText.match(/[A-Za-z\s]{20,}/g);
+              if (textBlocks && textBlocks.length > 0) {
+                const combinedText = textBlocks.join(" ");
+                if (combinedText.length > 100) {
+                  extractedText = combinedText.substring(0, 3000);
+                  console.log(`🟩 [ingest][SUCCESS] DOCX text extracted from readable blocks: ${extractedText.length} characters`);
+                }
+              }
+            }
+          } catch (docxError) {
+            console.warn(`🟨 [ingest][WARN] DOCX fallback extraction failed:`, docxError);
+          }
+        }
 
         if (extractedText) {
           console.log(
@@ -344,7 +399,7 @@ async function extractTextWithDocumentAI(
           return { text: extractedText, confidence, method: "fallback" };
         } else {
           console.warn(
-            `🟨 [ingest][WARN] No readable text found in PDF - likely image-based or corrupted`
+            `🟨 [ingest][WARN] No readable text found in ${mimeType} - likely corrupted or empty`
           );
         }
       } catch (fallbackError) {
