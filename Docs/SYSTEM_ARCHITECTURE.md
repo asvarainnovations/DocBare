@@ -10,7 +10,7 @@ flowchart TD
   subgraph Auth
     B1["NextAuth.js (Google, Credentials)"]
     B2["Prisma Adapter"]
-    B3["Cloud SQL/Postgres (Users, Sessions)"]
+    B3["Cloud SQL/Postgres (Users, Sessions, Roles)"]
   end
 
   subgraph FileUpload
@@ -18,12 +18,13 @@ flowchart TD
     C2["Google Cloud Storage (Files)"]
     C3["Prisma (Document Metadata)"]
     C4["Firestore (Document Metadata)"]
+    C5["File Type Validation (PDFs & Images Only)"]
   end
 
   subgraph Ingestion
     D1["Ingest API (/api/ingest)"]
     D2["Google Cloud Storage (Download File)"]
-    D3["Google Document AI (Text Extraction, OCR, Entity Extraction)"]
+    D3["Google Document AI (Layout Parser, OCR)"]
     D4["Firestore (Document)"]
     D5["OpenAI (Embeddings)"]
     D6["Firestore (Chunks, Embeddings)"]
@@ -59,6 +60,13 @@ flowchart TD
     H3["Prisma (Admin, AdminInvite)"]
   end
 
+  subgraph Enterprise
+    I1["Enterprise Team Management UI"]
+    I2["Enterprise API (/api/enterprise/*)"]
+    I3["Multi-User Management System"]
+    I4["User Role Management (USER, ADMIN, ENTERPRISE)"]
+  end
+
   %% Auth Flow
   A1 -- "Login/Signup" --> B1
   B1 -- "Adapter" --> B2
@@ -66,7 +74,8 @@ flowchart TD
   B3 -- "Session" --> A1
 
   %% File Upload Flow
-  A1 -- "Upload File" --> C1
+  A1 -- "Upload File" --> C5
+  C5 -- "Validate File Type" --> C1
   C1 -- "Store" --> C2
   C1 -- "Metadata" --> C3
   C1 -- "Metadata" --> C4
@@ -104,6 +113,11 @@ flowchart TD
 
   %% Admin
   H1 -- "View Feedbacks" --> H2
+
+  %% Enterprise
+  I1 -- "Manage Team" --> I2
+  I2 -- "User Management" --> I3
+  I3 -- "Role Assignment" --> I4
 ```
 
 ## 🧠 **DeepSeek Reasoning Model Integration**
@@ -139,6 +153,55 @@ DeepSeek Reasoning Model
 - **UI Components**: Professional thinking display with animations
 - **Error Handling**: Robust fallback mechanisms
 
+## 📁 **File Upload & Document Processing**
+
+### **Supported File Types**
+- **PDFs**: `application/pdf` - Full Document AI Layout Parser support
+- **Images**: `image/jpeg`, `image/jpg`, `image/png`, `image/gif`, `image/bmp`, `image/webp` - OCR processing
+- **Restriction**: DOCX, DOC, TXT, and other formats are not supported for optimal processing quality
+
+### **File Upload Flow**
+1. **Client Validation**: File type checked before upload
+2. **User Feedback**: Clear toast message for unsupported files
+3. **Storage**: Files stored in Google Cloud Storage
+4. **Processing**: Document AI Layout Parser for PDFs, OCR for images
+5. **Ingestion**: Text extraction, chunking, and embedding generation
+
+### **Document AI Integration**
+- **Layout Parser**: Used for PDFs and structured documents
+- **OCR**: Used for image files and scanned documents
+- **Intelligent Selection**: Automatic processor selection based on file type
+- **Confidence Scoring**: Quality assessment of extracted text
+
+## 🏢 **Multi-User Enterprise System**
+
+### **User Roles**
+- **USER**: Standard individual users
+- **ADMIN**: Asvara platform administrators
+- **ENTERPRISE**: Enterprise customers with team management capabilities
+
+### **Enterprise Features**
+- **Team Management**: Enterprise users can create and manage team members
+- **Multi-User Permissions**: Controlled by `multiUser` boolean flag
+- **User Hierarchy**: Managed users linked to enterprise account via `managedById`
+- **Role-Based Access**: Different permissions based on user role
+
+### **API Endpoints**
+- **Enterprise Users**: `/api/enterprise/users` - List and manage team members
+- **Admin Multi-User**: `/api/admin/multi-user` - Grant/revoke multi-user permissions
+- **User Management**: Full CRUD operations for team members
+
+### **Database Schema**
+```sql
+User {
+  role: USER | ADMIN | ENTERPRISE
+  multiUser: Boolean (default: false)
+  managedUsers: User[] (relation)
+  managedBy: User? (relation)
+  managedById: String?
+}
+```
+
 ## Document Management UI
 
 - The main page supports file upload with progress and error feedback.
@@ -154,28 +217,31 @@ DeepSeek Reasoning Model
 - **Session Viewing**: View chat sessions to understand feedback context
 - **Database Integration**: PostgreSQL-based storage with proper relations and constraints
 
-## Test Scripts
+## 🔧 **Current System Status**
 
-- Test scripts are provided in the `scripts/` directory:
-  ```bash
-  # Firestore chat session fetch
-  ts-node scripts/test-firestore-chat-sessions.ts
-  # Firestore chat session creation
-  ts-node scripts/test-firestore-chat-sessions.ts --create
-  # Prisma user creation
-  ts-node scripts/test-prisma.ts
-  # File upload to GCS
-  ts-node scripts/test-upload-gcs.ts
-  # RAG query endpoint
-  ts-node scripts/test-rag-query.ts
-  # Feedback submission
-  ts-node scripts/test-firestore-feedback.ts
-  # Authentication (Google and credentials)
-  ts-node scripts/test-auth-credentials.ts
-  # OpenAI embedding
-  ts-node scripts/test-openai-embedding.ts
-  # DeepSeek API
-  ts-node scripts/test-deepseek-api.ts
-  # Supabase test (if used)
-  ts-node scripts/test-supabase.ts
-  ``` 
+### **Production-Ready Features**
+- ✅ **Authentication**: Google OAuth + Credentials with NextAuth.js
+- ✅ **File Upload**: PDF and image support with Document AI processing
+- ✅ **Chat System**: Real-time messaging with DeepSeek reasoning model
+- ✅ **RAG Pipeline**: Document retrieval and AI-powered responses
+- ✅ **Admin Dashboard**: Feedback management and user analytics
+- ✅ **Enterprise System**: Multi-user team management (API ready)
+- ✅ **Thinking Display**: Real-time AI reasoning visualization
+
+### **File Processing Capabilities**
+- ✅ **PDFs**: Full Document AI Layout Parser support
+- ✅ **Images**: OCR processing for scanned documents
+- ❌ **DOCX/DOC**: Not supported (shows user-friendly error message)
+- ❌ **TXT/MD**: Not supported (shows user-friendly error message)
+
+### **User Experience**
+- ✅ **Clear Feedback**: Toast notifications for unsupported file types
+- ✅ **File Validation**: Client-side validation before upload
+- ✅ **Error Handling**: Graceful handling of processing failures
+- ✅ **Real-time Updates**: Live progress indicators and status updates
+
+### **Security & Performance**
+- ✅ **Rate Limiting**: API endpoints protected against abuse
+- ✅ **Input Validation**: Comprehensive request validation
+- ✅ **Error Logging**: Structured logging with Pino
+- ✅ **Database Optimization**: Efficient queries with Prisma 
