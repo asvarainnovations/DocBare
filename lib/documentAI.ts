@@ -330,6 +330,7 @@ export class DocumentAIService {
 
   /**
    * Determine the optimal processor type based on file type and options
+   * Since we only support PDFs and images, we use OCR for all files
    */
   private getOptimalProcessorType(
     fileName: string,
@@ -339,33 +340,10 @@ export class DocumentAIService {
     
     console.log(`🟦 [DocumentAI][INFO] File extension: ${fileExtension}`);
 
-    // For DOCX, DOC, and other native document formats, use LAYOUT_PARSER
-    if (["docx", "doc", "odt", "rtf"].includes(fileExtension || "")) {
-      console.log(`🟦 [DocumentAI][INFO] Using LAYOUT_PARSER for native document format`);
-      return "LAYOUT_PARSER";
-    }
-
-    // For images (PNG, JPG, etc.), use OCR processor
-    if (["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp"].includes(fileExtension || "")) {
-      console.log(`🟦 [DocumentAI][INFO] Using OCR processor for image format`);
-      return "OCR";
-    }
-
-    // If OCR is explicitly enabled, use OCR processor
-    if (options.enableOCR) {
-      console.log(`🟦 [DocumentAI][INFO] Using OCR processor (explicitly enabled)`);
-      return "OCR";
-    }
-
-    // For forms, use form parser
-    if (this.isFormDocument(fileName)) {
-      console.log(`🟦 [DocumentAI][INFO] Using FORM_PARSER for form document`);
-      return "FORM_PARSER";
-    }
-
-    // For PDFs and all other documents, use layout parser (general purpose)
-    console.log(`🟦 [DocumentAI][INFO] Using LAYOUT_PARSER for general document`);
-    return "LAYOUT_PARSER";
+    // Since we only support PDFs and images, use OCR processor for all files
+    // This ensures consistent processing and better text extraction
+    console.log(`🟦 [DocumentAI][INFO] Using OCR processor for all supported file types (PDFs and images)`);
+    return "OCR";
   }
 
   /**
@@ -416,6 +394,7 @@ export class DocumentAIService {
 
   /**
    * Get MIME type based on file extension
+   * Only supports PDFs and images as per current file upload restrictions
    */
   private getMimeType(fileName: string): string {
     const extension = fileName.toLowerCase().split(".").pop();
@@ -423,22 +402,11 @@ export class DocumentAIService {
     switch (extension) {
       case "pdf":
         return "application/pdf";
-      case "docx":
-        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-      case "doc":
-        return "application/msword";
-      case "odt":
-        return "application/vnd.oasis.opendocument.text";
-      case "rtf":
-        return "application/rtf";
       case "png":
         return "image/png";
       case "jpg":
       case "jpeg":
         return "image/jpeg";
-      case "tiff":
-      case "tif":
-        return "image/tiff";
       case "gif":
         return "image/gif";
       case "bmp":
@@ -446,7 +414,7 @@ export class DocumentAIService {
       case "webp":
         return "image/webp";
       default:
-        return "application/pdf"; // Default to PDF
+        return "application/pdf"; // Default to PDF for unsupported extensions
     }
   }
 
