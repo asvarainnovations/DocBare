@@ -366,14 +366,14 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
-                  {msg.role === "ASSISTANT" && (
+                  {msg.role === "ASSISTANT" && thinkingStates[msg.id] && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="w-full flex justify-start mb-4"
                     >
                       <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
-                        {thinkingStates[msg.id] && thinkingStates[msg.id].content ? (
+                        {thinkingStates[msg.id].content && thinkingStates[msg.id].content.trim() ? (
                           <ThinkingDisplay
                             isThinking={thinkingStates[msg.id].isThinking}
                             thinkingContent={thinkingStates[msg.id].content}
