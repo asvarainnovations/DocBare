@@ -30,7 +30,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     [idx: number]: "good" | "bad" | undefined;
   }>({});
   const [isStreaming, setIsStreaming] = useState(false);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -207,11 +207,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   }, [messages, shouldAutoScroll]);
 
   // Auto-scroll to bottom when AI is streaming (to end of AI response)
-  useEffect(() => {
-    if (isStreaming && shouldAutoScroll && lastMsgRef.current) {
-      lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [isStreaming, shouldAutoScroll]);
+  // Auto-scroll to bottom when streaming (disabled for user control)
+  // useEffect(() => {
+  //   if (isStreaming && shouldAutoScroll && lastMsgRef.current) {
+  //     lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
+  //   }
+  // }, [isStreaming, shouldAutoScroll]);
 
   // Detect user scroll to disable auto-scroll
   useEffect(() => {
@@ -365,15 +366,14 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
-                  {msg.role === "ASSISTANT" &&
-                    thinkingStates[msg.id] &&
-                    thinkingStates[msg.id].content && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="w-full flex justify-start mb-4"
-                      >
-                        <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
+                  {msg.role === "ASSISTANT" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="w-full flex justify-start mb-4"
+                    >
+                      <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
+                        {thinkingStates[msg.id] && thinkingStates[msg.id].content ? (
                           <ThinkingDisplay
                             isThinking={thinkingStates[msg.id].isThinking}
                             thinkingContent={thinkingStates[msg.id].content}
@@ -381,9 +381,22 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                               // Thinking display will auto-hide after completion
                             }}
                           />
-                        </div>
-                      </motion.div>
-                    )}
+                        ) : (
+                          // Show loading animation while waiting for thinking content
+                          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                            <div className="flex items-center space-x-3">
+                              <div className="flex space-x-1">
+                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                              </div>
+                              <span className="text-slate-300 text-sm">AI is analyzing your question...</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
 
                   <ChatMessage
                     message={msg}
