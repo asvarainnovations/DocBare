@@ -17,7 +17,6 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useChatAI } from "./hooks/useChatAI";
 
 // Components
-import ChatHeader from "./components/ChatHeader";
 import ChatMessage from "./components/ChatMessage";
 
 export default function ChatPage({ params }: { params: { chatId: string } }) {
@@ -148,9 +147,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [sessionMeta, loadingMeta, params.chatId, addChat]);
 
-  // Auto-scroll to bottom when chat loads or new messages arrive (only if user isn't scrolling)
+  // Auto-scroll to bottom only when chat initially loads (not during streaming)
   useEffect(() => {
-    if (chatRef.current && !loadingMessages && messages.length > 0 && !userScrolling) {
+    if (chatRef.current && !loadingMessages && messages.length > 0 && !isStreaming && !userScrolling) {
       // Small delay to ensure DOM is updated
       setTimeout(() => {
         chatRef.current?.scrollTo({
@@ -159,7 +158,25 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         });
       }, 100);
     }
-  }, [loadingMessages, messages.length, userScrolling]);
+  }, [loadingMessages, messages.length, isStreaming, userScrolling]);
+
+  // Auto-scroll to bottom when streaming completes (if user is near bottom)
+  useEffect(() => {
+    if (chatRef.current && !isStreaming && !userScrolling) {
+      const { scrollTop, scrollHeight, clientHeight } = chatRef.current;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+      
+      // Only auto-scroll if user is near bottom (they want to see new content)
+      if (isNearBottom) {
+        setTimeout(() => {
+          chatRef.current?.scrollTo({
+            top: chatRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }, 100);
+      }
+    }
+  }, [isStreaming, userScrolling]);
 
   // Scroll detection for loading more messages
   useEffect(() => {
@@ -174,7 +191,21 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       setIsNearTop(isNearTop);
       
       // Track user scrolling - if user scrolls away from bottom, they're manually scrolling
-      setUserScrolling(!isNearBottom);
+      const wasUserScrolling = userScrolling;
+      const nowUserScrolling = !isNearBottom;
+      setUserScrolling(nowUserScrolling);
+
+      // Debug logging for scroll behavior
+      if (process.env.NODE_ENV === 'development' && wasUserScrolling !== nowUserScrolling) {
+        console.log('🟦 [ChatPage][DEBUG] User scroll state changed:', {
+          wasUserScrolling,
+          nowUserScrolling,
+          isNearBottom,
+          scrollTop,
+          scrollHeight,
+          clientHeight
+        });
+      }
 
       // Load more messages when near top and not already loading
       if (isNearTop && hasMore && !loadingMore) {
@@ -485,7 +516,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     }}
                     onRegeneratingChange={handleRegeneratingChange}
                     onFeedback={handleFeedback}
-                    isStreaming={(isStreaming || thinkingStates[msg.id]?.isThinking) && idx === messages.length - 1}
+                    isStreaming={isStreaming && idx === messages.length - 1}
                     isThinking={thinkingStates[msg.id]?.isThinking || false}
                     thinkingContent={thinkingStates[msg.id]?.content || ""}
                   />

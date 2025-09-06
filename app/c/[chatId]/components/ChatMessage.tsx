@@ -204,7 +204,7 @@ export default function ChatMessage({
               </div>
 
               {/* Action buttons for AI messages */}
-              {!isStreaming && (
+              {!isStreaming && !isThinking && (
                 <div className="flex items-center gap-2 mt-4">
                   <AnimatedCopyButton content={message.content} />
                   <RegenerateButton
