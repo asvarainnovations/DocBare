@@ -29,7 +29,6 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     [idx: number]: "good" | "bad" | undefined;
   }>({});
   const [isStreaming, setIsStreaming] = useState(false);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
   const [userScrolling, setUserScrolling] = useState(false);
 
   const chatRef = useRef<HTMLDivElement>(null);
@@ -274,48 +273,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     checkAndGenerateAutoResponse,
   ]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (lastMsgRef.current && shouldAutoScroll) {
-      lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, shouldAutoScroll]);
-
-  // Auto-scroll to bottom when AI is streaming (to end of AI response)
-  // Auto-scroll to bottom when streaming (disabled for user control)
-  // useEffect(() => {
-  //   if (isStreaming && shouldAutoScroll && lastMsgRef.current) {
-  //     lastMsgRef.current.scrollIntoView({ behavior: "smooth" });
-  //   }
-  // }, [isStreaming, shouldAutoScroll]);
-
-  // Detect user scroll to disable auto-scroll
-  useEffect(() => {
-    const chatContainer = chatRef.current;
-    if (!chatContainer) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50; // 50px threshold
-
-      if (!isAtBottom) {
-        setShouldAutoScroll(false);
-      } else {
-        setShouldAutoScroll(true);
-      }
-    };
-
-    // Use passive listener for better performance
-    chatContainer.addEventListener("scroll", handleScroll, { passive: true });
-    return () => chatContainer.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Re-enable auto-scroll when new messages are added
-  useEffect(() => {
-    if (messages.length > 0) {
-      setShouldAutoScroll(true);
-    }
-  }, [messages.length]);
+  // Removed conflicting auto-scroll logic - using consolidated scroll system below
 
   // Set page loading to false when messages are loaded
   useEffect(() => {
