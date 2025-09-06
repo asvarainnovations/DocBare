@@ -36,18 +36,18 @@ export async function GET(req: NextRequest) {
         const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
         const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
         
-        console.log(`🟦 [user_chats][DEBUG] Sorting chats:`, {
-          aId: a.id,
-          aSessionName: a.sessionName,
-          aTime: aTime,
-          aCreatedAt: a.createdAt,
-          bId: b.id,
-          bSessionName: b.sessionName,
-          bTime: bTime,
-          bCreatedAt: b.createdAt,
-          diff: bTime - aTime,
-          sortOrder: bTime - aTime > 0 ? 'b (newer) before a (older)' : 'a (older) before b (newer)'
-        });
+        // console.log(`🟦 [user_chats][DEBUG] Sorting chats:`, {
+        //   aId: a.id,
+        //   aSessionName: a.sessionName,
+        //   aTime: aTime,
+        //   aCreatedAt: a.createdAt,
+        //   bId: b.id,
+        //   bSessionName: b.sessionName,
+        //   bTime: bTime,
+        //   bCreatedAt: b.createdAt,
+        //   diff: bTime - aTime,
+        //   sortOrder: bTime - aTime > 0 ? 'b (newer) before a (older)' : 'a (older) before b (newer)'
+        // });
         
         return bTime - aTime; // Descending order - newest first
       });

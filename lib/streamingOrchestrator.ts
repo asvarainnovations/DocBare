@@ -125,10 +125,26 @@ async function callLLMStream(query: string, memoryContext: string = '', document
     query
   );
 
-  // Combine optimized system prompt with memory context
-  const enhancedSystemPrompt = optimizedContext.memoryContext
-    ? `${optimizedContext.systemPrompt}\n\n**Previous Context:**\n${optimizedContext.memoryContext}\n\n**Current Query:**`
-    : optimizedContext.systemPrompt;
+  // Combine optimized system prompt with all contexts
+  let enhancedSystemPrompt = optimizedContext.systemPrompt;
+  
+  // Add memory context if available
+  if (optimizedContext.memoryContext) {
+    enhancedSystemPrompt += `\n\n**Previous Context:**\n${optimizedContext.memoryContext}`;
+  }
+  
+  // Add document context if available
+  if (optimizedContext.documentContext) {
+    enhancedSystemPrompt += `\n\n${optimizedContext.documentContext}`;
+  }
+  
+  // Add knowledge base context if available
+  if (optimizedContext.knowledgeBaseContext) {
+    enhancedSystemPrompt += `\n\n${optimizedContext.knowledgeBaseContext}`;
+  }
+  
+  // Add current query section
+  enhancedSystemPrompt += `\n\n**Current Query:**`;
   
   // Log context optimization results (development only)
   if (process.env.NODE_ENV === 'development') {

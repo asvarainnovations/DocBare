@@ -22,17 +22,12 @@ export async function GET(
 
     // Try to get messages from Firestore first (primary storage)
     try {
+      // Get all messages for the session (no ordering to avoid index requirement)
       let query = firestore.collection('chat_messages')
-        .where('sessionId', '==', params.sessionId)
-        .orderBy('createdAt', 'desc');
+        .where('sessionId', '==', params.sessionId);
 
-      // If loading more messages, apply pagination
-      if (loadMore) {
-        query = query.limit(limit).offset(offset);
-      } else {
-        // For initial load, get the latest messages
-        query = query.limit(limit);
-      }
+      // Apply limit
+      query = query.limit(loadMore ? limit + offset : limit);
 
       const snapshot = await query.get();
       
@@ -84,18 +79,18 @@ export async function GET(
         const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
         const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
         
-        console.log(`🟦 [sessions][DEBUG] Sorting messages:`, {
-          aId: a.id,
-          aRole: a.role,
-          aTime: aTime,
-          aCreatedAt: a.createdAt,
-          bId: b.id,
-          bRole: b.role,
-          bTime: bTime,
-          bCreatedAt: b.createdAt,
-          diff: aTime - bTime,
-          sortOrder: aTime - bTime < 0 ? 'a before b' : 'b before a'
-        });
+        // console.log(`🟦 [sessions][DEBUG] Sorting messages:`, {
+        //   aId: a.id,
+        //   aRole: a.role,
+        //   aTime: aTime,
+        //   aCreatedAt: a.createdAt,
+        //   bId: b.id,
+        //   bRole: b.role,
+        //   bTime: bTime,
+        //   bCreatedAt: b.createdAt,
+        //   diff: aTime - bTime,
+        //   sortOrder: aTime - bTime < 0 ? 'a before b' : 'b before a'
+        // });
         
         return aTime - bTime; // Ascending order (oldest first)
       });

@@ -97,29 +97,29 @@ export default function ChatMessage({
                   components={{
                     // Headings
                     h1: ({ children }) => (
-                      <h1 className="text-xl font-bold text-white mb-4 mt-6 first:mt-0">
+                      <h1 className="text-lg font-bold text-white mb-4 mt-6 first:mt-0">
                         {children}
                       </h1>
                     ),
                     h2: ({ children }) => (
-                      <h2 className="text-lg font-semibold text-white mb-3 mt-5 first:mt-0">
+                      <h2 className="text-base font-semibold text-white mb-3 mt-5 first:mt-0">
                         {children}
                       </h2>
                     ),
                     h3: ({ children }) => (
-                      <h3 className="text-base font-semibold text-white mb-2 mt-4 first:mt-0">
+                      <h3 className="text-sm font-semibold text-white mb-2 mt-4 first:mt-0">
                         {children}
                       </h3>
                     ),
                     h4: ({ children }) => (
-                      <h4 className="text-sm font-semibold text-white mb-2 mt-3 first:mt-0">
+                      <h4 className="text-xs font-semibold text-white mb-2 mt-3 first:mt-0">
                         {children}
                       </h4>
                     ),
 
                     // Paragraphs
                     p: ({ children }) => (
-                      <p className="text-white mb-3 leading-relaxed last:mb-0 font-legal-content text-base">
+                      <p className="text-white mb-3 leading-relaxed last:mb-0 font-legal-content text-xs">
                         {children}
                       </p>
                     ),

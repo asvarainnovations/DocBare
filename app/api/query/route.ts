@@ -63,6 +63,13 @@ export async function POST(req: NextRequest) {
           const sessionData = sessionDoc.data();
           const documentContext = sessionData?.documentContext || [];
 
+          aiLogger.info("Session data retrieved", {
+            sessionId,
+            hasDocumentContext: !!sessionData?.documentContext,
+            documentContextLength: documentContext.length,
+            documentContext: documentContext
+          });
+
           if (documentContext.length > 0) {
             aiLogger.info("Found document context in session", {
               sessionId,
@@ -77,6 +84,12 @@ export async function POST(req: NextRequest) {
                   .where("documentId", "==", doc.documentId)
                   .orderBy("chunkIndex", "asc")
                   .get();
+
+                aiLogger.info("Document chunks query", {
+                  documentId: doc.documentId,
+                  chunksFound: chunksSnapshot.size,
+                  chunksEmpty: chunksSnapshot.empty
+                });
 
                 if (!chunksSnapshot.empty) {
                   const docText = chunksSnapshot.docs
