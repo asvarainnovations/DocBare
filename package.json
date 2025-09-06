@@ -10,7 +10,9 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "tsx scripts/run-tests.ts",
+    "test:document-ai": "tsx scripts/test-document-ai.ts"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "4.4.0",
@@ -39,6 +41,7 @@
     "next": "14.1.0",
     "next-auth": "4.24.5",
     "openai": "4.20.1",
+    "pdf-parse": "^1.1.1",
     "pino": "8.17.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
