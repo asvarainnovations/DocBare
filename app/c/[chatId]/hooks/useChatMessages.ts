@@ -19,16 +19,21 @@ interface Message {
 export function useChatMessages(chatId: string, userId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [errorMessages, setErrorMessages] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
 
-  // Fetch messages
+  // Fetch initial messages (latest 10)
   useEffect(() => {
     async function fetchMessages() {
       if (!chatId) return;
       try {
-        const res = await axios.get(`/api/sessions/${chatId}`);
+        const res = await axios.get(`/api/sessions/${chatId}?limit=10`);
         const fetchedMessages = res.data.messages || [];
         setMessages(fetchedMessages);
+        setHasMore(res.data.pagination?.hasMore || false);
+        setTotalMessages(res.data.pagination?.totalMessages || fetchedMessages.length);
       } catch (err: any) {
         const errorMessage = err.response?.data?.error || 'Failed to load messages';
         setErrorMessages(errorMessage);
@@ -39,6 +44,24 @@ export function useChatMessages(chatId: string, userId?: string) {
     }
     fetchMessages();
   }, [chatId, userId]);
+
+  // Load more messages function
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const res = await axios.get(`/api/sessions/${chatId}?limit=10&offset=${messages.length}&loadMore=true`);
+      const newMessages = res.data.messages || [];
+      setMessages(prev => [...newMessages, ...prev]); // Prepend older messages
+      setHasMore(res.data.pagination?.hasMore || false);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to load more messages';
+      toast.error(errorMessage);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [chatId, messages.length, hasMore, loadingMore]);
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);
@@ -58,9 +81,13 @@ export function useChatMessages(chatId: string, userId?: string) {
     messages,
     setMessages,
     loadingMessages,
+    loadingMore,
     errorMessages,
+    hasMore,
+    totalMessages,
     addMessage,
     updateMessage,
-    removeMessage
+    removeMessage,
+    loadMoreMessages
   };
 } 

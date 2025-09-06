@@ -8,13 +8,33 @@ export async function GET(
   { params }: { params: { sessionId: string } }
 ) {
   try {
-    apiLogger.info('Session messages request received', { sessionId: params.sessionId });
+    const { searchParams } = new URL(req.url);
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const loadMore = searchParams.get('loadMore') === 'true';
+
+    apiLogger.info('Session messages request received', { 
+      sessionId: params.sessionId,
+      limit,
+      offset,
+      loadMore
+    });
 
     // Try to get messages from Firestore first (primary storage)
     try {
-      const snapshot = await firestore.collection('chat_messages')
+      let query = firestore.collection('chat_messages')
         .where('sessionId', '==', params.sessionId)
-        .get();
+        .orderBy('createdAt', 'desc');
+
+      // If loading more messages, apply pagination
+      if (loadMore) {
+        query = query.limit(limit).offset(offset);
+      } else {
+        // For initial load, get the latest messages
+        query = query.limit(limit);
+      }
+
+      const snapshot = await query.get();
       
       const messages = snapshot.docs.map((doc: any) => ({
         id: doc.id,
@@ -58,6 +78,7 @@ export async function GET(
       });
 
       // Sort in memory to avoid index requirements
+      // Since we're getting messages in descending order, reverse to get chronological order
       messages.sort((a, b) => {
         // Handle Firestore timestamps properly
         const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
@@ -76,17 +97,29 @@ export async function GET(
           sortOrder: aTime - bTime < 0 ? 'a before b' : 'b before a'
         });
         
-        return aTime - bTime;
+        return aTime - bTime; // Ascending order (oldest first)
       });
+
+      // Check if there are more messages
+      const hasMore = messages.length === limit;
+      const totalMessages = messages.length + offset;
 
       apiLogger.info('Session messages retrieved from Firestore', { 
         sessionId: params.sessionId,
-        messageCount: messages.length 
+        messageCount: messages.length,
+        hasMore,
+        totalMessages
       });
 
       return NextResponse.json({
         sessionId: params.sessionId,
         messages,
+        pagination: {
+          hasMore,
+          totalMessages,
+          limit,
+          offset
+        }
       });
     } catch (firestoreError) {
       apiLogger.warn('Firestore fetch failed, trying Prisma', { 

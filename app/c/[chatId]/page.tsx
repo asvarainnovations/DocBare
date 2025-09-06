@@ -35,16 +35,21 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   const chatRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
+  const [isNearTop, setIsNearTop] = useState(false);
   const { data: session, status } = useSession();
 
   // Custom hooks
   const {
     messages,
     loadingMessages,
+    loadingMore,
     errorMessages,
+    hasMore,
+    totalMessages,
     addMessage,
     updateMessage,
     removeMessage,
+    loadMoreMessages,
   } = useChatMessages(params.chatId, session?.user?.id);
   const { sessionMeta, loadingMeta, errorMeta } = useSessionMetadata(
     params.chatId
@@ -141,6 +146,39 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       });
     }
   }, [sessionMeta, loadingMeta, params.chatId, addChat]);
+
+  // Auto-scroll to bottom when chat loads or new messages arrive
+  useEffect(() => {
+    if (chatRef.current && !loadingMessages && messages.length > 0) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        chatRef.current?.scrollTo({
+          top: chatRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
+    }
+  }, [loadingMessages, messages.length]);
+
+  // Scroll detection for loading more messages
+  useEffect(() => {
+    const chatContainer = chatRef.current;
+    if (!chatContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isNearTop = scrollTop < 100; // Within 100px of top
+      setIsNearTop(isNearTop);
+
+      // Load more messages when near top and not already loading
+      if (isNearTop && hasMore && !loadingMore) {
+        loadMoreMessages();
+      }
+    };
+
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => chatContainer.removeEventListener('scroll', handleScroll);
+  }, [hasMore, loadingMore, loadMoreMessages]);
 
   // Poll for session name updates if it's still "New Chat"
   useEffect(() => {
@@ -360,6 +398,27 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             </div>
           ) : (
             <AnimatePresence>
+              {/* Loading animation for more messages */}
+              {loadingMore && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="w-full flex justify-center mb-4"
+                >
+                  <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                      <span className="text-slate-300 text-sm">Loading more messages...</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              
               {messages.map((msg, idx) => (
                 <div
                   key={msg.id || idx}
