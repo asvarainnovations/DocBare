@@ -31,6 +31,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   }>({});
   const [isStreaming, setIsStreaming] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
+  const [userScrolling, setUserScrolling] = useState(false);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -147,9 +148,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [sessionMeta, loadingMeta, params.chatId, addChat]);
 
-  // Auto-scroll to bottom when chat loads or new messages arrive
+  // Auto-scroll to bottom when chat loads or new messages arrive (only if user isn't scrolling)
   useEffect(() => {
-    if (chatRef.current && !loadingMessages && messages.length > 0) {
+    if (chatRef.current && !loadingMessages && messages.length > 0 && !userScrolling) {
       // Small delay to ensure DOM is updated
       setTimeout(() => {
         chatRef.current?.scrollTo({
@@ -158,7 +159,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         });
       }, 100);
     }
-  }, [loadingMessages, messages.length]);
+  }, [loadingMessages, messages.length, userScrolling]);
 
   // Scroll detection for loading more messages
   useEffect(() => {
@@ -168,7 +169,12 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const isNearTop = scrollTop < 100; // Within 100px of top
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // Within 100px of bottom
+      
       setIsNearTop(isNearTop);
+      
+      // Track user scrolling - if user scrolls away from bottom, they're manually scrolling
+      setUserScrolling(!isNearBottom);
 
       // Load more messages when near top and not already loading
       if (isNearTop && hasMore && !loadingMore) {
@@ -419,7 +425,17 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                 </motion.div>
               )}
               
-              {messages.map((msg, idx) => (
+              {messages.map((msg, idx) => {
+                // Debug logging for messages with documents
+                if (msg.role === 'USER' && msg.documents && msg.documents.length > 0) {
+                  console.log('🟦 [ChatPage][DEBUG] User message with documents:', {
+                    messageId: msg.id,
+                    content: msg.content.substring(0, 50),
+                    documents: msg.documents
+                  });
+                }
+                
+                return (
                 <div
                   key={msg.id || idx}
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
@@ -469,12 +485,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                     }}
                     onRegeneratingChange={handleRegeneratingChange}
                     onFeedback={handleFeedback}
-                    isStreaming={isStreaming && idx === messages.length - 1}
+                    isStreaming={(isStreaming || thinkingStates[msg.id]?.isThinking) && idx === messages.length - 1}
                     isThinking={thinkingStates[msg.id]?.isThinking || false}
                     thinkingContent={thinkingStates[msg.id]?.content || ""}
                   />
                     </div>
-              ))}
+                );
+              })}
             </AnimatePresence>
           )}
         </div>
