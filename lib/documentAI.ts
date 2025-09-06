@@ -65,7 +65,20 @@ export class DocumentAIService {
       config.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
     }
 
-    this.client = new DocumentProcessorServiceClient(config);
+    // Configure Document AI client with increased timeout
+    const clientConfig = {
+      ...config,
+      // Increase timeout to 10 minutes (600 seconds) for large documents
+      timeout: 600000, // 10 minutes in milliseconds
+      // Add retry configuration
+      retry: {
+        retryDelayMultiplier: 2,
+        totalTimeout: 600000, // 10 minutes total timeout
+        maxRetries: 3,
+      },
+    };
+
+    this.client = new DocumentProcessorServiceClient(clientConfig);
     this.storage = new Storage(config);
     this.projectId =
       process.env.FIRESTORE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID!;
@@ -237,8 +250,9 @@ export class DocumentAIService {
       };
 
       console.log(`🟦 [DocumentAI][INFO] Sending request to Document AI...`);
+      console.log(`🟦 [DocumentAI][INFO] Request timeout: 10 minutes, file size: ${fileBuffer.length} bytes`);
 
-      // Process the document
+      // Process the document with timeout handling
       const [result] = await this.client.processDocument(request);
       const { document } = result;
 
