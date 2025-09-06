@@ -194,17 +194,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       const nowUserScrolling = !isNearBottom;
       setUserScrolling(nowUserScrolling);
 
-      // Debug logging for scroll behavior
-      if (process.env.NODE_ENV === 'development' && wasUserScrolling !== nowUserScrolling) {
-        console.log('🟦 [ChatPage][DEBUG] User scroll state changed:', {
-          wasUserScrolling,
-          nowUserScrolling,
-          isNearBottom,
-          scrollTop,
-          scrollHeight,
-          clientHeight
-        });
-      }
+      // Debug logging for scroll behavior removed
 
       // Load more messages when near top and not already loading
       if (isNearTop && hasMore && !loadingMore) {
@@ -303,13 +293,15 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
       }));
 
       // Debug logging
-      console.log("🟦 [chat_ui][DEBUG] Sending message with documents:", {
-        message: message.substring(0, 100),
-        documents,
-        uploadedFilesCount: uploadedFiles.length,
-        sessionMeta: sessionMeta,
-        sessionDocumentContext: sessionMeta?.documentContext,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log("🟦 [chat_ui][DEBUG] Sending message with documents:", {
+          message: message.substring(0, 100),
+          documents,
+          uploadedFilesCount: uploadedFiles.length,
+          sessionMeta: sessionMeta,
+          sessionDocumentContext: sessionMeta?.documentContext,
+        });
+      }
 
       setInput("");
       await handleSend(
@@ -416,7 +408,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
               
               {messages.map((msg, idx) => {
                 // Debug logging for messages with documents
-                if (msg.role === 'USER' && msg.documents && msg.documents.length > 0) {
+                if (process.env.NODE_ENV === 'development' && msg.role === 'USER' && msg.documents && msg.documents.length > 0) {
                   console.log('🟦 [ChatPage][DEBUG] User message with documents:', {
                     messageId: msg.id,
                     content: msg.content.substring(0, 50),
@@ -426,7 +418,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                 
                 return (
                 <div
-                  key={msg.id || idx}
+                  key={msg.id ? `msg-${msg.id}` : `msg-${idx}`}
                   ref={idx === messages.length - 1 ? lastMsgRef : undefined}
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}

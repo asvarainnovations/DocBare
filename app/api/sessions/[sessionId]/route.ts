@@ -46,31 +46,37 @@ export async function GET(
           sessionDocumentContext = sessionData?.documentContext || [];
         }
       } catch (sessionError) {
-        console.log('🟦 [sessions][DEBUG] Could not retrieve session metadata for document context');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🟦 [sessions][DEBUG] Could not retrieve session metadata for document context');
+        }
       }
 
       // Add document context to old messages that don't have it
       messages.forEach((msg) => {
         if (msg.role === 'USER' && (!msg.documents || msg.documents.length === 0) && sessionDocumentContext.length > 0) {
           msg.documents = sessionDocumentContext;
-          console.log(`🟦 [sessions][DEBUG] Added document context to old message:`, {
-            messageId: msg.id,
-            documents: msg.documents
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`🟦 [sessions][DEBUG] Added document context to old message:`, {
+              messageId: msg.id,
+              documents: msg.documents
+            });
+          }
         }
       });
 
       // Debug logging for each message
-      messages.forEach((msg, idx) => {
-        console.log(`🟦 [sessions][DEBUG] Message ${idx}:`, {
-          id: msg.id,
-          role: msg.role,
-          content: msg.content.substring(0, 50),
-          documents: msg.documents,
-          createdAt: msg.createdAt,
-          timestamp: msg.createdAt?.toDate?.() ? msg.createdAt.toDate().getTime() : new Date(msg.createdAt).getTime()
+      if (process.env.NODE_ENV === 'development') {
+        messages.forEach((msg, idx) => {
+          console.log(`🟦 [sessions][DEBUG] Message ${idx}:`, {
+            id: msg.id,
+            role: msg.role,
+            content: msg.content.substring(0, 50),
+            documents: msg.documents,
+            createdAt: msg.createdAt,
+            timestamp: msg.createdAt?.toDate?.() ? msg.createdAt.toDate().getTime() : new Date(msg.createdAt).getTime()
+          });
         });
-      });
+      }
 
       // Sort in memory to avoid index requirements
       // Since we're getting messages in descending order, reverse to get chronological order

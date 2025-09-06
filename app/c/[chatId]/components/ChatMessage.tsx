@@ -58,7 +58,7 @@ export default function ChatMessage({
   thinkingContent,
 }: ChatMessageProps) {
   // Debug logging for user messages with documents
-  if (message.role === 'USER' && message.documents && message.documents.length > 0) {
+  if (process.env.NODE_ENV === 'development' && message.role === 'USER' && message.documents && message.documents.length > 0) {
     console.log('🟦 [ChatMessage][DEBUG] User message with documents:', {
       messageId: message.id,
       content: message.content.substring(0, 50),

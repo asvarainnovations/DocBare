@@ -265,12 +265,14 @@ export function useChatAI(chatId: string, userId?: string) {
       ...(sessionMetadata?.documentContext || [])
     ];
 
-    console.log('🟦 [chat_ui][DEBUG] Document information for user message:', {
-      uploadedDocuments: documents || [],
-      sessionDocumentContext: sessionMetadata?.documentContext || [],
-      combinedDocuments: allDocuments,
-      sessionId: chatId
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🟦 [chat_ui][DEBUG] Document information for user message:', {
+        uploadedDocuments: documents || [],
+        sessionDocumentContext: sessionMetadata?.documentContext || [],
+        combinedDocuments: allDocuments,
+        sessionId: chatId
+      });
+    }
 
     const userMessage: Message = {
       id: generateUniqueId('user'),
