@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import dynamic from "next/dynamic";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import AnimatedCopyButton from "./AnimatedCopyButton";
@@ -359,6 +360,7 @@ export default function DocumentAnalysis({
                                 </div>
                                 <div className="prose prose-invert max-w-none">
                                   <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
                                     components={{
                                       h1: ({ children }) => (
                                         <h1 className="text-xl font-bold text-white mb-4 mt-6 first:mt-0">

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PaperClipIcon, DocumentIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -65,7 +66,7 @@ export default function Chat() {
             >
               {message.type === 'ai' ? (
                 <div className="prose prose-invert text-sm">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                 </div>
               ) : (
                 <p className="text-sm">{message.content}</p>
