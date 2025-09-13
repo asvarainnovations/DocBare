@@ -122,7 +122,7 @@ export function ThinkingDisplay({ isThinking, thinkingContent, onComplete }: Thi
           {isThinking ? (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <span>AI is analyzing...</span>
+              <span>Analyzing your query...</span>
             </div>
           ) : (
             <span>Thought for {thinkingTime} seconds</span>

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import dynamic from 'next/dynamic';
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import AnimatedCopyButton from "@/app/components/AnimatedCopyButton";
@@ -94,6 +95,7 @@ export default function ChatMessage({
             <>
               <div className="markdown-content max-w-none bg-transparent">
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     // Headings
                     h1: ({ children }) => (
@@ -187,8 +189,23 @@ export default function ChatMessage({
                         </table>
                       </div>
                     ),
+                    thead: ({ children }) => (
+                      <thead className="bg-gray-800">
+                        {children}
+                      </thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody>
+                        {children}
+                      </tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="border-b border-gray-600">
+                        {children}
+                      </tr>
+                    ),
                     th: ({ children }) => (
-                      <th className="border border-gray-600 px-3 py-2 text-left text-white bg-gray-800">
+                      <th className="border border-gray-600 px-3 py-2 text-left text-white bg-gray-800 font-semibold">
                         {children}
                       </th>
                     ),
