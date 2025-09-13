@@ -310,7 +310,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         updateMessage as any,
         removeMessage as any,
         documents,
-        sessionMeta
+        null // Don't pass sessionMeta to avoid including all session documents
       );
 
       // Clear all uploaded files after sending

@@ -259,18 +259,17 @@ export function useChatAI(chatId: string, userId?: string) {
       return;
     }
 
-    // Combine documents from uploaded files and session context
-    const allDocuments = [
-      ...(documents || []),
-      ...(sessionMetadata?.documentContext || [])
-    ];
+    // Only include documents uploaded with this specific message
+    // Do NOT include session document context as it contains all session documents
+    const allDocuments = documents || [];
 
     if (process.env.NODE_ENV === 'development') {
       console.log('🟦 [chat_ui][DEBUG] Document information for user message:', {
         uploadedDocuments: documents || [],
         sessionDocumentContext: sessionMetadata?.documentContext || [],
         combinedDocuments: allDocuments,
-        sessionId: chatId
+        sessionId: chatId,
+        note: 'Only including documents uploaded with this specific message'
       });
     }
 
@@ -304,7 +303,7 @@ export function useChatAI(chatId: string, userId?: string) {
     setLoadingAI(true);
     setSendError(null);
 
-    // Generate AI response
+    // Generate AI response with only the documents from this message
     await generateAIResponse(message, addMessage, updateMessage, removeMessage, allDocuments);
   }, [userId, chatId, generateAIResponse]);
 
