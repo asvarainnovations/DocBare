@@ -132,7 +132,24 @@ export async function POST(req: NextRequest) {
         );
         // Get conversation history in API format
         conversationHistory = await memoryManager.getConversationHistoryForAPI(sessionId, 10);
+        
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.info('🟦 [query][DEBUG] Memory context and conversation history', {
+            sessionId,
+            userId,
+            hasMemoryContext: !!memoryContext,
+            memoryContextLength: memoryContext.length,
+            conversationHistoryCount: conversationHistory.length,
+            conversationHistory: conversationHistory.map(msg => ({
+              role: msg.role,
+              content: msg.content.substring(0, 50) + '...'
+            }))
+          });
+        }
       } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.error('🟥 [query][ERROR] Failed to get memory context', error);
+        }
         // Continue without memory context if it fails
       }
     }

@@ -277,15 +277,40 @@ export class MemoryManager {
     try {
       const memories = await this.getConversationHistory(sessionId, limit);
       
+      if (process.env.NODE_ENV === 'development') {
+        aiLogger.info('🟦 [memory][DEBUG] Retrieved conversation memories', {
+          sessionId,
+          memoryCount: memories.length,
+          memories: memories.map(m => ({
+            id: m.id,
+            content: m.content.substring(0, 100) + '...',
+            metadata: m.metadata
+          }))
+        });
+      }
+      
       // Convert memories to API message format
       const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
       
       for (const memory of memories) {
-        // Determine role based on memory metadata or content pattern
-        const role = memory.metadata?.source === 'user' ? 'user' : 'assistant';
+        // Get role from metadata (stored when saving conversation memory)
+        const role = memory.metadata?.role || 'assistant';
+        // Extract content without the [ROLE]: prefix
+        const content = memory.content.replace(/^\[(USER|ASSISTANT)\]:\s*/, '');
         messages.push({
-          role,
-          content: memory.content
+          role: role as 'user' | 'assistant',
+          content: content
+        });
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        aiLogger.info('🟦 [memory][DEBUG] Converted to API format', {
+          sessionId,
+          messageCount: messages.length,
+          messages: messages.map(m => ({
+            role: m.role,
+            content: m.content.substring(0, 50) + '...'
+          }))
         });
       }
       

@@ -191,6 +191,18 @@ async function callLLMStream(
       },
     ];
 
+    if (process.env.NODE_ENV === 'development') {
+      aiLogger.info('🟦 [streaming][DEBUG] Messages array for DeepSeek API', {
+        totalMessages: messages.length,
+        conversationHistoryCount: conversationHistory.length,
+        conversationHistory: conversationHistory.map(msg => ({
+          role: msg.role,
+          content: msg.content.substring(0, 50) + '...'
+        })),
+        currentQuery: query.substring(0, 100) + '...'
+      });
+    }
+
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
