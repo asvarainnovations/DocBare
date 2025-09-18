@@ -216,7 +216,36 @@ export class MemoryManager {
    * Get conversation history for context
    */
   async getConversationHistory(sessionId: string, limit: number = 20): Promise<MemoryEntry[]> {
-    return this.retrieveMemories(sessionId, '', '', limit, ['conversation']);
+    // We need to get the userId from the session to retrieve memories
+    // For now, let's query without userId filter to get all memories for the session
+    try {
+      let query = firestore.collection('agent_memory')
+        .where('sessionId', '==', sessionId)
+        .where('type', '==', 'conversation')
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
+
+      const snapshot = await query.get();
+      const memories: MemoryEntry[] = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        memories.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt.toDate(),
+          accessedAt: data.accessedAt.toDate()
+        } as MemoryEntry);
+      });
+
+      // Update access count and timestamp for retrieved memories
+      await this.updateMemoryAccess(memories.map(m => m.id));
+
+      return memories;
+    } catch (error) {
+      aiLogger.error('Failed to get conversation history', { sessionId, error });
+      return [];
+    }
   }
 
   /**

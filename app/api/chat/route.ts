@@ -38,6 +38,33 @@ export async function POST(req: NextRequest) {
 
       const docRef = await firestore.collection('chat_messages').add(messageData);
       
+      // Store conversation memory for user messages
+      if (role === 'USER' && sessionId && userId) {
+        try {
+          const { MemoryManager } = await import('@/lib/memory');
+          const memoryManager = MemoryManager.getInstance();
+          await memoryManager.storeConversationMemory(
+            sessionId,
+            userId,
+            'user',
+            content
+          );
+          
+          if (process.env.NODE_ENV === 'development') {
+            apiLogger.info('🟦 [chat][DEBUG] User message stored as conversation memory', {
+              sessionId,
+              userId,
+              content: content.substring(0, 50) + '...'
+            });
+          }
+        } catch (memoryError) {
+          // Don't fail the request if memory storage fails
+          if (process.env.NODE_ENV === 'development') {
+            apiLogger.error('🟥 [chat][ERROR] Failed to store user message as memory', memoryError);
+          }
+        }
+      }
+      
       apiLogger.success('Chat message saved to Firestore', { 
         messageId: docRef.id,
         sessionId, 

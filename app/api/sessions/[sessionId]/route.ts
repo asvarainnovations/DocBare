@@ -51,18 +51,15 @@ export async function GET(
         }
       }
 
-      // Add document context to old messages that don't have it
-      messages.forEach((msg) => {
-        if (msg.role === 'USER' && (!msg.documents || msg.documents.length === 0) && sessionDocumentContext.length > 0) {
-          msg.documents = sessionDocumentContext;
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`🟦 [sessions][DEBUG] Added document context to old message:`, {
-              messageId: msg.id,
-              documents: msg.documents
-            });
-          }
-        }
-      });
+      // DO NOT add document context to old messages - documents should only appear with the message they were originally attached to
+      // This was causing the document attachment persistence issue where documents appeared on all messages
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🟦 [sessions][DEBUG] Document context available but not added to old messages:`, {
+          sessionDocumentContext: sessionDocumentContext,
+          messageCount: messages.length,
+          note: 'Documents should only appear with the message they were originally attached to'
+        });
+      }
 
       // Debug logging for each message
       if (process.env.NODE_ENV === 'development') {

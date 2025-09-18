@@ -222,8 +222,17 @@ export async function POST(req: NextRequest) {
     // 3. Store memories if sessionId is provided
     if (sessionId && !errorDuringStream) {
       try {
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.info('🟦 [query][DEBUG] Storing conversation memories', {
+            sessionId,
+            userId,
+            query: query.substring(0, 50) + '...',
+            finalAnswer: finalAnswer.substring(0, 50) + '...'
+          });
+        }
+
         // Store user query as conversation memory
-        await memoryManager.storeConversationMemory(
+        const userMemoryId = await memoryManager.storeConversationMemory(
           sessionId,
           userId,
           "user",
@@ -231,12 +240,21 @@ export async function POST(req: NextRequest) {
         );
 
         // Store AI response as conversation memory
-        await memoryManager.storeConversationMemory(
+        const assistantMemoryId = await memoryManager.storeConversationMemory(
           sessionId,
           userId,
           "assistant",
           finalAnswer
         );
+
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.info('🟦 [query][DEBUG] Conversation memories stored', {
+            sessionId,
+            userId,
+            userMemoryId,
+            assistantMemoryId
+          });
+        }
 
         // Extract and store reasoning from the response
         const reasoningMatch = finalAnswer.match(
@@ -251,6 +269,14 @@ export async function POST(req: NextRequest) {
           );
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.error('🟥 [query][ERROR] Failed to store conversation memories', {
+            sessionId,
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
+        }
         // Don't fail the request if memory storage fails
       }
     }
