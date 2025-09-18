@@ -11,7 +11,12 @@ function calculateDynamicTokenLimit(query: string, documentContent?: string): nu
 }
 
 // Import the callLLMStream function from the query route
-async function callLLMStream(query: string, memoryContext: string = '', documentContent: string = '') {
+async function callLLMStream(
+  query: string, 
+  memoryContext: string = '', 
+  documentContent: string = '',
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = []
+) {
   const startTime = Date.now();
   
   // 1. Retrieve knowledge base context
@@ -171,6 +176,21 @@ async function callLLMStream(query: string, memoryContext: string = '', document
     // Calculate dynamic max_tokens based on query complexity
     const maxTokens = calculateDynamicTokenLimit(query, documentContent);
     
+    // Build messages array with conversation history
+    const messages = [
+      {
+        role: "system",
+        content: enhancedSystemPrompt,
+      },
+      // Add conversation history
+      ...conversationHistory,
+      // Add current user query
+      {
+        role: "user",
+        content: query,
+      },
+    ];
+
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -179,16 +199,7 @@ async function callLLMStream(query: string, memoryContext: string = '', document
       },
       body: JSON.stringify({
         model: "deepseek-reasoner",
-        messages: [
-          {
-            role: "system",
-            content: enhancedSystemPrompt,
-          },
-          {
-            role: "user",
-            content: query,
-          },
-        ],
+        messages: messages,
         stream: true,
         max_tokens: maxTokens, // Dynamic token allocation
       }),
@@ -212,6 +223,7 @@ export interface StreamingContext {
   userId: string;
   documentContent?: string;
   documentName?: string;
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>;
 }
 
 export class StreamingOrchestrator {
@@ -252,7 +264,12 @@ export class StreamingOrchestrator {
     return new ReadableStream({
       async start(controller) {
         try {
-          const response = await callLLMStream(context.query, '', context.documentContent || '');
+          const response = await callLLMStream(
+            context.query, 
+            '', 
+            context.documentContent || '', 
+            context.conversationHistory || []
+          );
           const reader = response.getReader();
           
           let reasoningContent = '';

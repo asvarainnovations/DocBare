@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
 
     // Generate memory context if sessionId is provided
     let memoryContext = "";
+    let conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     if (sessionId) {
       try {
         memoryContext = await memoryManager.generateMemoryContext(
@@ -129,6 +130,8 @@ export async function POST(req: NextRequest) {
           userId,
           query
         );
+        // Get conversation history in API format
+        conversationHistory = await memoryManager.getConversationHistoryForAPI(sessionId, 10);
       } catch (error) {
         // Continue without memory context if it fails
       }
@@ -145,6 +148,7 @@ export async function POST(req: NextRequest) {
         userId,
         documentContent: documentContent.trim(), // Pass retrieved document content
         documentName: documentName,
+        conversationHistory: conversationHistory, // Pass conversation history
       };
 
       stream = await StreamingOrchestrator.streamResponse(streamingContext);

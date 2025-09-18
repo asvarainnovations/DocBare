@@ -271,6 +271,32 @@ export class MemoryManager {
   }
 
   /**
+   * Get conversation history in DeepSeek API message format
+   */
+  async getConversationHistoryForAPI(sessionId: string, limit: number = 10): Promise<Array<{role: 'user' | 'assistant', content: string}>> {
+    try {
+      const memories = await this.getConversationHistory(sessionId, limit);
+      
+      // Convert memories to API message format
+      const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
+      
+      for (const memory of memories) {
+        // Determine role based on memory metadata or content pattern
+        const role = memory.metadata?.source === 'user' ? 'user' : 'assistant';
+        messages.push({
+          role,
+          content: memory.content
+        });
+      }
+      
+      return messages;
+    } catch (error) {
+      aiLogger.error('Failed to get conversation history for API', error);
+      return [];
+    }
+  }
+
+  /**
    * Generate memory-enhanced context for AI (Enhanced with user-level memories)
    */
   async generateMemoryContext(sessionId: string, userId: string, currentQuery: string): Promise<string> {
