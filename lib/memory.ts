@@ -106,8 +106,7 @@ export class MemoryManager {
       let query = firestore.collection('agent_memory')
         .where('sessionId', '==', sessionId)
         .where('userId', '==', userId)
-        .orderBy('accessedAt', 'desc')
-        .limit(limit);
+        .limit(limit * 2); // Get more to account for sorting
 
       if (types && types.length > 0) {
         query = query.where('type', 'in', types);
@@ -126,11 +125,18 @@ export class MemoryManager {
         } as MemoryEntry);
       });
 
-      // Update access count and timestamp for retrieved memories
-      await this.updateMemoryAccess(memories.map(m => m.id));
+      // Sort in memory by accessedAt descending (most recently accessed first)
+      memories.sort((a, b) => b.accessedAt.getTime() - a.accessedAt.getTime());
 
-      return memories;
+      // Take only the requested limit
+      const limitedMemories = memories.slice(0, limit);
+
+      // Update access count and timestamp for retrieved memories
+      await this.updateMemoryAccess(limitedMemories.map(m => m.id));
+
+      return limitedMemories;
     } catch (error) {
+      aiLogger.error('Failed to retrieve memories', { sessionId, userId, error });
       return [];
     }
   }
@@ -216,14 +222,13 @@ export class MemoryManager {
    * Get conversation history for context
    */
   async getConversationHistory(sessionId: string, limit: number = 20): Promise<MemoryEntry[]> {
-    // We need to get the userId from the session to retrieve memories
-    // For now, let's query without userId filter to get all memories for the session
+    // Query without orderBy to avoid Firestore index requirements
+    // We'll sort in memory instead
     try {
       let query = firestore.collection('agent_memory')
         .where('sessionId', '==', sessionId)
         .where('type', '==', 'conversation')
-        .orderBy('createdAt', 'desc')
-        .limit(limit);
+        .limit(limit * 2); // Get more to account for potential duplicates
 
       const snapshot = await query.get();
       const memories: MemoryEntry[] = [];
@@ -238,10 +243,30 @@ export class MemoryManager {
         } as MemoryEntry);
       });
 
-      // Update access count and timestamp for retrieved memories
-      await this.updateMemoryAccess(memories.map(m => m.id));
+      // Sort in memory by createdAt descending (newest first)
+      memories.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-      return memories;
+      // Take only the requested limit
+      const limitedMemories = memories.slice(0, limit);
+
+      // Update access count and timestamp for retrieved memories
+      await this.updateMemoryAccess(limitedMemories.map(m => m.id));
+
+      if (process.env.NODE_ENV === 'development') {
+        aiLogger.info('🟦 [memory][DEBUG] Retrieved conversation memories', {
+          sessionId,
+          totalFound: memories.length,
+          limitedTo: limitedMemories.length,
+          memories: limitedMemories.map(m => ({
+            id: m.id,
+            role: m.metadata?.role,
+            content: m.content.substring(0, 50) + '...',
+            createdAt: m.createdAt
+          }))
+        });
+      }
+
+      return limitedMemories;
     } catch (error) {
       aiLogger.error('Failed to get conversation history', { sessionId, error });
       return [];
