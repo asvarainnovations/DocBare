@@ -346,7 +346,10 @@ export class MemoryManager {
       // Convert memories to API message format
       const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
       
-      for (const memory of memories) {
+      // Reverse the memories to get chronological order (oldest first) for the API
+      const chronologicalMemories = [...memories].reverse();
+      
+      for (const memory of chronologicalMemories) {
         // Get role from metadata (stored when saving conversation memory)
         const role = memory.metadata?.role || 'assistant';
         // Extract content without the [ROLE]: prefix
