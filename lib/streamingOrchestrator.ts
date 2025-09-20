@@ -10,6 +10,31 @@ function calculateDynamicTokenLimit(query: string, documentContent?: string): nu
   return TokenManager.calculateMaxTokens(query, hasDocument);
 }
 
+// Expert-recommended function to build messages array correctly
+function buildMessagesArray(
+  systemPrompt: string | null, 
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}>, 
+  currentUserMessage: string
+): Array<{role: 'system' | 'user' | 'assistant', content: string}> {
+  const messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
+  
+  // Add system prompt first
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+
+  // Add conversation history in chronological order (already sorted correctly)
+  conversationHistory.forEach(item => {
+    const role = item.role === "assistant" ? "assistant" : "user";
+    messages.push({ role, content: item.content });
+  });
+
+  // Add current user message last
+  messages.push({ role: "user", content: currentUserMessage });
+  
+  return messages;
+}
+
 // Import the callLLMStream function from the query route
 async function callLLMStream(
   query: string, 
@@ -64,6 +89,12 @@ async function callLLMStream(
   // Use the expert-designed system prompt from query/route.ts
   const systemPrompt = `
     You are DocBare, an expert AI legal analyst specializing in Indian Law, contracts, pleadings, and legal drafts.
+
+    **CRITICAL: ALWAYS USE CONVERSATION HISTORY**
+    - Always use the conversation history that follows when answering follow-up questions
+    - Treat facts stated by the user in earlier messages as ground-truth for the purpose of follow-ups (unless the user says they were mistaken)
+    - If a user asks "What is my name?" and they previously said "My name is Rajat", respond with "Your name is Rajat"
+    - Do NOT ignore or overlook information from previous messages in the conversation
 
     **ABOUT DOCBARE:**
     - DocBare is developed by Asvara, a technology company focused on legal AI solutions
@@ -187,20 +218,8 @@ async function callLLMStream(
     // Calculate dynamic max_tokens based on query complexity
     const maxTokens = calculateDynamicTokenLimit(query, documentContent);
     
-    // Build messages array with conversation history
-    const messages = [
-      {
-        role: "system",
-        content: enhancedSystemPrompt,
-      },
-      // Add conversation history
-      ...conversationHistory,
-      // Add current user query
-      {
-        role: "user",
-        content: query,
-      },
-    ];
+    // Build messages array with conversation history (expert-recommended approach)
+    const messages = buildMessagesArray(enhancedSystemPrompt, conversationHistory, query);
 
     if (process.env.NODE_ENV === 'development') {
       aiLogger.info('🟦 [streaming][DEBUG] Messages array for DeepSeek API', {
@@ -212,7 +231,29 @@ async function callLLMStream(
         })),
         currentQuery: query.substring(0, 100) + '...'
       });
+      
+      // CRITICAL: Log the EXACT payload being sent to DeepSeek
+      aiLogger.info('🟦 [streaming][DEBUG] EXACT DeepSeek API Payload', {
+        model: "deepseek/deepseek-chat-v3.1",
+        messages: messages.map((msg, index) => ({
+          index,
+          role: msg.role,
+          content: msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : ''),
+          contentLength: msg.content.length
+        })),
+        max_tokens: maxTokens,
+        temperature: 0.1,
+        stream: true
+      });
     }
+
+    const requestPayload = {
+      model: "deepseek-reasoner",
+      messages: messages,
+      stream: true,
+      max_tokens: maxTokens, // Dynamic token allocation
+      temperature: 0.1, // Add temperature for consistency
+    };
 
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
@@ -220,17 +261,33 @@ async function callLLMStream(
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: "deepseek-reasoner",
-        messages: messages,
-        stream: true,
-        max_tokens: maxTokens, // Dynamic token allocation
-      }),
+      body: JSON.stringify(requestPayload),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
+      if (process.env.NODE_ENV === 'development') {
+        aiLogger.error('🟥 [streaming][ERROR] DeepSeek API Error Response', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          requestPayload: {
+            model: requestPayload.model,
+            messageCount: requestPayload.messages.length,
+            max_tokens: requestPayload.max_tokens,
+            temperature: requestPayload.temperature
+          }
+        });
+      }
       throw new Error(`DeepSeek API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      aiLogger.info('🟦 [streaming][DEBUG] DeepSeek API Response Status', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
     }
 
     return response.body!;
