@@ -5,14 +5,17 @@
   "description": "DocBare: Modern legal AI platform for document drafting and analysis",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/validate-env.js && next build",
+    "build:skip-validation": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "test": "tsx scripts/run-tests.ts",
-    "test:document-ai": "tsx scripts/test-document-ai.ts"
+    "test:document-ai": "tsx scripts/test-document-ai.ts",
+    "validate:env": "node scripts/validate-env.js",
+    "validate:env:generate-example": "node scripts/validate-env.js --generate-example"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "4.4.0",

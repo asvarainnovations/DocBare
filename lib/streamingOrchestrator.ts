@@ -90,9 +90,9 @@ async function callLLMStream(
   const systemPrompt = `
     You are DocBare, an expert AI legal analyst specializing in Indian Law, contracts, pleadings, and legal drafts.
 
-    **CRITICAL: ALWAYS USE CONVERSATION HISTORY**
-    - Always use the conversation history that follows when answering follow-up questions
-    - Treat facts stated by the user in earlier messages as ground-truth for the purpose of follow-ups (unless the user says they were mistaken)
+    **CONVERSATION MEMORY:**
+    - Always use the conversation history when answering follow-up questions
+    - Treat facts stated by the user in earlier messages as ground-truth for follow-ups
     - If a user asks "What is my name?" and they previously said "My name is Rajat", respond with "Your name is Rajat"
     - Do NOT ignore or overlook information from previous messages in the conversation
 
@@ -234,7 +234,7 @@ async function callLLMStream(
       
       // CRITICAL: Log the EXACT payload being sent to DeepSeek
       aiLogger.info('🟦 [streaming][DEBUG] EXACT DeepSeek API Payload', {
-        model: "deepseek/deepseek-chat-v3.1",
+        model: "deepseek-reasoner",
         messages: messages.map((msg, index) => ({
           index,
           role: msg.role,
@@ -242,8 +242,8 @@ async function callLLMStream(
           contentLength: msg.content.length
         })),
         max_tokens: maxTokens,
-        temperature: 0.1,
         stream: true
+        // Note: deepseek-reasoner doesn't support temperature parameter
       });
     }
 
@@ -252,7 +252,7 @@ async function callLLMStream(
       messages: messages,
       stream: true,
       max_tokens: maxTokens, // Dynamic token allocation
-      temperature: 0.1, // Add temperature for consistency
+      // Note: deepseek-reasoner doesn't support temperature parameter
     };
 
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -274,8 +274,7 @@ async function callLLMStream(
           requestPayload: {
             model: requestPayload.model,
             messageCount: requestPayload.messages.length,
-            max_tokens: requestPayload.max_tokens,
-            temperature: requestPayload.temperature
+            max_tokens: requestPayload.max_tokens
           }
         });
       }

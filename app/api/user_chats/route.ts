@@ -3,6 +3,9 @@ import firestore from '@/lib/firestore';
 import { prisma } from '@/lib/prisma';
 import { apiLogger } from '@/lib/logger';
 
+// Force dynamic rendering to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

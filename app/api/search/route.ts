@@ -4,6 +4,9 @@ import { withRateLimit, rateLimitConfigs } from '@/lib/rateLimit';
 import { aiLogger } from '@/lib/logger';
 import firestore from '@/lib/firestore';
 
+// Force dynamic rendering to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // Type definitions for search results
 interface DocumentData {
   id: string;

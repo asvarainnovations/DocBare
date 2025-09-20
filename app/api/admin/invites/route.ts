@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin, generateInviteCode } from '@/lib/adminUtils';
 
+// Force dynamic rendering to prevent static generation issues
+export const dynamic = 'force-dynamic';
+
 // Helper function to add hours to current time
 function addHours(date: Date, hours: number): Date {
   const result = new Date(date);

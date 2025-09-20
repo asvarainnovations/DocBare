@@ -20,10 +20,10 @@ async function testDeepSeekMemory() {
 
   console.log('🧪 Testing DeepSeek memory functionality...\n');
 
-  // Test 1: Simple name memory test
-  console.log('📝 Test 1: Simple name memory test');
+  // Test 1: Simple name memory test with deepseek-chat
+  console.log('📝 Test 1: Simple name memory test with deepseek-chat');
   const test1Payload = {
-    model: "deepseek/deepseek-chat-v3.1",
+    model: "deepseek-chat",
     messages: [
       {
         role: "system",
@@ -67,10 +67,10 @@ async function testDeepSeekMemory() {
     console.error('❌ Test 1 error:', error);
   }
 
-  // Test 2: Legal context memory test
-  console.log('📝 Test 2: Legal context memory test');
+  // Test 2: Legal context memory test with deepseek-chat
+  console.log('📝 Test 2: Legal context memory test with deepseek-chat');
   const test2Payload = {
-    model: "deepseek/deepseek-chat-v3.1", 
+    model: "deepseek-chat", 
     messages: [
       {
         role: "system",
@@ -136,8 +136,8 @@ async function testDeepSeekMemory() {
         content: "What's my name?"
       }
     ],
-    max_tokens: 60,
-    temperature: 0.1
+    max_tokens: 60
+    // Note: deepseek-reasoner doesn't support temperature parameter
   };
 
   try {

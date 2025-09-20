@@ -117,7 +117,7 @@ export default function SettingsPage() {
                 </div>
               </button>
               
-              <button
+        <button
                 onClick={() => router.push("/")}
                 className="w-full px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors text-left flex items-center gap-3"
               >
@@ -126,7 +126,7 @@ export default function SettingsPage() {
                   <p className="text-white font-medium">Back to Chat</p>
                   <p className="text-gray-400 text-sm">Return to your conversations</p>
                 </div>
-              </button>
+        </button>
             </div>
 
             {/* Development Status */}
@@ -152,4 +152,4 @@ export default function SettingsPage() {
       </div>
     </div>
   );
-}
+} 
