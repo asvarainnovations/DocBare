@@ -63,6 +63,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     checkAndGenerateAutoResponse,
     thinkingStates,
     clearThinkingStates,
+    cancelRequest,
   } = useChatAI(params.chatId, session?.user?.id);
 
   // Enhanced file upload handler that clears thinking states
@@ -526,6 +527,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
           <ChatInput
             variant="chat"
             onSend={handleSendMessage}
+            onCancel={cancelRequest}
             loading={loadingAI}
             disabled={isAnyDocumentProcessing}
             error={sendError}

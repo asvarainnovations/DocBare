@@ -5,6 +5,7 @@ import {
   PaperAirplaneIcon,
   PaperClipIcon,
   PlusIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
@@ -15,6 +16,7 @@ interface ChatInputProps {
   variant?: "home" | "chat";
   placeholder?: string;
   onSend: (message: string) => void;
+  onCancel?: () => void; // Add cancel callback
   loading?: boolean;
   disabled?: boolean;
   error?: string | null;
@@ -39,6 +41,7 @@ export default function ChatInput({
   variant = "chat",
   placeholder = "Ask your legal question…",
   onSend,
+  onCancel,
   loading = false,
   disabled = false,
   error = null,
@@ -490,49 +493,70 @@ export default function ChatInput({
               </div>
             )}
 
-            {/* Right: Send Button */}
-            <motion.button
-              type="submit"
-              className={clsx(
-                "flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10",
-                "bg-[#007BFF] text-white",
-                "transition-all duration-150",
-                displayValue.trim() && !loading
-                  ? "animate-pulse"
-                  : "opacity-50 cursor-not-allowed",
-                loading && "pointer-events-none"
-              )}
-              disabled={!displayValue.trim() || loading || disabled}
-              whileHover={
-                displayValue.trim() && !loading ? { scale: 1.08 } : {}
-              }
-              whileTap={displayValue.trim() && !loading ? { scale: 0.95 } : {}}
-              aria-label="Send"
-            >
-              {loading ? (
-                <svg
-                  className="animate-spin w-4 h-4 sm:w-5 sm:h-5"
-                  viewBox="0 0 24 24"
+            {/* Right: Send/Cancel Button */}
+            <div className="flex items-center gap-2">
+              {loading && onCancel && (
+                <motion.button
+                  type="button"
+                  onClick={onCancel}
+                  className={clsx(
+                    "flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10",
+                    "bg-red-500 text-white",
+                    "transition-all duration-150",
+                    "hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
+                    "active:scale-95"
+                  )}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Cancel request"
                 >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="#fff"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="#fff"
-                    d="M4 12a8 8 0 018-8v8z"
-                  />
-                </svg>
-              ) : (
-                <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </motion.button>
               )}
-            </motion.button>
+              
+              <motion.button
+                type="submit"
+                className={clsx(
+                  "flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10",
+                  "bg-[#007BFF] text-white",
+                  "transition-all duration-150",
+                  displayValue.trim() && !loading
+                    ? "animate-pulse"
+                    : "opacity-50 cursor-not-allowed",
+                  loading && "pointer-events-none"
+                )}
+                disabled={!displayValue.trim() || loading || disabled}
+                whileHover={
+                  displayValue.trim() && !loading ? { scale: 1.08 } : {}
+                }
+                whileTap={displayValue.trim() && !loading ? { scale: 0.95 } : {}}
+                aria-label="Send"
+              >
+                {loading ? (
+                  <svg
+                    className="animate-spin w-4 h-4 sm:w-5 sm:h-5"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="#fff"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="#fff"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
+                  </svg>
+                ) : (
+                  <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </motion.button>
+            </div>
           </div>
 
           {/* Error message */}

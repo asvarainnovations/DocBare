@@ -6,6 +6,7 @@ import { memoryManager } from "@/lib/memory";
 import { StreamingOrchestrator } from "@/lib/streamingOrchestrator";
 import { USE_MULTI_AGENT } from "@/lib/config";
 import firestore from "@/lib/firestore";
+import { isAbortError, getAbortErrorMessage } from "@/lib/abortController";
 
 export async function GET(req: NextRequest) {
   aiLogger.info("Query route GET method called", {
@@ -166,10 +167,25 @@ export async function POST(req: NextRequest) {
         documentContent: documentContent.trim(), // Pass retrieved document content
         documentName: documentName,
         conversationHistory: conversationHistory, // Pass conversation history
+        abortSignal: req.signal, // Pass the request's abort signal
       };
 
       stream = await StreamingOrchestrator.streamResponse(streamingContext);
     } catch (llmErr: any) {
+      // Handle abort errors specifically
+      if (isAbortError(llmErr)) {
+        aiLogger.warn("🟨 [query][WARNING] Request was aborted", {
+          sessionId,
+          userId,
+          query: query.substring(0, 100),
+          reason: getAbortErrorMessage(llmErr)
+        });
+        return NextResponse.json(
+          { error: getAbortErrorMessage(llmErr) },
+          { status: 499 } // Client Closed Request
+        );
+      }
+      
       const apiError = llmErr?.response?.data?.error;
       if (apiError && apiError.message === "Insufficient Balance") {
         aiLogger.error("DeepSeek API insufficient balance", llmErr);
@@ -200,6 +216,13 @@ export async function POST(req: NextRequest) {
           const decoder = new TextDecoder();
 
           while (true) {
+            // Check if request was aborted
+            if (req.signal?.aborted) {
+              aiLogger.warn("🟨 [query][WARNING] Stream aborted by user during reading");
+              controller.close();
+              return;
+            }
+            
             const { done, value } = await reader.read();
             if (done) break;
 

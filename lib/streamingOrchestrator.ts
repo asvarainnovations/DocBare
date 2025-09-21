@@ -3,6 +3,7 @@ import { aiLogger } from './logger';
 import { retrieveFromKB } from './vertexTool';
 import { ContextOptimizer } from './contextOptimizer';
 import { TokenManager } from './tokenManager';
+import { createLinkedAbortController, isAbortError, getAbortErrorMessage } from './abortController';
 
 // Dynamic token limit calculation using TokenManager
 function calculateDynamicTokenLimit(query: string, documentContent?: string): number {
@@ -40,7 +41,8 @@ async function callLLMStream(
   query: string, 
   memoryContext: string = '', 
   documentContent: string = '',
-  conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = []
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [],
+  abortSignal?: AbortSignal
 ) {
   const startTime = Date.now();
   
@@ -255,42 +257,65 @@ async function callLLMStream(
       // Note: deepseek-reasoner doesn't support temperature parameter
     };
 
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify(requestPayload),
+    // Create AbortController with timeout and proper cleanup
+    const { controller, cleanup } = createLinkedAbortController(abortSignal, {
+      timeout: 30000, // 30 second timeout
+      reason: 'DeepSeek API request timeout'
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    try {
+      const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify(requestPayload),
+        signal: controller.signal,
+      });
+
+      cleanup();
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (process.env.NODE_ENV === 'development') {
+          aiLogger.error('🟥 [streaming][ERROR] DeepSeek API Error Response', {
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
+            requestPayload: {
+              model: requestPayload.model,
+              messageCount: requestPayload.messages.length,
+              max_tokens: requestPayload.max_tokens
+            }
+          });
+        }
+        throw new Error(`DeepSeek API error: ${errorData.error?.message || response.statusText}`);
+      }
+
       if (process.env.NODE_ENV === 'development') {
-        aiLogger.error('🟥 [streaming][ERROR] DeepSeek API Error Response', {
+        aiLogger.info('🟦 [streaming][DEBUG] DeepSeek API Response Status', {
           status: response.status,
           statusText: response.statusText,
-          errorData,
-          requestPayload: {
-            model: requestPayload.model,
-            messageCount: requestPayload.messages.length,
-            max_tokens: requestPayload.max_tokens
-          }
+          headers: Object.fromEntries(response.headers.entries())
         });
       }
-      throw new Error(`DeepSeek API error: ${errorData.error?.message || response.statusText}`);
-    }
 
-    if (process.env.NODE_ENV === 'development') {
-      aiLogger.info('🟦 [streaming][DEBUG] DeepSeek API Response Status', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
+      return response.body!;
+    } catch (error) {
+      cleanup();
+      throw error;
     }
-
-    return response.body!;
   } catch (error) {
+    // Handle abort errors specifically
+    if (isAbortError(error)) {
+      aiLogger.warn("🟨 [streaming][WARNING] Request was aborted", {
+        query: query.substring(0, 100),
+        reason: getAbortErrorMessage(error)
+      });
+      throw new Error(getAbortErrorMessage(error));
+    }
+    
     aiLogger.error("Error calling DeepSeek API", error);
     throw error;
   }
@@ -303,6 +328,7 @@ export interface StreamingContext {
   documentContent?: string;
   documentName?: string;
   conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+  abortSignal?: AbortSignal;
 }
 
 export class StreamingOrchestrator {
@@ -347,7 +373,8 @@ export class StreamingOrchestrator {
             context.query, 
             '', 
             context.documentContent || '', 
-            context.conversationHistory || []
+            context.conversationHistory || [],
+            context.abortSignal
           );
           const reader = response.getReader();
           
@@ -360,6 +387,13 @@ export class StreamingOrchestrator {
           
           try {
             while (true) {
+              // Check if request was aborted
+              if (context.abortSignal?.aborted) {
+                aiLogger.warn("🟨 [streaming][WARNING] Stream aborted by user");
+                controller.close();
+                return;
+              }
+              
               const { done, value } = await reader.read();
               if (done) break;
               

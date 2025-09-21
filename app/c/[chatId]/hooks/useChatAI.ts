@@ -336,6 +336,20 @@ export function useChatAI(chatId: string, userId?: string) {
     setThinkingStates({});
   }, []);
 
+  // Cancel current AI request (exposed for external use)
+  const cancelRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      try {
+        abortControllerRef.current.abort();
+        console.log('🟦 [chat_ui][INFO] AI request cancelled by user');
+        setLoadingAI(false);
+        setSendError('Request was cancelled');
+      } catch (error) {
+        console.log('🟦 [chat_ui][INFO] Error cancelling request (ignored):', error);
+      }
+    }
+  }, []);
+
   return {
     loadingAI,
     sendError,
@@ -343,5 +357,6 @@ export function useChatAI(chatId: string, userId?: string) {
     checkAndGenerateAutoResponse,
     thinkingStates,
     clearThinkingStates,
+    cancelRequest,
   };
 } 
