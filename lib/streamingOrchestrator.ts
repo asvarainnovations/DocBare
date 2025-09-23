@@ -374,19 +374,36 @@ export class StreamingOrchestrator {
               
               const chunk = new TextDecoder().decode(value);
               
+              // Debug logging for raw chunks
+              if (process.env.NODE_ENV === 'development') {
+                aiLogger.info('🟦 [streaming][DEBUG] Raw chunk received', {
+                  chunkLength: chunk.length,
+                  chunkPreview: chunk.substring(0, 200),
+                  hasDataPrefix: chunk.includes('data: '),
+                  chunkEndsWith: chunk.slice(-20)
+                });
+              }
+              
               // Handle DeepSeek reasoning model streaming format
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
+              // Process the entire chunk as a single unit to handle incomplete JSON properly
+              if (chunk.includes('data: ')) {
+                // Split by 'data: ' to get individual JSON objects
+                const dataParts = chunk.split('data: ');
+                for (let i = 1; i < dataParts.length; i++) { // Skip first empty part
                   try {
-                    const jsonStr = line.slice(6); // Remove 'data: ' prefix
-                    if (jsonStr.trim() === '[DONE]') continue;
+                    let jsonStr = dataParts[i].trim();
+                    
+                    // Remove trailing newlines and handle [DONE] marker
+                    if (jsonStr === '[DONE]') continue;
+                    if (jsonStr.endsWith('\n')) {
+                      jsonStr = jsonStr.slice(0, -1);
+                    }
                     
                     // Add to buffer and try to parse
                     jsonBuffer += jsonStr;
                     
                     // Safety check: prevent buffer from growing too large
-                    if (jsonBuffer.length > 50000) { // Increased limit for better handling
+                    if (jsonBuffer.length > 50000) {
                       console.warn('🟨 [streaming][WARN] JSON buffer too large, clearing:', jsonBuffer.length);
                       jsonBuffer = '';
                       continue;
@@ -397,9 +414,27 @@ export class StreamingOrchestrator {
                     try {
                       jsonData = JSON.parse(jsonBuffer);
                       jsonBuffer = ''; // Clear buffer on successful parse
+                      
+                      // Debug logging for successful JSON parsing
+                      if (process.env.NODE_ENV === 'development') {
+                        aiLogger.info('🟦 [streaming][DEBUG] JSON parsed successfully', {
+                          hasChoices: !!(jsonData.choices && jsonData.choices[0]),
+                          hasDelta: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta),
+                          hasReasoningContent: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.reasoning_content),
+                          hasContent: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content),
+                          contentPreview: jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content ? 
+                            jsonData.choices[0].delta.content.substring(0, 20) : 'none'
+                        });
+                      }
                     } catch (bufferError) {
                       // If buffer parsing fails, it might be incomplete - continue to next chunk
                       // But don't clear the buffer yet - it might be completed in next chunk
+                      if (process.env.NODE_ENV === 'development') {
+                        aiLogger.info('🟦 [streaming][DEBUG] JSON parsing failed, buffering for next chunk', {
+                          bufferLength: jsonBuffer.length,
+                          bufferPreview: jsonBuffer.substring(0, 100)
+                        });
+                      }
                       continue;
                     }
                     
@@ -438,6 +473,17 @@ export class StreamingOrchestrator {
                       }
                       const newContent = jsonData.choices[0].delta.content;
                       finalContent += newContent;
+                      
+                      // Debug logging for content extraction
+                      if (process.env.NODE_ENV === 'development') {
+                        aiLogger.info('🟦 [streaming][DEBUG] Content chunk extracted', {
+                          newContent: newContent,
+                          newContentLength: newContent.length,
+                          finalContentLength: finalContent.length,
+                          finalContentStart: finalContent.substring(0, 50)
+                        });
+                      }
+                      
                       controller.enqueue(encoder.encode(newContent));
                     }
                   } catch (parseError) {
