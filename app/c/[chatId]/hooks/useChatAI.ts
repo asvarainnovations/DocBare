@@ -165,6 +165,18 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
+        // Debug logging for frontend chunk processing
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🟦 [frontend][DEBUG] Chunk received:', {
+            chunk: chunk,
+            chunkLength: chunk.length,
+            startsWithThinking: chunk.startsWith('THINKING:'),
+            startsWithFinal: chunk.startsWith('FINAL:'),
+            aiResponseLength: aiResponse.length,
+            aiResponseStart: aiResponse.substring(0, 50)
+          });
+        }
+        
         // Handle character-by-character streaming (not line-by-line)
         if (chunk.startsWith('THINKING:')) {
           const thinkingContent = chunk.slice(9); // Remove 'THINKING:' prefix
@@ -184,6 +196,18 @@ export function useChatAI(chatId: string, userId?: string) {
         } else if (chunk.trim() && !chunk.startsWith('THINKING:') && !chunk.startsWith('FINAL:')) {
           // Regular content - this is the actual AI response
           aiResponse += chunk;
+          
+          // Debug logging for content assembly
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [frontend][DEBUG] Content chunk processed:', {
+              chunk: chunk,
+              chunkLength: chunk.length,
+              aiResponseLength: aiResponse.length,
+              aiResponseStart: aiResponse.substring(0, 50),
+              aiResponseEnd: aiResponse.slice(-20)
+            });
+          }
+          
           updateMessage(aiMessage!.id, { content: aiResponse });
         }
       }
