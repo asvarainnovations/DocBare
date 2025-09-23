@@ -352,12 +352,22 @@ export class MemoryManager {
       for (const memory of chronologicalMemories) {
         // Get role from metadata (stored when saving conversation memory)
         const role = memory.metadata?.role || 'assistant';
-        // Extract content without the [ROLE]: prefix
-        const content = memory.content.replace(/^\[(USER|ASSISTANT)\]:\s*/, '');
-        messages.push({
-          role: role as 'user' | 'assistant',
-          content: content
-        });
+        // Extract content without the [ROLE]: prefix and ensure no reasoning content
+        let content = memory.content.replace(/^\[(USER|ASSISTANT)\]:\s*/, '');
+        
+        // Additional cleanup to ensure no reasoning content leaks through
+        content = content
+          .replace(/^THINKING:[\s\S]*?FINAL:/, '') // Remove any thinking content
+          .replace(/^FINAL:/, '') // Remove FINAL: prefix
+          .trim();
+        
+        // Only add if content is not empty after cleanup
+        if (content.trim()) {
+          messages.push({
+            role: role as 'user' | 'assistant',
+            content: content
+          });
+        }
       }
       
       if (process.env.NODE_ENV === 'development') {

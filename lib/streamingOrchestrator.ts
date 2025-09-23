@@ -196,16 +196,18 @@ async function callLLMStream(
     // Build messages array with conversation history (expert-recommended approach)
     const messages = buildMessagesArray(enhancedSystemPrompt, conversationHistory, query);
 
-    if (process.env.NODE_ENV === 'development') {
-      aiLogger.info('🟦 [streaming][DEBUG] Messages array for DeepSeek API', {
-        totalMessages: messages.length,
-        conversationHistoryCount: conversationHistory.length,
-        conversationHistory: conversationHistory.map(msg => ({
-          role: msg.role,
-          content: msg.content.substring(0, 50) + '...'
-        })),
-        currentQuery: query.substring(0, 100) + '...'
-      });
+      if (process.env.NODE_ENV === 'development') {
+        aiLogger.info('🟦 [streaming][DEBUG] Messages array for DeepSeek API', {
+          totalMessages: messages.length,
+          conversationHistoryCount: conversationHistory.length,
+          conversationHistory: conversationHistory.map(msg => ({
+            role: msg.role,
+            content: msg.content.substring(0, 50) + '...',
+            contentLength: msg.content.length
+          })),
+          currentQuery: query.substring(0, 100) + '...',
+          hasReasoningContent: conversationHistory.some(msg => msg.content.includes('THINKING:') || msg.content.includes('FINAL:'))
+        });
       
       // CRITICAL: Log the EXACT payload being sent to DeepSeek
       aiLogger.info('🟦 [streaming][DEBUG] EXACT DeepSeek API Payload', {
@@ -384,19 +386,20 @@ export class StreamingOrchestrator {
                     jsonBuffer += jsonStr;
                     
                     // Safety check: prevent buffer from growing too large
-                    if (jsonBuffer.length > 10000) {
+                    if (jsonBuffer.length > 50000) { // Increased limit for better handling
                       console.warn('🟨 [streaming][WARN] JSON buffer too large, clearing:', jsonBuffer.length);
                       jsonBuffer = '';
                       continue;
                     }
                     
-                    // Try to parse the buffered JSON
+                    // Try to parse the buffered JSON with better error handling
                     let jsonData;
                     try {
                       jsonData = JSON.parse(jsonBuffer);
                       jsonBuffer = ''; // Clear buffer on successful parse
                     } catch (bufferError) {
                       // If buffer parsing fails, it might be incomplete - continue to next chunk
+                      // But don't clear the buffer yet - it might be completed in next chunk
                       continue;
                     }
                     
@@ -441,6 +444,7 @@ export class StreamingOrchestrator {
                     // Skip invalid JSON lines - improved error handling
                     if (process.env.NODE_ENV === 'development') {
                       console.warn('🟨 [streaming][WARN] Failed to parse streaming chunk:', parseError);
+                      console.warn('🟨 [streaming][WARN] Problematic JSON buffer:', jsonBuffer.substring(0, 200));
                     }
                     // Continue processing other chunks
                     continue;
@@ -452,6 +456,22 @@ export class StreamingOrchestrator {
             // Send any remaining reasoning content at the end
             if (reasoningChunkBuffer.trim() && !hasStartedFinalResponse) {
               controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
+            }
+            
+            // Ensure final content is complete
+            if (finalContent && !finalContent.endsWith('.') && !finalContent.endsWith('!') && !finalContent.endsWith('?') && !finalContent.endsWith('...')) {
+              // Add completion marker if response seems incomplete
+              controller.enqueue(encoder.encode('...'));
+            }
+            
+            // Log final response completion status
+            if (process.env.NODE_ENV === 'development') {
+              aiLogger.info('🟦 [streaming][DEBUG] Stream completed', {
+                reasoningContentLength: reasoningContent.length,
+                finalContentLength: finalContent.length,
+                hasStartedFinalResponse,
+                finalContentEndsWith: finalContent.slice(-10)
+              });
             }
           } finally {
             reader.releaseLock();

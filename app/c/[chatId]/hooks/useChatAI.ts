@@ -172,7 +172,7 @@ export function useChatAI(chatId: string, userId?: string) {
             ...prev,
             [aiMessage!.id]: { 
               isThinking: true, 
-              content: prev[aiMessage!.id]?.content + thinkingContent 
+              content: (prev[aiMessage!.id]?.content || '') + thinkingContent 
             }
           }));
         } else if (chunk.startsWith('FINAL:')) {

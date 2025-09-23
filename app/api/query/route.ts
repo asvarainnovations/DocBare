@@ -262,12 +262,18 @@ export async function POST(req: NextRequest) {
           query
         );
 
-        // Store AI response as conversation memory
+        // Store AI response as conversation memory - ONLY content, NOT reasoning_content
+        // Remove any thinking content that might have leaked into finalAnswer
+        const cleanFinalAnswer = finalAnswer
+          .replace(/^THINKING:[\s\S]*?FINAL:/, '') // Remove thinking content prefix
+          .replace(/^FINAL:/, '') // Remove FINAL: prefix
+          .trim();
+        
         const assistantMemoryId = await memoryManager.storeConversationMemory(
           sessionId,
           userId,
           "assistant",
-          finalAnswer
+          cleanFinalAnswer
         );
 
         if (process.env.NODE_ENV === 'development') {
@@ -275,7 +281,9 @@ export async function POST(req: NextRequest) {
             sessionId,
             userId,
             userMemoryId,
-            assistantMemoryId
+            assistantMemoryId,
+            originalAnswerLength: finalAnswer.length,
+            cleanedAnswerLength: cleanFinalAnswer.length
           });
         }
 
