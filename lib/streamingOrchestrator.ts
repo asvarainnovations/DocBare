@@ -374,15 +374,6 @@ export class StreamingOrchestrator {
               
               const chunk = new TextDecoder().decode(value);
               
-              // Debug logging for raw chunks
-              if (process.env.NODE_ENV === 'development') {
-                aiLogger.info('🟦 [streaming][DEBUG] Raw chunk received', {
-                  chunkLength: chunk.length,
-                  chunkPreview: chunk.substring(0, 200),
-                  hasDataPrefix: chunk.includes('data: '),
-                  chunkEndsWith: chunk.slice(-20)
-                });
-              }
               
               // Handle DeepSeek reasoning model streaming format
               // Process the entire chunk as a single unit to handle incomplete JSON properly
@@ -415,26 +406,9 @@ export class StreamingOrchestrator {
                       jsonData = JSON.parse(jsonBuffer);
                       jsonBuffer = ''; // Clear buffer on successful parse
                       
-                      // Debug logging for successful JSON parsing
-                      if (process.env.NODE_ENV === 'development') {
-                        aiLogger.info('🟦 [streaming][DEBUG] JSON parsed successfully', {
-                          hasChoices: !!(jsonData.choices && jsonData.choices[0]),
-                          hasDelta: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta),
-                          hasReasoningContent: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.reasoning_content),
-                          hasContent: !!(jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content),
-                          contentPreview: jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content ? 
-                            jsonData.choices[0].delta.content.substring(0, 20) : 'none'
-                        });
-                      }
                     } catch (bufferError) {
                       // If buffer parsing fails, it might be incomplete - continue to next chunk
                       // But don't clear the buffer yet - it might be completed in next chunk
-                      if (process.env.NODE_ENV === 'development') {
-                        aiLogger.info('🟦 [streaming][DEBUG] JSON parsing failed, buffering for next chunk', {
-                          bufferLength: jsonBuffer.length,
-                          bufferPreview: jsonBuffer.substring(0, 100)
-                        });
-                      }
                       continue;
                     }
                     
@@ -443,6 +417,14 @@ export class StreamingOrchestrator {
                       const newReasoningContent = jsonData.choices[0].delta.reasoning_content;
                       reasoningContent += newReasoningContent;
                       reasoningChunkBuffer += newReasoningContent;
+                      
+                      // Log thinking content for debugging
+                      if (process.env.NODE_ENV === 'development' && newReasoningContent.trim()) {
+                        aiLogger.info('🟦 [CONVERSATION_FLOW] AI Thinking Content', {
+                          newReasoningContent: newReasoningContent,
+                          totalReasoningLength: reasoningContent.length
+                        });
+                      }
                       
                       // Send reasoning content in larger chunks for better formatting
                       // Send when we have a complete sentence or significant content
@@ -474,13 +456,12 @@ export class StreamingOrchestrator {
                       const newContent = jsonData.choices[0].delta.content;
                       finalContent += newContent;
                       
-                      // Debug logging for content extraction
-                      if (process.env.NODE_ENV === 'development') {
-                        aiLogger.info('🟦 [streaming][DEBUG] Content chunk extracted', {
+                      // Log final response content for debugging
+                      if (process.env.NODE_ENV === 'development' && newContent.trim()) {
+                        aiLogger.info('🟦 [CONVERSATION_FLOW] AI Final Response Content', {
                           newContent: newContent,
-                          newContentLength: newContent.length,
-                          finalContentLength: finalContent.length,
-                          finalContentStart: finalContent.substring(0, 50)
+                          totalFinalContentLength: finalContent.length,
+                          finalContentStart: finalContent.substring(0, 100)
                         });
                       }
                       
@@ -488,10 +469,6 @@ export class StreamingOrchestrator {
                     }
                   } catch (parseError) {
                     // Skip invalid JSON lines - improved error handling
-                    if (process.env.NODE_ENV === 'development') {
-                      console.warn('🟨 [streaming][WARN] Failed to parse streaming chunk:', parseError);
-                      console.warn('🟨 [streaming][WARN] Problematic JSON buffer:', jsonBuffer.substring(0, 200));
-                    }
                     // Continue processing other chunks
                     continue;
                   }
@@ -510,15 +487,6 @@ export class StreamingOrchestrator {
               controller.enqueue(encoder.encode('...'));
             }
             
-            // Log final response completion status
-            if (process.env.NODE_ENV === 'development') {
-              aiLogger.info('🟦 [streaming][DEBUG] Stream completed', {
-                reasoningContentLength: reasoningContent.length,
-                finalContentLength: finalContent.length,
-                hasStartedFinalResponse,
-                finalContentEndsWith: finalContent.slice(-10)
-              });
-            }
           } finally {
             reader.releaseLock();
           }

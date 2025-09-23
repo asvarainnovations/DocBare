@@ -165,17 +165,6 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
-        // Debug logging for frontend chunk processing
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🟦 [frontend][DEBUG] Chunk received:', {
-            chunk: chunk,
-            chunkLength: chunk.length,
-            startsWithThinking: chunk.startsWith('THINKING:'),
-            startsWithFinal: chunk.startsWith('FINAL:'),
-            aiResponseLength: aiResponse.length,
-            aiResponseStart: aiResponse.substring(0, 50)
-          });
-        }
         
         // Handle character-by-character streaming (not line-by-line)
         if (chunk.startsWith('THINKING:')) {
@@ -197,14 +186,13 @@ export function useChatAI(chatId: string, userId?: string) {
           // Regular content - this is the actual AI response
           aiResponse += chunk;
           
-          // Debug logging for content assembly
+          // Log what user sees in frontend
           if (process.env.NODE_ENV === 'development') {
-            console.log('🟦 [frontend][DEBUG] Content chunk processed:', {
+            console.log('🟦 [CONVERSATION_FLOW] User Sees Content', {
               chunk: chunk,
-              chunkLength: chunk.length,
               aiResponseLength: aiResponse.length,
-              aiResponseStart: aiResponse.substring(0, 50),
-              aiResponseEnd: aiResponse.slice(-20)
+              aiResponseStart: aiResponse.substring(0, 100),
+              aiResponseEnd: aiResponse.slice(-50)
             });
           }
           

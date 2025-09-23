@@ -134,16 +134,16 @@ export async function POST(req: NextRequest) {
         // Get conversation history in API format
         conversationHistory = await memoryManager.getConversationHistoryForAPI(sessionId, 10);
         
+        // Log complete conversation flow for debugging
         if (process.env.NODE_ENV === 'development') {
-          aiLogger.info('🟦 [query][DEBUG] Memory context and conversation history', {
+          aiLogger.info('🟦 [CONVERSATION_FLOW] User Query Received', {
             sessionId,
             userId,
-            hasMemoryContext: !!memoryContext,
-            memoryContextLength: memoryContext.length,
+            userQuery: query,
             conversationHistoryCount: conversationHistory.length,
             conversationHistory: conversationHistory.map(msg => ({
               role: msg.role,
-              content: msg.content.substring(0, 50) + '...'
+              content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : '')
             }))
           });
         }
@@ -276,14 +276,17 @@ export async function POST(req: NextRequest) {
           cleanFinalAnswer
         );
 
+        // Log final stored response
         if (process.env.NODE_ENV === 'development') {
-          aiLogger.info('🟦 [query][DEBUG] Conversation memories stored', {
+          aiLogger.info('🟦 [CONVERSATION_FLOW] Final Stored Response', {
             sessionId,
             userId,
-            userMemoryId,
-            assistantMemoryId,
             originalAnswerLength: finalAnswer.length,
-            cleanedAnswerLength: cleanFinalAnswer.length
+            cleanedAnswerLength: cleanFinalAnswer.length,
+            originalAnswerStart: finalAnswer.substring(0, 100),
+            cleanedAnswerStart: cleanFinalAnswer.substring(0, 100),
+            originalAnswerEnd: finalAnswer.slice(-50),
+            cleanedAnswerEnd: cleanFinalAnswer.slice(-50)
           });
         }
 
