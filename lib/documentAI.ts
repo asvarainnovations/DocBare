@@ -225,16 +225,9 @@ export class DocumentAIService {
     try {
       console.log(`🟦 [DocumentAI][INFO] Processing document: ${fileName}`);
       
-      // Security check: Validate file size and estimate pages
+      // Security check: Validate file size only
       const fileSizeMB = fileBuffer.length / (1024 * 1024);
-      const estimatedPages = Math.ceil(fileSizeMB / 0.5); // Rough estimate: 0.5MB per page
-      
-      // Pre-check: If estimated pages exceed Google's limit, reject before processing
-      if (estimatedPages > 30) {
-        throw new Error(`Document too large: Estimated ${estimatedPages} pages. Maximum allowed: 30 pages per document (Google Document AI limit).`);
-      }
-      
-      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB, Estimated pages: ${estimatedPages}`);
+      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB`);
 
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
