@@ -65,16 +65,16 @@ export class DocumentAIService {
       config.keyFilename = process.env.GOOGLE_CLOUD_KEY_FILE;
     }
 
-    // Configure Document AI client with increased timeout
+    // Configure Document AI client with reasonable timeout
     const clientConfig = {
       ...config,
-      // Increase timeout to 10 minutes (600 seconds) for large documents
-      timeout: 600000, // 10 minutes in milliseconds
+      // Set reasonable timeout based on file size
+      timeout: 300000, // 5 minutes in milliseconds
       // Add retry configuration
       retry: {
         retryDelayMultiplier: 2,
-        totalTimeout: 600000, // 10 minutes total timeout
-        maxRetries: 3,
+        totalTimeout: 300000, // 5 minutes total timeout
+        maxRetries: 2,
       },
     };
 
@@ -189,7 +189,7 @@ export class DocumentAIService {
       });
 
       // Wait for the operation to complete
-      const [processor] = await (operation as any).promise();
+      const processor = await operation;
 
       if (!processor.name) {
         throw new Error("Failed to create processor - no name returned");
@@ -243,14 +243,15 @@ export class DocumentAIService {
         },
         // Add process options for better results
         processOptions: {
-          individualPageSelector: {
-            pages: [1], // Process first page for testing
-          },
+          // Process all pages, not just the first page
+          // individualPageSelector: {
+          //   pages: [1], // Process first page for testing
+          // },
         },
       };
 
       console.log(`🟦 [DocumentAI][INFO] Sending request to Document AI...`);
-      console.log(`🟦 [DocumentAI][INFO] Request timeout: 10 minutes, file size: ${fileBuffer.length} bytes`);
+      console.log(`🟦 [DocumentAI][INFO] File size: ${fileBuffer.length} bytes, processing all pages`);
 
       // Process the document with timeout handling
       const [result] = await this.client.processDocument(request);
