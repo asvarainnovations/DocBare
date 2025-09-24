@@ -165,6 +165,17 @@ export function useChatAI(chatId: string, userId?: string) {
 
         const chunk = decoder.decode(value);
         
+        // Log all chunks received for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🟦 [CONVERSATION_FLOW] Chunk received', {
+            chunk: chunk,
+            chunkLength: chunk.length,
+            startsWithThinking: chunk.startsWith('THINKING:'),
+            startsWithFinal: chunk.startsWith('FINAL:'),
+            isTrimmed: chunk.trim() !== chunk,
+            aiResponseLength: aiResponse.length
+          });
+        }
         
         // Handle character-by-character streaming (not line-by-line)
         if (chunk.startsWith('THINKING:')) {
@@ -178,6 +189,12 @@ export function useChatAI(chatId: string, userId?: string) {
           }));
         } else if (chunk.startsWith('FINAL:')) {
           // Switch from thinking to final response
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [CONVERSATION_FLOW] FINAL marker received', {
+              chunk: chunk,
+              aiResponseLength: aiResponse.length
+            });
+          }
           setThinkingStates(prev => ({
             ...prev,
             [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
