@@ -225,9 +225,16 @@ export class DocumentAIService {
     try {
       console.log(`🟦 [DocumentAI][INFO] Processing document: ${fileName}`);
       
-      // Security check: Validate file size
+      // Security check: Validate file size and estimate pages
       const fileSizeMB = fileBuffer.length / (1024 * 1024);
-      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB`);
+      const estimatedPages = Math.ceil(fileSizeMB / 0.5); // Rough estimate: 0.5MB per page
+      
+      // Pre-check: If estimated pages exceed Google's limit, reject before processing
+      if (estimatedPages > 30) {
+        throw new Error(`Document too large: Estimated ${estimatedPages} pages. Maximum allowed: 30 pages per document (Google Document AI limit).`);
+      }
+      
+      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB, Estimated pages: ${estimatedPages}`);
 
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
@@ -274,10 +281,10 @@ export class DocumentAIService {
       console.log(
         `🟦 [DocumentAI][INFO] Text preview: ${text.substring(0, 200)}...`
       );
-      // Security check: Validate actual page count
+      // Security check: Validate actual page count against Google Document AI limits
       const actualPages = document.pages?.length || 0;
-      if (actualPages > 50) {
-        throw new Error(`Document too large: ${actualPages} pages detected. Maximum allowed: 50 pages per document.`);
+      if (actualPages > 30) {
+        throw new Error(`Document too large: ${actualPages} pages detected. Maximum allowed: 30 pages per document (Google Document AI limit).`);
       }
       
       console.log(
@@ -332,6 +339,11 @@ export class DocumentAIService {
         error
       );
 
+      // Check if it's a Google Document AI page limit error
+      if (error instanceof Error && error.message.includes('PAGE_LIMIT_EXCEEDED')) {
+        console.error(`🟥 [DocumentAI][ERROR] Google Document AI page limit exceeded. Consider using imageless mode or splitting the document.`);
+      }
+
       // Add detailed error information
       console.error(`🟥 [DocumentAI][INFO] Error details:`, {
         fileName,
@@ -339,6 +351,7 @@ export class DocumentAIService {
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         errorStack: error instanceof Error ? error.stack : undefined,
         processingTime,
+        isPageLimitError: error instanceof Error && error.message.includes('PAGE_LIMIT_EXCEEDED'),
       });
 
       // Return fallback result
