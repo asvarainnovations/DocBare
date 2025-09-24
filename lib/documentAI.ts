@@ -333,8 +333,9 @@ export class DocumentAIService {
       );
 
       // Check if it's a Google Document AI page limit error
-      if (error instanceof Error && error.message.includes('PAGE_LIMIT_EXCEEDED')) {
-        console.error(`🟥 [DocumentAI][ERROR] Google Document AI page limit exceeded. Consider using imageless mode or splitting the document.`);
+      if (error instanceof Error && (error.message.includes('PAGE_LIMIT_EXCEEDED') || error.message.includes('exceed the limit'))) {
+        console.error(`🟥 [DocumentAI][ERROR] Google Document AI page limit exceeded. Document has more than 15 pages (non-imageless mode limit).`);
+        console.error(`🟥 [DocumentAI][ERROR] Consider splitting the document or using a processor with imageless mode enabled.`);
       }
 
       // Add detailed error information
