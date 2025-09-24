@@ -224,10 +224,12 @@ export class DocumentAIService {
 
     try {
       console.log(`🟦 [DocumentAI][INFO] Processing document: ${fileName}`);
-      
+
       // Security check: Validate file size only
       const fileSizeMB = fileBuffer.length / (1024 * 1024);
-      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB`);
+      console.log(
+        `🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB`
+      );
 
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
@@ -245,17 +247,32 @@ export class DocumentAIService {
           content: fileBuffer.toString("base64"),
           mimeType: this.getMimeType(fileName),
         },
-        // Add process options for better results
+        // Add process options for high accuracy OCR
         processOptions: {
-          // Process all pages, not just the first page
-          // individualPageSelector: {
-          //   pages: [1], // Process first page for testing
-          // },
+          // Enable OCR configuration for high accuracy
+          ocrConfig: {
+            // Enable language hints for better accuracy
+            hints: {
+              languageHints: ["en", "hi"], // English and Hindi for legal documents
+            },
+            // Enable advanced OCR options for better layout detection
+            advancedOcrOptions: ["legacy_layout"], // Use heuristics-based layout detection
+            // Enable digital PDF support for better text extraction
+            enableNativePdfParsing: true,
+            // Enable quality assessment
+            enableImageQualityScores: true,
+          },
+          // Enable entity extraction for legal documents
+          enableEntityExtraction: true,
+          // Enable table extraction for structured data
+          enableTableExtraction: true,
         },
       };
 
       console.log(`🟦 [DocumentAI][INFO] Sending request to Document AI...`);
-      console.log(`🟦 [DocumentAI][INFO] File size: ${fileBuffer.length} bytes, processing all pages`);
+      console.log(
+        `🟦 [DocumentAI][INFO] File size: ${fileBuffer.length} bytes, processing all pages`
+      );
 
       // Process the document with timeout handling
       const [result] = await this.client.processDocument(request);
@@ -274,15 +291,15 @@ export class DocumentAIService {
       console.log(
         `🟦 [DocumentAI][INFO] Text preview: ${text.substring(0, 200)}...`
       );
-      // Security check: Validate actual page count against Google Document AI limits
-      const actualPages = document.pages?.length || 0;
-      if (actualPages > 30) {
-        throw new Error(`Document too large: ${actualPages} pages detected. Maximum allowed: 30 pages per document (Google Document AI limit).`);
-      }
-      
-      console.log(
-        `🟦 [DocumentAI][INFO] Document pages: ${actualPages}`
-      );
+        // Security check: Validate actual page count against Google Document AI limits
+        const actualPages = document.pages?.length || 0;
+        if (actualPages > 30) {
+          throw new Error(
+            `Document too large: ${actualPages} pages detected. Maximum allowed: 30 pages per document (Google Document AI OCR Processor limit).`
+          );
+        }
+
+      console.log(`🟦 [DocumentAI][INFO] Document pages: ${actualPages}`);
       console.log(
         `🟦 [DocumentAI][INFO] Document entities: ${
           document.entities?.length || 0
@@ -333,9 +350,17 @@ export class DocumentAIService {
       );
 
       // Check if it's a Google Document AI page limit error
-      if (error instanceof Error && (error.message.includes('PAGE_LIMIT_EXCEEDED') || error.message.includes('exceed the limit'))) {
-        console.error(`🟥 [DocumentAI][ERROR] Google Document AI page limit exceeded. Document has more than 15 pages (non-imageless mode limit).`);
-        console.error(`🟥 [DocumentAI][ERROR] Consider splitting the document or using a processor with imageless mode enabled.`);
+      if (
+        error instanceof Error &&
+        (error.message.includes("PAGE_LIMIT_EXCEEDED") ||
+          error.message.includes("exceed the limit"))
+      ) {
+        console.error(
+          `🟥 [DocumentAI][ERROR] Google Document AI page limit exceeded. Document has more than 15 pages (non-imageless mode limit).`
+        );
+        console.error(
+          `🟥 [DocumentAI][ERROR] Consider splitting the document or using a processor with imageless mode enabled.`
+        );
       }
 
       // Add detailed error information
@@ -345,7 +370,9 @@ export class DocumentAIService {
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         errorStack: error instanceof Error ? error.stack : undefined,
         processingTime,
-        isPageLimitError: error instanceof Error && error.message.includes('PAGE_LIMIT_EXCEEDED'),
+        isPageLimitError:
+          error instanceof Error &&
+          error.message.includes("PAGE_LIMIT_EXCEEDED"),
       });
 
       // Return fallback result
@@ -369,12 +396,14 @@ export class DocumentAIService {
     options: ProcessingOptions
   ): keyof typeof PROCESSOR_TYPES {
     const fileExtension = fileName.toLowerCase().split(".").pop();
-    
+
     console.log(`🟦 [DocumentAI][INFO] File extension: ${fileExtension}`);
 
-    // Since we only support PDFs and images, use OCR processor for all files
+    // Use OCR processor for all files with high accuracy configuration
     // This ensures consistent processing and better text extraction
-    console.log(`🟦 [DocumentAI][INFO] Using OCR processor for all supported file types (PDFs and images)`);
+    console.log(
+      `🟦 [DocumentAI][INFO] Using high-accuracy OCR processor for all supported file types (PDFs and images)`
+    );
     return "OCR";
   }
 
