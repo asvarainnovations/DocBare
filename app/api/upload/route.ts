@@ -77,6 +77,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Security check: Limit number of files per prompt
+    const totalFiles = files.length || (singleFile ? 1 : 0);
+    if (totalFiles > 10) {
+      return NextResponse.json(
+        { error: `Too many files: ${totalFiles} files provided. Maximum allowed: 10 files per prompt.` }, 
+        { status: 400 }
+      );
+    }
+
     // Normalize to array of File
     let fileList: File[] = [];
     if (files.length) {

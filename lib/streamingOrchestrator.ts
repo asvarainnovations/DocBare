@@ -103,6 +103,16 @@ async function callLLMStream(
     - Apply Indian legal principles and procedures
     - Use Indian legal terminology and formatting
 
+    **REASONING CONTENT FORMATTING (FOR THINKING DISPLAY):**
+    - Structure your reasoning in clear, professional sections
+    - Use numbered steps with descriptive headers: "1. **Task Analysis:** [description]"
+    - Separate each major step with line breaks for readability
+    - Use bullet points for sub-considerations: "- Key consideration: [detail]"
+    - Maintain consistent formatting throughout the reasoning process
+    - Write in a professional, analytical tone suitable for legal analysis
+    - Ensure each step builds logically on the previous one
+    - Use clear, concise language that demonstrates your analytical process
+
     **ANALYSIS PIPELINE:**
     1. **Task Classification:** Determine Analysis vs Drafting
     2. **Document Type Identification:** Label input type (Contract, Petition, Notice, etc.)

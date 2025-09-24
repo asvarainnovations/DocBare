@@ -72,6 +72,11 @@ export async function POST(req: NextRequest) {
           });
 
           if (documentContext.length > 0) {
+            // Security check: Limit number of documents per prompt
+            if (documentContext.length > 10) {
+              throw new Error(`Too many documents: ${documentContext.length} documents found. Maximum allowed: 10 documents per prompt.`);
+            }
+            
             aiLogger.info("Found document context in session", {
               sessionId,
               documentCount: documentContext.length,

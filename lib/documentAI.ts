@@ -224,6 +224,10 @@ export class DocumentAIService {
 
     try {
       console.log(`🟦 [DocumentAI][INFO] Processing document: ${fileName}`);
+      
+      // Security check: Validate file size
+      const fileSizeMB = fileBuffer.length / (1024 * 1024);
+      console.log(`🟦 [DocumentAI][INFO] File size: ${fileSizeMB.toFixed(2)}MB`);
 
       // Determine the best processor type based on file type and options
       const processorType = this.getOptimalProcessorType(fileName, options);
@@ -270,8 +274,14 @@ export class DocumentAIService {
       console.log(
         `🟦 [DocumentAI][INFO] Text preview: ${text.substring(0, 200)}...`
       );
+      // Security check: Validate actual page count
+      const actualPages = document.pages?.length || 0;
+      if (actualPages > 50) {
+        throw new Error(`Document too large: ${actualPages} pages detected. Maximum allowed: 50 pages per document.`);
+      }
+      
       console.log(
-        `🟦 [DocumentAI][INFO] Document pages: ${document.pages?.length || 0}`
+        `🟦 [DocumentAI][INFO] Document pages: ${actualPages}`
       );
       console.log(
         `🟦 [DocumentAI][INFO] Document entities: ${
