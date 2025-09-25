@@ -172,6 +172,7 @@ export async function POST(req: NextRequest) {
         documentContent: documentContent.trim(), // Pass retrieved document content
         documentName: documentName,
         conversationHistory: conversationHistory, // Pass conversation history
+        memoryContext, // Pass memory context to streaming orchestrator
         abortSignal: req.signal, // Pass the request's abort signal
       };
 

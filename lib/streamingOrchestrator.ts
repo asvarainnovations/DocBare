@@ -4,6 +4,7 @@ import { retrieveFromKB } from './vertexTool';
 import { ContextOptimizer } from './contextOptimizer';
 import { TokenManager } from './tokenManager';
 import { createLinkedAbortController, isAbortError, getAbortErrorMessage } from './abortController';
+import { memoryManager } from './memory';
 
 // Dynamic token limit calculation using TokenManager
 function calculateDynamicTokenLimit(query: string, documentContent?: string): number {
@@ -292,6 +293,7 @@ export interface StreamingContext {
   documentContent?: string;
   documentName?: string;
   conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>;
+  memoryContext?: string;
   abortSignal?: AbortSignal;
 }
 
@@ -362,9 +364,24 @@ export class StreamingOrchestrator {
     return new ReadableStream({
       async start(controller) {
         try {
+          // Use memory context passed from query route, or generate if not provided
+          let memoryContext = context.memoryContext || '';
+          if (!memoryContext) {
+            try {
+              if (context.sessionId && context.userId) {
+                memoryContext = await memoryManager.generateMemoryContext(context.sessionId, context.userId, context.query);
+              } else {
+                memoryContext = await memoryManager.generateMemoryContext(context.sessionId || '', context.userId || '', context.query);
+              }
+            } catch (memErr) {
+              aiLogger.warn('🟨 [streaming][WARN] Failed to generate memory context', { error: String(memErr) });
+              memoryContext = '';
+            }
+          }
+
           const response = await callLLMStream(
-            context.query, 
-            '', 
+            context.query,
+            memoryContext,
             context.documentContent || '', 
             context.conversationHistory || [],
             context.abortSignal
@@ -458,19 +475,31 @@ export class StreamingOrchestrator {
                     if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
                       if (!hasStartedFinalResponse) {
                         hasStartedFinalResponse = true;
-                        // Send any remaining reasoning content before starting final response
-                        if (reasoningChunkBuffer.trim()) {
-                          controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
-                          reasoningChunkBuffer = '';
-                        }
+                        
+                        // Merge leftover reasoning buffer into the first final chunk to prevent character loss
+                        const preFinalPrefix = reasoningChunkBuffer || '';
+                        reasoningChunkBuffer = '';
+                        
+                        // Emit the FINAL marker so client knows final phase started
                         controller.enqueue(encoder.encode('FINAL:'));
+                        
+                        const newContent = jsonData.choices[0].delta.content;
+                        
+                        // If there is preFinalPrefix, prepend it to the first newContent chunk
+                        if (preFinalPrefix) {
+                          controller.enqueue(encoder.encode(preFinalPrefix + newContent));
+                          // Also append to finalContent tracking
+                          finalContent += preFinalPrefix + newContent;
+                        } else {
+                          controller.enqueue(encoder.encode(newContent));
+                          finalContent += newContent;
+                        }
+                      } else {
+                        // Subsequent final chunks
+                        const newContent = jsonData.choices[0].delta.content;
+                        finalContent += newContent;
+                        controller.enqueue(encoder.encode(newContent));
                       }
-                      const newContent = jsonData.choices[0].delta.content;
-                      finalContent += newContent;
-                      
-                      // Accumulate final content (no individual logging)
-                      
-                      controller.enqueue(encoder.encode(newContent));
                     }
                   } catch (parseError) {
                     // Skip invalid JSON lines - improved error handling

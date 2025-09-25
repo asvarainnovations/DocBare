@@ -29,6 +29,8 @@ export function useChatAI(chatId: string, userId?: string) {
   const [loadingAI, setLoadingAI] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [thinkingStates, setThinkingStates] = useState<{ [messageId: string]: ThinkingState }>({});
+  // Local ref to keep the latest thinking buffer in synchronous memory
+  const thinkingBuffersRef = useRef<{ [messageId: string]: string }>({});
   const autoResponseGeneratedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -180,6 +182,8 @@ export function useChatAI(chatId: string, userId?: string) {
         // Handle character-by-character streaming (not line-by-line)
         if (chunk.startsWith('THINKING:')) {
           const thinkingContent = chunk.slice(9); // Remove 'THINKING:' prefix
+
+          // Update React state (existing)
           setThinkingStates(prev => ({
             ...prev,
             [aiMessage!.id]: { 
@@ -187,6 +191,10 @@ export function useChatAI(chatId: string, userId?: string) {
               content: (prev[aiMessage!.id]?.content || '') + thinkingContent 
             }
           }));
+
+          // Also update synchronous ref buffer for immediate access (prevents race with setState)
+          const prevBuf = thinkingBuffersRef.current[aiMessage!.id] || '';
+          thinkingBuffersRef.current[aiMessage!.id] = prevBuf + thinkingContent;
         } else if (chunk.startsWith('FINAL:')) {
           // Switch from thinking to final response
           if (process.env.NODE_ENV === 'development') {
@@ -195,6 +203,30 @@ export function useChatAI(chatId: string, userId?: string) {
               aiResponseLength: aiResponse.length
             });
           }
+
+          // Get synchronous thinking buffer (if any)
+          const thinkingBuf = thinkingBuffersRef.current[aiMessage!.id] || '';
+
+          // Merge thinking buffer into aiResponse if it's not already present
+          if (thinkingBuf && thinkingBuf.trim() !== '') {
+            const shouldPrepend =
+              !aiResponse.startsWith(thinkingBuf) && !aiResponse.includes(thinkingBuf);
+
+            if (shouldPrepend) {
+              aiResponse = thinkingBuf + aiResponse;
+              // Update UI with merged content immediately
+              try {
+                updateMessage(aiMessage!.id, { content: aiResponse });
+              } catch (e) {
+                console.warn('🟨 [chat_ui][WARN] failed to update message with thinking merge', e);
+              }
+            }
+          }
+
+          // Clear thinking buffer (we keep the thinkingStates content for audit/logging)
+          thinkingBuffersRef.current[aiMessage!.id] = '';
+
+          // Mark thinking state as finished (existing behavior)
           setThinkingStates(prev => ({
             ...prev,
             [aiMessage!.id]: { isThinking: false, content: prev[aiMessage!.id]?.content || '' }
