@@ -206,32 +206,18 @@ async function callLLMStream(
     // Build messages array with conversation history (expert-recommended approach)
     const messages = buildMessagesArray(enhancedSystemPrompt, conversationHistory, query);
 
-      if (process.env.NODE_ENV === 'development') {
-        aiLogger.info('🟦 [streaming][DEBUG] Messages array for DeepSeek API', {
-          totalMessages: messages.length,
-          conversationHistoryCount: conversationHistory.length,
-          conversationHistory: conversationHistory.map(msg => ({
-            role: msg.role,
-            content: msg.content.substring(0, 50) + '...',
-            contentLength: msg.content.length
-          })),
-          currentQuery: query.substring(0, 100) + '...',
-          hasReasoningContent: conversationHistory.some(msg => msg.content.includes('THINKING:') || msg.content.includes('FINAL:'))
-        });
-      
-      // Store request details for final comprehensive logging
-      const requestDetails = {
-        model: "deepseek-reasoner",
-        messages: messages.map((msg, index) => ({
-          index,
-          role: msg.role,
-          content: msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : ''),
-          contentLength: msg.content.length
-        })),
-        max_tokens: maxTokens,
-        stream: true
-      };
-    }
+    // Store request details for final comprehensive logging
+    const requestDetails = {
+      model: "deepseek-reasoner",
+      messages: messages.map((msg, index) => ({
+        index,
+        role: msg.role,
+        content: msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : ''),
+        contentLength: msg.content.length
+      })),
+      max_tokens: maxTokens,
+      stream: true
+    };
 
     const requestPayload = {
       model: "deepseek-reasoner",
@@ -340,6 +326,35 @@ export class StreamingOrchestrator {
     }
 
     aiLogger.info(`${LOG_PREFIXES.ORCHESTRATOR} Using single-agent mode with prompt length: ${prompt.length}`);
+    
+    // Log multi-round conversation details before API call
+    if (process.env.NODE_ENV === 'development') {
+      aiLogger.info('🔄 [MULTI_ROUND_CONVERSATION] Pre-API Call Analysis', {
+        sessionId: context.sessionId,
+        userId: context.userId,
+        conversationFlow: {
+          hasHistory: (context.conversationHistory?.length || 0) > 0,
+          historyCount: context.conversationHistory?.length || 0,
+          currentQuery: context.query,
+          hasDocument: !!context.documentContent,
+          documentName: context.documentName || 'N/A'
+        },
+        conversationHistory: context.conversationHistory?.map((msg, index) => ({
+          [`message_${index}`]: {
+            role: msg.role,
+            contentPreview: msg.content.substring(0, 150) + (msg.content.length > 150 ? '...' : ''),
+            contentLength: msg.content.length,
+            isReasoningContent: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+          }
+        })) || [],
+        apiPayload: {
+          model: "deepseek-reasoner",
+          totalMessages: (context.conversationHistory?.length || 0) + 2, // system + user + history
+          hasDocumentContext: !!context.documentContent,
+          documentContentLength: context.documentContent?.length || 0
+        }
+      });
+    }
     
     // Use the existing single-agent flow with native reasoning model support
     const encoder = new TextEncoder();
@@ -481,18 +496,29 @@ export class StreamingOrchestrator {
             if (process.env.NODE_ENV === 'development') {
               aiLogger.info('🤖 [AI_RESPONSE_COMPLETE] DeepSeek API Interaction Summary', {
                 request: {
-                  model: requestDetails.model,
-                  messageCount: requestDetails.messages.length,
-                  maxTokens: requestDetails.max_tokens,
-                  stream: requestDetails.stream
+                  model: "deepseek-reasoner",
+                  messageCount: (context.conversationHistory?.length || 0) + 2, // +2 for system and user message
+                  maxTokens: 4000,
+                  stream: true
                 },
-                messages: requestDetails.messages.map((msg, index) => ({
-                  [`message_${index}`]: {
-                    role: msg.role,
-                    contentPreview: msg.content,
-                    contentLength: msg.contentLength
+                multiRoundConversation: {
+                  hasConversationHistory: (context.conversationHistory?.length || 0) > 0,
+                  conversationHistoryCount: context.conversationHistory?.length || 0,
+                  conversationHistory: context.conversationHistory?.map((msg, index) => ({
+                    [`turn_${index}`]: {
+                      role: msg.role,
+                      contentPreview: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
+                      contentLength: msg.content.length,
+                      hasReasoningContent: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+                    }
+                  })) || [],
+                  currentUserQuery: {
+                    query: context.query,
+                    queryLength: context.query.length,
+                    hasDocument: !!context.documentContent,
+                    documentName: context.documentName || 'N/A'
                   }
-                })),
+                },
                 reasoning: {
                   hasReasoning: reasoningContent.length > 0,
                   reasoningLength: reasoningContent.length,
