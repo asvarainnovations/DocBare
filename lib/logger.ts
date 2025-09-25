@@ -1,13 +1,46 @@
 import pino from 'pino';
 
+// Custom formatter for development mode
+const formatLog = (logData: any) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return JSON.stringify(logData);
+  }
+  
+  const { level, time, context, msg, ...rest } = logData;
+  const levelEmoji = {
+    10: '🔍', // trace
+    20: '🐛', // debug  
+    30: 'ℹ️', // info
+    40: '⚠️', // warn
+    50: '❌', // error
+    60: '💀'  // fatal
+  }[level] || '📝';
+  
+  let output = `${levelEmoji} [${context || 'APP'}] ${msg}`;
+  
+  if (Object.keys(rest).length > 0) {
+    output += '\n' + JSON.stringify(rest, null, 2);
+  }
+  
+  return output;
+};
+
 // Create logger instance - Next.js compatible without worker threads
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  // Remove transport option to avoid worker thread issues in Next.js
   base: {
     env: process.env.NODE_ENV,
     version: process.env.npm_package_version,
   },
+  // Custom formatting for development
+  ...(process.env.NODE_ENV === 'development' && {
+    formatters: {
+      log: (obj) => {
+        console.log(formatLog(obj));
+        return {};
+      }
+    }
+  }),
   // Simplified formatting to avoid webpack issues
   timestamp: () => `,"time":"${new Date().toISOString()}"`,
 });
