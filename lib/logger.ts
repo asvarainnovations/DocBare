@@ -1,30 +1,5 @@
 import pino from 'pino';
 
-// Custom formatter for development mode
-const formatLog = (logData: any) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return JSON.stringify(logData);
-  }
-  
-  const { level, time, context, msg, ...rest } = logData;
-  const levelEmoji = {
-    10: '🔍', // trace
-    20: '🐛', // debug  
-    30: 'ℹ️', // info
-    40: '⚠️', // warn
-    50: '❌', // error
-    60: '💀'  // fatal
-  }[level] || '📝';
-  
-  let output = `${levelEmoji} [${context || 'APP'}] ${msg}`;
-  
-  if (Object.keys(rest).length > 0) {
-    output += '\n' + JSON.stringify(rest, null, 2);
-  }
-  
-  return output;
-};
-
 // Create logger instance - Next.js compatible without worker threads
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -32,12 +7,20 @@ const logger = pino({
     env: process.env.NODE_ENV,
     version: process.env.npm_package_version,
   },
-  // Custom formatting for development
+  // Pretty print in development mode using proper pino-pretty configuration
   ...(process.env.NODE_ENV === 'development' && {
-    formatters: {
-      log: (obj) => {
-        console.log(formatLog(obj));
-        return {};
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+        singleLine: false,
+        hideObject: false,
+        messageFormat: '{context} {msg}',
+        customPrettifiers: {
+          time: (timestamp: string) => `🕐 ${timestamp}`,
+        }
       }
     }
   }),
