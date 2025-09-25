@@ -193,6 +193,10 @@ export function useChatAI(chatId: string, userId?: string) {
           }));
 
           // Also update synchronous ref buffer for immediate access (prevents race with setState)
+          const prevBuf = thinkingBuffersRef.current[aiMessage!.id] || '';
+          thinkingBuffersRef.current[aiMessage!.id] = prevBuf + thinkingContent
+        } else if (chunk.startsWith('FINAL:')) {
+          // Switch from thinking to final response
           if (process.env.NODE_ENV === 'development') {
             console.log('🟦 [CONVERSATION_FLOW] FINAL marker received', {
               chunk: chunk,

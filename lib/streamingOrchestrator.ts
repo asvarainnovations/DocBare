@@ -443,7 +443,10 @@ export class StreamingOrchestrator {
                     
                     // Safety check: prevent buffer from growing too large
                     if (jsonBuffer.length > 50000) {
-                      console.warn('🟨 [streaming][WARN] JSON buffer too large, clearing:', jsonBuffer.length);
+                      aiLogger.warn('🟨 [streaming][WARN] JSON buffer too large, clearing', {
+                        bufferLength: jsonBuffer.length,
+                        query: query.substring(0, 100)
+                      });
                       jsonBuffer = '';
                       continue;
                     }
