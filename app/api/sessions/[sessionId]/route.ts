@@ -47,14 +47,18 @@ export async function GET(
         }
       } catch (sessionError) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🟦 [sessions][DEBUG] Could not retrieve session metadata for document context');
+          apiLogger.info('🟦 [sessions][DEBUG] Could not retrieve session metadata for document context', {
+            sessionId: params.sessionId,
+            error: sessionError
+          });
         }
       }
 
       // DO NOT add document context to old messages - documents should only appear with the message they were originally attached to
       // This was causing the document attachment persistence issue where documents appeared on all messages
       if (process.env.NODE_ENV === 'development') {
-        console.log(`🟦 [sessions][DEBUG] Document context available but not added to old messages:`, {
+        apiLogger.info('🟦 [sessions][DEBUG] Document context available but not added to old messages', {
+          sessionId: params.sessionId,
           sessionDocumentContext: sessionDocumentContext,
           messageCount: messages.length,
           note: 'Documents should only appear with the message they were originally attached to'
@@ -64,8 +68,9 @@ export async function GET(
       // Debug logging for each message
       if (process.env.NODE_ENV === 'development') {
         messages.forEach((msg, idx) => {
-          console.log(`🟦 [sessions][DEBUG] Message ${idx}:`, {
-            id: msg.id,
+          apiLogger.info(`🟦 [sessions][DEBUG] Message ${idx}`, {
+            sessionId: params.sessionId,
+            messageId: msg.id,
             role: msg.role,
             content: msg.content.substring(0, 50),
             documents: msg.documents,

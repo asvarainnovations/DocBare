@@ -25,7 +25,7 @@ export async function GET(
       const sessionData = sessionDoc.data();
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('🟦 [session_metadata][DEBUG] Firestore session data:', {
+        apiLogger.info('🟦 [session_metadata][DEBUG] Firestore session data', {
           sessionId: params.sessionId,
           documentContext: sessionData?.documentContext,
           documentIds: sessionData?.documentIds,
