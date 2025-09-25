@@ -331,31 +331,44 @@ export class StreamingOrchestrator {
     
     // Log multi-round conversation details before API call
     if (process.env.NODE_ENV === 'development') {
+      const conversationHistory = context.conversationHistory || [];
+      const hasHistory = conversationHistory.length > 0;
+      
       aiLogger.info('🔄 [MULTI_ROUND_CONVERSATION] Pre-API Call Analysis', {
-        sessionId: context.sessionId,
-        userId: context.userId,
-        conversationFlow: {
-          hasHistory: (context.conversationHistory?.length || 0) > 0,
-          historyCount: context.conversationHistory?.length || 0,
-          currentQuery: context.query,
-          hasDocument: !!context.documentContent,
-          documentName: context.documentName || 'N/A'
+        '🔍 SESSION INFO': {
+          'Session ID': context.sessionId,
+          'User ID': context.userId
         },
-        conversationHistory: context.conversationHistory?.map((msg, index) => ({
-          [`message_${index}`]: {
-            role: msg.role,
-            contentPreview: msg.content.substring(0, 150) + (msg.content.length > 150 ? '...' : ''),
-            contentLength: msg.content.length,
-            isReasoningContent: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
-          }
-        })) || [],
-        apiPayload: {
-          model: "deepseek-reasoner",
-          totalMessages: (context.conversationHistory?.length || 0) + 2, // system + user + history
-          hasDocumentContext: !!context.documentContent,
-          documentContentLength: context.documentContent?.length || 0
+        '💬 CONVERSATION STATUS': {
+          'Has History': hasHistory,
+          'History Count': conversationHistory.length,
+          'Current Query': context.query,
+          'Query Length': context.query.length,
+          'Has Document': !!context.documentContent,
+          'Document Name': context.documentName || 'N/A'
+        },
+        '📤 API PAYLOAD': {
+          'Model': "deepseek-reasoner",
+          'Total Messages': (conversationHistory.length + 2),
+          'Has Document Context': !!context.documentContent,
+          'Document Content Length': context.documentContent?.length || 0
         }
       });
+      
+      // Log conversation history in a separate, more readable log
+      if (hasHistory) {
+        aiLogger.info('📚 [CONVERSATION_HISTORY] Previous Messages Being Sent to API', {
+          'Total Previous Messages': conversationHistory.length,
+          'Messages': conversationHistory.map((msg, index) => ({
+            [`Message ${index + 1}`]: {
+              'Role': msg.role,
+              'Content': msg.content.substring(0, 120) + (msg.content.length > 120 ? '...' : ''),
+              'Length': msg.content.length,
+              'Has Reasoning': msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+            }
+          }))
+        });
+      }
     }
     
     // Use the existing single-agent flow with native reasoning model support
@@ -523,43 +536,51 @@ export class StreamingOrchestrator {
             
             // Single comprehensive log after AI response is complete
             if (process.env.NODE_ENV === 'development') {
+              const conversationHistory = context.conversationHistory || [];
+              const hasHistory = conversationHistory.length > 0;
+              
               aiLogger.info('🤖 [AI_RESPONSE_COMPLETE] DeepSeek API Interaction Summary', {
-                request: {
-                  model: "deepseek-reasoner",
-                  messageCount: (context.conversationHistory?.length || 0) + 2, // +2 for system and user message
-                  maxTokens: 4000,
-                  stream: true
+                '📊 REQUEST DETAILS': {
+                  'Model': "deepseek-reasoner",
+                  'Total Messages': (conversationHistory.length + 2),
+                  'Max Tokens': 4000,
+                  'Streaming': true
                 },
-                multiRoundConversation: {
-                  hasConversationHistory: (context.conversationHistory?.length || 0) > 0,
-                  conversationHistoryCount: context.conversationHistory?.length || 0,
-                  conversationHistory: context.conversationHistory?.map((msg, index) => ({
-                    [`turn_${index}`]: {
-                      role: msg.role,
-                      contentPreview: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
-                      contentLength: msg.content.length,
-                      hasReasoningContent: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
-                    }
-                  })) || [],
-                  currentUserQuery: {
-                    query: context.query,
-                    queryLength: context.query.length,
-                    hasDocument: !!context.documentContent,
-                    documentName: context.documentName || 'N/A'
-                  }
+                '💬 CONVERSATION FLOW': {
+                  'Has History': hasHistory,
+                  'History Count': conversationHistory.length,
+                  'Current Query': context.query,
+                  'Query Length': context.query.length,
+                  'Has Document': !!context.documentContent,
+                  'Document Name': context.documentName || 'N/A'
                 },
-                reasoning: {
-                  hasReasoning: reasoningContent.length > 0,
-                  reasoningLength: reasoningContent.length,
-                  reasoningPreview: reasoningContent.substring(0, 200) + (reasoningContent.length > 200 ? '...' : '')
+                '🧠 AI REASONING': {
+                  'Has Reasoning': reasoningContent.length > 0,
+                  'Reasoning Length': reasoningContent.length,
+                  'Reasoning Preview': reasoningContent.substring(0, 150) + (reasoningContent.length > 150 ? '...' : '')
                 },
-                response: {
-                  hasResponse: finalContent.length > 0,
-                  responseLength: finalContent.length,
-                  responsePreview: finalContent.substring(0, 200) + (finalContent.length > 200 ? '...' : ''),
-                  fullResponse: finalContent
+                '💭 AI RESPONSE': {
+                  'Has Response': finalContent.length > 0,
+                  'Response Length': finalContent.length,
+                  'Response Preview': finalContent.substring(0, 150) + (finalContent.length > 150 ? '...' : ''),
+                  'Full Response': finalContent
                 }
               });
+              
+              // Log conversation history in a more readable format
+              if (hasHistory) {
+                aiLogger.info('📝 [CONVERSATION_HISTORY] Previous Messages', {
+                  'Total Turns': conversationHistory.length,
+                  'Messages': conversationHistory.map((msg, index) => ({
+                    [`Turn ${index + 1}`]: {
+                      'Role': msg.role,
+                      'Content': msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
+                      'Length': msg.content.length,
+                      'Has Reasoning': msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+                    }
+                  }))
+                });
+              }
             }
             
           } finally {
