@@ -96,14 +96,6 @@ async function callLLMStream(
     - DocBare is developed by Asvara, a technology company focused on legal AI solutions
     - When asked about your creator or who made you, always mention that you are developed by Asvara
 
-    **CONVERSATION CONTEXT HANDLING:**
-    - ALWAYS review the conversation history before responding
-    - If a document has already been analyzed in previous messages, DO NOT re-analyze it
-    - For follow-up questions (like "what is the summary"), reference the previous analysis
-    - Build upon previous responses rather than starting from scratch
-    - Use phrases like "Based on the document I already analyzed..." or "As mentioned in my previous analysis..."
-    - Only analyze documents that haven't been analyzed before in this conversation
-
     **PRIMARY JURISDICTION: INDIAN LEGAL SYSTEM**
     - Focus on Indian Constitution, statutes, and case law
     - Reference relevant Indian legal provisions (IPC, CPC, CrPC, etc.)
@@ -122,26 +114,18 @@ async function callLLMStream(
     - Use clear, concise language that demonstrates your analytical process
 
     **ANALYSIS PIPELINE:**
-    1. **Conversation Context Review:** Check if document was already analyzed in previous messages
-    2. **Task Classification:** Determine Analysis vs Drafting vs Follow-up
-    3. **Document Type Identification:** Label input type (Contract, Petition, Notice, etc.)
-    4. **Objective Extraction:** User's goals and legal requirements
-    5. **Jurisdiction Analysis:** Identify relevant Indian laws and courts
-    6. **Context Summarization:** Key facts, dates, and legal issues
-    7. **Legal Intent Determination:** Purpose identification under Indian law
-    8. **Structural Outline:** Required sections as per Indian legal standards
-    9. **Apply Indian Legal Principles:** Statute mapping (IPC, CPC, CrPC, etc.)
-    10. **Consistency Check:** Verification against Indian legal framework
-    11. **Length Control:** Response length appropriate for Indian legal context
-    12. **Output Formatting:** Final structure following Indian legal conventions
-    13. **Clarification:** Unclear points requiring Indian legal context
-
-    **FOLLOW-UP QUESTION HANDLING:**
-    - For questions like "what is the summary", "explain the facts", "analyze this further"
-    - ALWAYS check if the document was already analyzed in previous messages
-    - If already analyzed, provide a summary or additional insights based on previous analysis
-    - DO NOT re-analyze the same document unless specifically asked to "re-analyze" or "analyze again"
-    - Use phrases like "Based on my previous analysis..." or "As I mentioned earlier..."
+    1. **Task Classification:** Determine Analysis vs Drafting vs Follow-up
+    2. **Document Type Identification:** Label input type (Contract, Petition, Notice, etc.)
+    3. **Objective Extraction:** User's goals and legal requirements
+    4. **Jurisdiction Analysis:** Identify relevant Indian laws and courts
+    5. **Context Summarization:** Key facts, dates, and legal issues
+    6. **Legal Intent Determination:** Purpose identification under Indian law
+    7. **Structural Outline:** Required sections as per Indian legal standards
+    8. **Apply Indian Legal Principles:** Statute mapping (IPC, CPC, CrPC, etc.)
+    9. **Consistency Check:** Verification against Indian legal framework
+    10. **Length Control:** Response length appropriate for Indian legal context
+    11. **Output Formatting:** Final structure following Indian legal conventions
+    12. **Clarification:** Unclear points requiring Indian legal context
 
     **FINAL RESPONSE FORMAT (FOR CONTENT):**
     - Provide ONLY the final, user-facing response
@@ -235,8 +219,8 @@ async function callLLMStream(
           hasReasoningContent: conversationHistory.some(msg => msg.content.includes('THINKING:') || msg.content.includes('FINAL:'))
         });
       
-      // CRITICAL: Log the EXACT payload being sent to DeepSeek
-      aiLogger.info('🟦 [streaming][DEBUG] EXACT DeepSeek API Payload', {
+      // Store request details for final comprehensive logging
+      const requestDetails = {
         model: "deepseek-reasoner",
         messages: messages.map((msg, index) => ({
           index,
@@ -246,8 +230,7 @@ async function callLLMStream(
         })),
         max_tokens: maxTokens,
         stream: true
-        // Note: deepseek-reasoner doesn't support temperature parameter
-      });
+      };
     }
 
     const requestPayload = {
@@ -294,13 +277,7 @@ async function callLLMStream(
         throw new Error(`DeepSeek API error: ${errorData.error?.message || response.statusText}`);
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        aiLogger.info('🟦 [streaming][DEBUG] DeepSeek API Response Status', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-      }
+      // Response status logged in comprehensive summary
 
       return response.body!;
     } catch (error) {
@@ -444,13 +421,7 @@ export class StreamingOrchestrator {
                       reasoningContent += newReasoningContent;
                       reasoningChunkBuffer += newReasoningContent;
                       
-                      // Log thinking content for debugging
-                      if (process.env.NODE_ENV === 'development' && newReasoningContent.trim()) {
-                        aiLogger.info('🟦 [CONVERSATION_FLOW] AI Thinking Content', {
-                          newReasoningContent: newReasoningContent,
-                          totalReasoningLength: reasoningContent.length
-                        });
-                      }
+                      // Accumulate reasoning content (no individual logging)
                       
                       // Send reasoning content in larger chunks for better formatting
                       // Send when we have a complete sentence or significant content
@@ -482,14 +453,7 @@ export class StreamingOrchestrator {
                       const newContent = jsonData.choices[0].delta.content;
                       finalContent += newContent;
                       
-                      // Log final response content for debugging
-                      if (process.env.NODE_ENV === 'development' && newContent.trim()) {
-                        aiLogger.info('🟦 [CONVERSATION_FLOW] AI Final Response Content', {
-                          newContent: newContent,
-                          totalFinalContentLength: finalContent.length,
-                          finalContentStart: finalContent.substring(0, 100)
-                        });
-                      }
+                      // Accumulate final content (no individual logging)
                       
                       controller.enqueue(encoder.encode(newContent));
                     }
@@ -511,6 +475,36 @@ export class StreamingOrchestrator {
             if (finalContent && !finalContent.endsWith('.') && !finalContent.endsWith('!') && !finalContent.endsWith('?') && !finalContent.endsWith('...')) {
               // Add completion marker if response seems incomplete
               controller.enqueue(encoder.encode('...'));
+            }
+            
+            // Single comprehensive log after AI response is complete
+            if (process.env.NODE_ENV === 'development') {
+              aiLogger.info('🤖 [AI_RESPONSE_COMPLETE] DeepSeek API Interaction Summary', {
+                request: {
+                  model: requestDetails.model,
+                  messageCount: requestDetails.messages.length,
+                  maxTokens: requestDetails.max_tokens,
+                  stream: requestDetails.stream
+                },
+                messages: requestDetails.messages.map((msg, index) => ({
+                  [`message_${index}`]: {
+                    role: msg.role,
+                    contentPreview: msg.content,
+                    contentLength: msg.contentLength
+                  }
+                })),
+                reasoning: {
+                  hasReasoning: reasoningContent.length > 0,
+                  reasoningLength: reasoningContent.length,
+                  reasoningPreview: reasoningContent.substring(0, 200) + (reasoningContent.length > 200 ? '...' : '')
+                },
+                response: {
+                  hasResponse: finalContent.length > 0,
+                  responseLength: finalContent.length,
+                  responsePreview: finalContent.substring(0, 200) + (finalContent.length > 200 ? '...' : ''),
+                  fullResponse: finalContent
+                }
+              });
             }
             
           } finally {
