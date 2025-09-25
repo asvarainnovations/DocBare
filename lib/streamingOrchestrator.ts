@@ -335,36 +335,36 @@ export class StreamingOrchestrator {
       const hasHistory = conversationHistory.length > 0;
       
       aiLogger.info('🔄 [MULTI_ROUND_CONVERSATION] Pre-API Call Analysis', {
-        '🔍 SESSION INFO': {
-          'Session ID': context.sessionId,
-          'User ID': context.userId
+        sessionInfo: {
+          sessionId: context.sessionId,
+          userId: context.userId
         },
-        '💬 CONVERSATION STATUS': {
-          'Has History': hasHistory,
-          'History Count': conversationHistory.length,
-          'Current Query': context.query,
-          'Query Length': context.query.length,
-          'Has Document': !!context.documentContent,
-          'Document Name': context.documentName || 'N/A'
+        conversationStatus: {
+          hasHistory: hasHistory,
+          historyCount: conversationHistory.length,
+          currentQuery: context.query,
+          queryLength: context.query.length,
+          hasDocument: !!context.documentContent,
+          documentName: context.documentName || 'N/A'
         },
-        '📤 API PAYLOAD': {
-          'Model': "deepseek-reasoner",
-          'Total Messages': (conversationHistory.length + 2),
-          'Has Document Context': !!context.documentContent,
-          'Document Content Length': context.documentContent?.length || 0
+        apiPayload: {
+          model: "deepseek-reasoner",
+          totalMessages: (conversationHistory.length + 2),
+          hasDocumentContext: !!context.documentContent,
+          documentContentLength: context.documentContent?.length || 0
         }
       });
       
       // Log conversation history in a separate, more readable log
       if (hasHistory) {
         aiLogger.info('📚 [CONVERSATION_HISTORY] Previous Messages Being Sent to API', {
-          'Total Previous Messages': conversationHistory.length,
-          'Messages': conversationHistory.map((msg, index) => ({
-            [`Message ${index + 1}`]: {
-              'Role': msg.role,
-              'Content': msg.content.substring(0, 120) + (msg.content.length > 120 ? '...' : ''),
-              'Length': msg.content.length,
-              'Has Reasoning': msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+          totalPreviousMessages: conversationHistory.length,
+          messages: conversationHistory.map((msg, index) => ({
+            [`message_${index + 1}`]: {
+              role: msg.role,
+              content: msg.content.substring(0, 120) + (msg.content.length > 120 ? '...' : ''),
+              length: msg.content.length,
+              hasReasoning: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
             }
           }))
         });
@@ -540,43 +540,43 @@ export class StreamingOrchestrator {
               const hasHistory = conversationHistory.length > 0;
               
               aiLogger.info('🤖 [AI_RESPONSE_COMPLETE] DeepSeek API Interaction Summary', {
-                '📊 REQUEST DETAILS': {
-                  'Model': "deepseek-reasoner",
-                  'Total Messages': (conversationHistory.length + 2),
-                  'Max Tokens': 4000,
-                  'Streaming': true
+                requestDetails: {
+                  model: "deepseek-reasoner",
+                  totalMessages: (conversationHistory.length + 2),
+                  maxTokens: 4000,
+                  streaming: true
                 },
-                '💬 CONVERSATION FLOW': {
-                  'Has History': hasHistory,
-                  'History Count': conversationHistory.length,
-                  'Current Query': context.query,
-                  'Query Length': context.query.length,
-                  'Has Document': !!context.documentContent,
-                  'Document Name': context.documentName || 'N/A'
+                conversationFlow: {
+                  hasHistory: hasHistory,
+                  historyCount: conversationHistory.length,
+                  currentQuery: context.query,
+                  queryLength: context.query.length,
+                  hasDocument: !!context.documentContent,
+                  documentName: context.documentName || 'N/A'
                 },
-                '🧠 AI REASONING': {
-                  'Has Reasoning': reasoningContent.length > 0,
-                  'Reasoning Length': reasoningContent.length,
-                  'Reasoning Preview': reasoningContent.substring(0, 150) + (reasoningContent.length > 150 ? '...' : '')
+                aiReasoning: {
+                  hasReasoning: reasoningContent.length > 0,
+                  reasoningLength: reasoningContent.length,
+                  reasoningPreview: reasoningContent.substring(0, 150) + (reasoningContent.length > 150 ? '...' : '')
                 },
-                '💭 AI RESPONSE': {
-                  'Has Response': finalContent.length > 0,
-                  'Response Length': finalContent.length,
-                  'Response Preview': finalContent.substring(0, 150) + (finalContent.length > 150 ? '...' : ''),
-                  'Full Response': finalContent
+                aiResponse: {
+                  hasResponse: finalContent.length > 0,
+                  responseLength: finalContent.length,
+                  responsePreview: finalContent.substring(0, 150) + (finalContent.length > 150 ? '...' : ''),
+                  fullResponse: finalContent
                 }
               });
               
               // Log conversation history in a more readable format
               if (hasHistory) {
                 aiLogger.info('📝 [CONVERSATION_HISTORY] Previous Messages', {
-                  'Total Turns': conversationHistory.length,
-                  'Messages': conversationHistory.map((msg, index) => ({
-                    [`Turn ${index + 1}`]: {
-                      'Role': msg.role,
-                      'Content': msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
-                      'Length': msg.content.length,
-                      'Has Reasoning': msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
+                  totalTurns: conversationHistory.length,
+                  messages: conversationHistory.map((msg, index) => ({
+                    [`turn_${index + 1}`]: {
+                      role: msg.role,
+                      content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
+                      length: msg.content.length,
+                      hasReasoning: msg.content.includes('THINKING:') || msg.content.includes('FINAL:')
                     }
                   }))
                 });
