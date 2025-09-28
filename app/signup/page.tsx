@@ -3,29 +3,37 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import axios from "axios";
+import { toast } from "sonner";
 import AuthGuard from "../components/AuthGuard";
+import { Checkbox } from "../components/ui/checkbox";
 
 function SignupPageInner() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    
+    if (!agreedToTerms) {
+      toast.error("You must agree to the Privacy Policy and Terms & Conditions to continue.");
+      setLoading(false);
+      return;
+    }
+    
     try {
       if (password) {
         // Credentials signup
         const res = await axios.post("/api/auth/register", { email, password });
         if (res.status !== 201) {
-          setError(res.data.error || "Failed to sign up.");
+          toast.error(res.data.error || "Failed to sign up.");
         } else {
           // Auto-login after signup
           const loginRes = await signIn("credentials", { email, password, redirect: false });
-          if (loginRes?.error) setError("Signup succeeded but login failed.");
+          if (loginRes?.error) toast.error("Signup succeeded but login failed.");
           else window.location.href = "/";
         }
       } else {
@@ -33,7 +41,7 @@ function SignupPageInner() {
         await signIn("email", { email, callbackUrl: "/" });
       }
     } catch (err) {
-      setError("Failed to sign up. Try again.");
+      toast.error("Failed to sign up. Try again.");
     }
     setLoading(false);
   };
@@ -54,7 +62,7 @@ function SignupPageInner() {
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
-              placeholder="Password (for credentials signup)"
+              placeholder="Password"
               className="w-full px-4 py-3 border border-input bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring text-lg text-foreground placeholder-muted-foreground"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -68,6 +76,38 @@ function SignupPageInner() {
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
+          
+          <div className="flex items-center space-x-3 py-2">
+            <Checkbox
+              id="agree-terms"
+              checked={agreedToTerms}
+              onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+            />
+            <label 
+              htmlFor="agree-terms" 
+              className="text-xs text-foreground leading-tight cursor-pointer flex-1"
+            >
+              I agree to the{" "}
+              <Link 
+                href="https://www.asvarainnovation.com/policies/privacy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline font-semibold"
+              >
+                Privacy Policy
+              </Link>{" "}
+              and{" "}
+              <Link 
+                href="https://www.asvarainnovation.com/policies/tos" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline font-semibold"
+              >
+                Terms & Conditions
+              </Link>
+            </label>
+          </div>
+          
           <button
             type="submit"
             className="w-full bg-primary text-primary-foreground py-3 rounded text-lg font-semibold hover:bg-primary/90 transition disabled:opacity-60"
@@ -76,7 +116,6 @@ function SignupPageInner() {
             {loading ? "Loading..." : "Continue"}
           </button>
         </form>
-        {error && <div className="text-destructive text-center mt-2">{error}</div>}
         <div className="text-center mt-4 text-muted-foreground">
           Already have an account? <Link href="/login" className="text-primary hover:underline">Log in</Link>
         </div>

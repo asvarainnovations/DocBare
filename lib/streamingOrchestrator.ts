@@ -103,7 +103,7 @@ async function callLLMStream(
     - Consider Supreme Court and High Court precedents
     - Apply Indian legal principles and procedures
     - Use Indian legal terminology and formatting
-
+    
     **REASONING CONTENT FORMATTING (FOR THINKING DISPLAY):**
     - Structure your reasoning in clear, professional sections
     - Use numbered steps with descriptive headers: "1. **Task Analysis:** [description]"
@@ -225,7 +225,6 @@ async function callLLMStream(
       messages: messages,
       stream: true,
       max_tokens: maxTokens, // Dynamic token allocation
-      // Note: deepseek-reasoner doesn't support temperature parameter
     };
 
     // Create AbortController with timeout and proper cleanup
@@ -417,10 +416,51 @@ export class StreamingOrchestrator {
                 return;
               }
               
-              const { done, value } = await reader.read();
-              if (done) break;
+      // Add timeout to make reader.read() respect abort signals
+      const readWithAbortCheck = async () => {
+        // Check abort signal immediately
+        if (context.abortSignal?.aborted) {
+          throw new Error('Request aborted');
+        }
+        
+        // Create abort promise that resolves when signal is aborted
+        const abortPromise = new Promise<never>((_, reject) => {
+          if (context.abortSignal?.aborted) {
+            reject(new Error('Request aborted'));
+            return;
+          }
+          
+          const abortHandler = () => {
+            reject(new Error('Request aborted'));
+          };
+          
+          context.abortSignal?.addEventListener('abort', abortHandler);
+        });
+        
+        // Race between read and abort
+        return Promise.race([
+          reader.read(),
+          abortPromise
+        ]);
+      };
               
-              const chunk = new TextDecoder().decode(value);
+              let chunk: string;
+              try {
+                const { done, value } = await readWithAbortCheck();
+                if (done) break;
+                chunk = new TextDecoder().decode(value);
+              } catch (error) {
+                if (error instanceof Error && error.message === 'Request aborted') {
+                  aiLogger.warn("🟨 [streaming][WARNING] Stream aborted by user");
+                  controller.close();
+                  return;
+                } else if (error instanceof Error && error.message === 'Read timeout') {
+                  // Continue to next iteration
+                  continue;
+                } else {
+                  throw error;
+                }
+              }
               
               
               // Handle DeepSeek reasoning model streaming format
@@ -528,12 +568,6 @@ export class StreamingOrchestrator {
             // Send any remaining reasoning content at the end
             if (reasoningChunkBuffer.trim() && !hasStartedFinalResponse) {
               controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
-            }
-            
-            // Ensure final content is complete
-            if (finalContent && !finalContent.endsWith('.') && !finalContent.endsWith('!') && !finalContent.endsWith('?') && !finalContent.endsWith('...')) {
-              // Add completion marker if response seems incomplete
-              controller.enqueue(encoder.encode('...'));
             }
             
             // Single comprehensive log after AI response is complete

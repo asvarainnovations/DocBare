@@ -29,7 +29,8 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
   return (
     <header className={clsx(
       'flex items-center justify-between px-3 sm:px-4 py-2 fixed top-0 z-40',
-      'background-transparent',
+      // Responsive background: transparent on large screens, solid on small screens
+      'bg-background lg:bg-transparent',
       // Responsive positioning based on sidebar state
       'left-0 right-0',
       // Desktop: adjust left position when sidebar is open

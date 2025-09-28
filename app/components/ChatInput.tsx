@@ -52,6 +52,7 @@ export default function ChatInput({
   userId,
   onFileUpload,
 }: ChatInputProps) {
+  
   const [inputValue, setInputValue] = useState("");
   const [showError, setShowError] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -495,66 +496,35 @@ export default function ChatInput({
 
             {/* Right: Send/Cancel Button */}
             <div className="flex items-center gap-2">
-              {loading && onCancel && (
-                <motion.button
-                  type="button"
-                  onClick={onCancel}
-                  className={clsx(
-                    "flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10",
-                    "bg-red-500 text-white",
-                    "transition-all duration-150",
-                    "hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
-                    "active:scale-95"
-                  )}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  aria-label="Cancel request"
-                >
-                  <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </motion.button>
-              )}
-              
               <motion.button
-                type="submit"
+                type={loading ? "button" : "submit"}
+                onClick={loading && onCancel ? onCancel : undefined}
                 className={clsx(
-                  "flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10",
-                  "bg-[#007BFF] text-white",
+                  "flex items-center justify-center gap-2 rounded-full px-3 py-2 sm:px-4 sm:py-2.5",
+                  loading ? "bg-gray-500 hover:bg-gray-600" : "bg-[#007BFF] hover:bg-blue-600",
+                  "text-white text-sm font-medium",
                   "transition-all duration-150",
                   displayValue.trim() && !loading
                     ? "animate-pulse"
                     : "opacity-50 cursor-not-allowed",
-                  loading && "pointer-events-none"
+                  loading && "pointer-events-auto cursor-pointer"
                 )}
-                disabled={!displayValue.trim() || loading || disabled}
+                disabled={!displayValue.trim() || disabled}
                 whileHover={
-                  displayValue.trim() && !loading ? { scale: 1.08 } : {}
+                  displayValue.trim() ? { scale: 1.08 } : {}
                 }
-                whileTap={displayValue.trim() && !loading ? { scale: 0.95 } : {}}
-                aria-label="Send"
+                whileTap={displayValue.trim() ? { scale: 0.95 } : {}}
+                aria-label={loading ? "Cancel request" : "Send"}
               >
                 {loading ? (
-                  <svg
-                    className="animate-spin w-4 h-4 sm:w-5 sm:h-5"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="#fff"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="#fff"
-                      d="M4 12a8 8 0 018-8v8z"
-                    />
-                  </svg>
+                  // Square icon for cancel (ChatGPT style)
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-sm" />
                 ) : (
                   <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 )}
+                <span className="hidden sm:inline">
+                  {loading ? "Cancel" : "Send"}
+                </span>
               </motion.button>
             </div>
           </div>

@@ -212,7 +212,7 @@ export default function Sidebar({
             <ul className="space-y-1">
               {chats.map((chat, index) => (
                 <motion.li
-                  key={chat.id || `chat-${index}`}
+                  key={chat.id || `chat-${index}-${chat.createdAt?.getTime() || index}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{

@@ -7,23 +7,6 @@ const logger = pino({
     env: process.env.NODE_ENV,
     version: process.env.npm_package_version,
   },
-  // Pretty print in development mode using proper pino-pretty configuration
-  ...(process.env.NODE_ENV === 'development' && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        singleLine: false,
-        hideObject: false,
-        messageFormat: '{context} {msg}',
-        customPrettifiers: {
-          time: (timestamp: string) => `🕐 ${timestamp}`,
-        }
-      }
-    }
-  }),
   // Simplified formatting to avoid webpack issues
   timestamp: () => `,"time":"${new Date().toISOString()}"`,
 });

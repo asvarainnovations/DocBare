@@ -9,6 +9,7 @@ import { useSidebar } from "@/app/components/SidebarContext";
 import { useChat } from "@/app/components/ChatContext";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
 import { ThinkingDisplay } from "@/app/components/ThinkingDisplay";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 // Custom hooks
 import { useChatMessages } from "./hooks/useChatMessages";
@@ -62,6 +63,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     handleSend,
     checkAndGenerateAutoResponse,
     thinkingStates,
+    thinkingLoadingMap,
+    cancelledMessages,
     clearThinkingStates,
     cancelRequest,
   } = useChatAI(params.chatId, session?.user?.id);
@@ -438,19 +441,13 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                               // Thinking display will auto-hide after completion
                             }}
                           />
-                        ) : (
-                          // Show loading animation while waiting for thinking content
+                        ) : thinkingLoadingMap[msg.id] ? (
                           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                            <div className="flex items-center space-x-3">
-                              <div className="flex space-x-1">
-                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                              </div>
-                              <span className="text-slate-300 text-sm">AI is analyzing your question...</span>
+                            <div className="py-3 px-4">
+                              <LoadingSpinner />
                             </div>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </motion.div>
                   )}
@@ -533,13 +530,11 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             error={sendError}
             showAttachments={true}
             value={input}
-            onChange={(value) => {
-              console.log("🟦 [chat_ui][INFO] Input onChange:", value);
-              setInput(value);
-            }}
+            onChange={setInput}
             userId={session?.user?.id}
             onFileUpload={handleFileUploadWithCleanup}
           />
+          
         </div>
       </div>
 

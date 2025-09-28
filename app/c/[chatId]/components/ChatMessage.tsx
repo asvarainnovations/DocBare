@@ -67,6 +67,27 @@ export default function ChatMessage({
     });
   }
 
+  // Preprocess content to format checklist items as proper markdown lists
+  const preprocessContent = (content: string) => {
+    return content
+      // Convert Γ£à to ✅ for compliance items (as proper list items)
+      .replace(/^Γ£à\s*\*\*(.*?)\*\*/gm, '\n- ✅ **$1**')
+      // Convert Γ¥î to ❌ for risk items (as proper list items)
+      .replace(/^Γ¥î\s*\*\*(.*?)\*\*/gm, '\n- ❌ **$1**')
+      // Handle other Unicode checkmark variations
+      .replace(/^✅\s*\*\*(.*?)\*\*/gm, '\n- ✅ **$1**')
+      .replace(/^❌\s*\*\*(.*?)\*\*/gm, '\n- ❌ **$1**')
+      // Handle cases without bold formatting
+      .replace(/^Γ£à\s*(.*?)$/gm, '\n- ✅ **$1**')
+      .replace(/^Γ¥î\s*(.*?)$/gm, '\n- ❌ **$1**')
+      .replace(/^✅\s*(.*?)$/gm, '\n- ✅ **$1**')
+      .replace(/^❌\s*(.*?)$/gm, '\n- ❌ **$1**')
+      // Force line breaks for any checklist items that are on the same line
+      .replace(/([✅❌])\s*\*\*(.*?)\*\*/g, '\n- $1 **$2**')
+      // Clean up any double line breaks
+      .replace(/\n{3,}/g, '\n\n');
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -128,7 +149,7 @@ export default function ChatMessage({
 
                     // Lists
                     ul: ({ children }) => (
-                      <ul className="text-white mb-4 space-y-2 list-disc pl-6 font-legal-content">
+                      <ul className="text-white mb-4 space-y-2 list-none pl-0 font-legal-content">
                         {children}
                       </ul>
                     ),
@@ -137,11 +158,23 @@ export default function ChatMessage({
                         {children}
                       </ol>
                     ),
-                    li: ({ children }) => (
-                      <li className="text-white leading-relaxed font-legal-content mb-1">
-                        {children}
-                      </li>
-                    ),
+                    li: ({ children }) => {
+                      // Check if this is a checklist item (contains ✅ or ❌)
+                      const content = String(children);
+                      if (content.includes('✅') || content.includes('❌')) {
+                        return (
+                          <li className="text-white leading-relaxed font-legal-content mb-2 flex items-start">
+                            <span className="mr-2 flex-shrink-0 text-lg">{content.match(/[✅❌]/)?.[0] || ''}</span>
+                            <span className="flex-1">{content.replace(/[✅❌]\s*/, '')}</span>
+                          </li>
+                        );
+                      }
+                      return (
+                        <li className="text-white leading-relaxed font-legal-content mb-1">
+                          {children}
+                        </li>
+                      );
+                    },
 
                     // Code blocks
                     code: ({ children, className }) => {
@@ -216,14 +249,14 @@ export default function ChatMessage({
                     ),
                   }}
                 >
-                  {message.content}
+                  {preprocessContent(message.content)}
                 </ReactMarkdown>
               </div>
 
               {/* Action buttons for AI messages */}
               {!isStreaming && !isThinking && (
                 <div className="flex items-center gap-2 mt-4">
-                  <AnimatedCopyButton content={message.content} />
+                  <AnimatedCopyButton content={preprocessContent(message.content)} />
                   <RegenerateButton
                     sessionId={chatId}
                     userId={userId || ""}
