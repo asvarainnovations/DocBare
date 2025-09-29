@@ -154,7 +154,7 @@ function buildMessagesArray(
   }
 
   // Add conversation history in chronological order (already sorted correctly)
-v   // Filter out the current user message to avoid duplication
+  // Filter out the current user message to avoid duplication
   const filteredHistory = conversationHistory.filter(item => 
     item.content !== currentUserMessage || item.role !== 'user'
   );
