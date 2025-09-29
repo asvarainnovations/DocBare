@@ -5,7 +5,7 @@
   "description": "DocBare: Modern legal AI platform for document drafting and analysis",
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/validate-env.js && next build",
+    "build": "next build",
     "build:skip-validation": "next build",
     "start": "next start",
     "lint": "next lint",

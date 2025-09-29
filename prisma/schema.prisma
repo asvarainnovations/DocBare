@@ -475,3 +475,16 @@ model PleadSmartFeedback {
   @@index([createdAt])
   @@unique([userId, sessionId, messageIndex]) // Prevent duplicate feedback for same message
 }
+
+model CareerSubmission {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String
+  position  String
+  linkedin  String?
+  portfolio String?
+  cover     String?
+  resumeUrl String
+  createdAt DateTime @default(now())
+}
