@@ -69,7 +69,8 @@ export const QuerySchema = z.object({
     .max(5000, 'Query too long (max 5,000 characters)')
     .transform(sanitizeInput),
   sessionId: z.string().uuid('Invalid session ID').optional(),
-  userId: z.string().uuid('Invalid user ID')
+  userId: z.string().uuid('Invalid user ID'),
+  mode: z.enum(['pleadsmart', 'docbare']).optional().default('pleadsmart')
 });
 
 export const FeedbackSchema = z.object({

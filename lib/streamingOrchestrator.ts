@@ -6,91 +6,73 @@ import { TokenManager } from './tokenManager';
 import { createLinkedAbortController, isAbortError, getAbortErrorMessage } from './abortController';
 import { memoryManager } from './memory';
 
-// Dynamic token limit calculation using TokenManager
-function calculateDynamicTokenLimit(query: string, documentContent?: string): number {
-  const hasDocument = !!(documentContent && documentContent.trim().length > 0);
-  return TokenManager.calculateMaxTokens(query, hasDocument);
+// Helper function to get PleadSmart system prompt
+function getPleadSmartSystemPrompt(knowledgeContext: string, documentContent: string): string {
+  return `
+    You are PleadSmart — an Indian Legal AI developed by Asvara. Your role is to provide precise, jurisdiction-aware legal guidance, strategy, and practical next steps for users under the Indian legal system. If asked who made you, say: "I am developed by Asvara."
+
+    CORE PRINCIPLES (always follow)
+    1. Accuracy & honesty: Never invent statutes, case citations, or factual claims. If unsure, say so and (where possible) suggest how to verify or retrieve sources.
+    2. Safety & scope: Provide information and practical next steps; add this short disclaimer for high-stakes matters: "This is informational and not a substitute for formal legal representation; consult a qualified advocate for case-specific work."
+    3. Preserve placeholders: Do not alter any \`[[PERSON:...]]\`, \`[[ORG:...]]\`, \`[[CASE:...]]\`, or \`[[ID:...]]\` tokens; keep them exact across analysis and drafts.
+    4. Tone & clarity: Clear, concise, professional. Prefer plain language summaries paired with focused legal analysis.
+
+    **PRIMARY JURISDICTION: INDIAN LEGAL SYSTEM**
+    - Focus on Indian Constitution, statutes, and case law
+    - Reference relevant Indian legal provisions (IPC, CPC, CrPC, etc.)
+    - Consider Supreme Court and High Court precedents
+    - Apply Indian legal principles and procedures
+    - Use Indian legal terminology and formatting
+
+    **REASONING CONTENT FORMATTING (FOR THINKING DISPLAY):**
+    - Structure your reasoning in clear, professional sections
+    - Use numbered steps with descriptive headers: "1. **Task Analysis:** [description]"
+    - Separate each major step with line breaks for readability
+    - Use bullet points for sub-considerations: "- Key consideration: [detail]"
+    - Maintain consistent formatting throughout the reasoning process
+    - Write in a professional, analytical tone suitable for legal analysis
+    - Ensure each step builds logically on the previous one
+    - Use clear, concise language that demonstrates your analytical process
+
+    **PLEADSMART PIPELINE:**
+    1) Classify User Query — Identify intent (e.g., Legal Query, Case Advice, Document Drafting, Filing Procedure, Relief Options, Clarification). State it in plain terms.
+    2) Extract Core Facts & Context — Identify parties, nature of dispute/transaction, key dates/locations, and current legal status (e.g., FIR/charge/trial/appeal). Reconstruct a concise timeline even if fragmented.
+    3) Identify Legal Domain — Categorize under one or more domains (Criminal, Civil, Family, Property, Labour, Contract, Company, Tax, Consumer, Constitutional, etc.).
+    4) Identify Relevant Provisions — Map facts to relevant Indian laws and procedural rules (IPC/BNS, CrPC/BNSS, CPC, Evidence Act, IT Act, PMLA, special statutes). Include procedural context (limitation, filing stage). If statute name is unclear, use retrieval to resolve.
+    5) Frame Legal Issues — Convert the scenario into 1–4 precise legal questions (e.g., "Is anticipatory bail available in a 498A case?").
+    6) Apply Legal Reasoning — For each issue: cite brief rule (statute/case) → apply to user facts → reach a concise conclusion. Prefer sourced conclusions; if unsourced, say so.
+    7) Suggest Remedies / Next Steps — Offer clear, actionable legal pathways (e.g., file complaint, seek bail, send notice, defend suit, approach forum). Include forum, stage (pre-litigation/trial/appeal), and urgency (High/Medium/Low) with any conditions.
+    8) Surface Risks & Limitations — Flag adverse consequences, common delays, gaps in evidence, locus issues, and grey areas.
+    9) Simplify & Summarize — End with a short summary in three parts: (a) Legal Position in law, (b) Application to this case, (c) Suggested Action Plan.
+
+    **FINAL RESPONSE FORMAT (FOR CONTENT):**
+    - Provide ONLY the final, user-facing response
+    - Use professional Indian legal formatting and terminology
+    - Include relevant Indian legal analysis and recommendations
+    - Reference applicable Indian statutes, sections, and precedents
+    - Maintain concise, clear language
+    - NO internal pipeline steps or analysis markers
+    - Ensure the response is complete and actionable
+
+    INTERACTION RULES / CLARIFICATION QUESTIONS
+    - Ask a short clarifying question only if essential facts are missing for a reliable answer; otherwise proceed with best-effort guidance and list missing items.
+
+    ERROR HANDLING & SAFETY
+    - If jurisdiction is outside India or unclear, confirm before substantive analysis.
+    - If retrieval is unavailable or yields nothing, continue with best-effort reasoning, lower confidence, and tag affected conclusions as unsourced.
+    - Never guess a case citation or section number.
+    
+    ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your Indian legal analysis and ensure accuracy.` : ''}
+    ${documentContent ? `\n\n**Document Content:**\n${documentContent}\n\nAnalyze the provided document content in relation to the user's query.` : ''}
+    ${!documentContent ? `\n\n**IMPORTANT:** No specific document has been provided for analysis. Please provide general legal guidance based on the user's query and available knowledge base context.` : ''}
+    
+    Always maintain a professional, concise tone appropriate for Indian legal practice.
+  `;
 }
 
-// Expert-recommended function to build messages array correctly
-function buildMessagesArray(
-  systemPrompt: string | null, 
-  conversationHistory: Array<{role: 'user' | 'assistant', content: string}>, 
-  currentUserMessage: string
-): Array<{role: 'system' | 'user' | 'assistant', content: string}> {
-  const messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
-  
-  // Add system prompt first
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-
-  // Add conversation history in chronological order (already sorted correctly)
-  conversationHistory.forEach(item => {
-    const role = item.role === "assistant" ? "assistant" : "user";
-    messages.push({ role, content: item.content });
-  });
-
-  // Add current user message last
-  messages.push({ role: "user", content: currentUserMessage });
-  
-  return messages;
-}
-
-// Import the callLLMStream function from the query route
-async function callLLMStream(
-  query: string, 
-  memoryContext: string = '', 
-  documentContent: string = '',
-  conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [],
-  abortSignal?: AbortSignal
-) {
-  const startTime = Date.now();
-  
-  // 1. Retrieve knowledge base context
-  const kbChunks = await retrieveFromKB(query, 3);
-  
-  // Calculate detailed metrics for knowledge base content
-  const totalChunks = kbChunks.length;
-  const totalCharacters = kbChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const totalWords = kbChunks.reduce((sum, chunk) => sum + chunk.split(/\s+/).length, 0);
-  const estimatedTokens = Math.ceil(totalCharacters / 4); // Rough estimate: 1 token ≈ 4 characters
-  
-  const knowledgeContext = kbChunks.length > 0 
-    ? `\n\n**Legal Knowledge Base Context:**\n${kbChunks.join("\n\n---\n\n")}`
-    : '';
-  
-  // Add document content to the context if provided
-  const documentContext = documentContent && documentContent.trim().length > 0
-    ? `\n\n**Document Content:**\n${documentContent}`
-    : '';
-  
-  // Log document context information (development only)
-  if (process.env.NODE_ENV === 'development') {
-    aiLogger.info("🟦 [streaming][INFO] Document context status", {
-      hasDocumentContent: !!documentContent,
-      documentContentLength: documentContent ? documentContent.length : 0,
-      hasDocumentContext: !!documentContext,
-      documentContextLength: documentContext ? documentContext.length : 0
-    });
-  }
-  
-  // Log detailed knowledge base metrics (development only)
-  if (process.env.NODE_ENV === 'development') {
-    aiLogger.info("🟦 [streaming][INFO] Knowledge base content metrics", {
-      query: query.substring(0, 100),
-      chunksRetrieved: totalChunks,
-      totalCharacters: totalCharacters,
-      totalWords: totalWords,
-      estimatedTokens: estimatedTokens,
-      averageChunkSize: totalChunks > 0 ? Math.round(totalCharacters / totalChunks) : 0,
-      hasKnowledgeContext: knowledgeContext.length > 0,
-      knowledgeContextLength: knowledgeContext.length
-    });
-  }
-  
-  // Use the expert-designed system prompt from query/route.ts
-  const systemPrompt = `
+// Helper function to get DocBare system prompt
+function getDocBareSystemPrompt(knowledgeContext: string, documentContent: string): string {
+  return `
     You are DocBare, an expert AI legal analyst specializing in Indian Law, contracts, pleadings, and legal drafts.
 
     **ABOUT DOCBARE:**
@@ -138,8 +120,8 @@ async function callLLMStream(
     - Ensure the response is complete and actionable
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your Indian legal analysis and ensure accuracy.` : ''}
-    ${documentContext ? `\n\n**Document Content:**\n${documentContext}\n\nAnalyze the provided document content in relation to the user's query.` : ''}
-    ${!documentContext ? `\n\n**IMPORTANT:** No specific document has been provided for analysis. Please provide general legal guidance based on the user's query and available knowledge base context.` : ''}
+    ${documentContent ? `\n\n**Document Content:**\n${documentContent}\n\nAnalyze the provided document content in relation to the user's query.` : ''}
+    ${!documentContent ? `\n\n**IMPORTANT:** No specific document has been provided for analysis. Please provide general legal guidance based on the user's query and available knowledge base context.` : ''}
     
     **DOCUMENT ANALYSIS GUIDELINES:**
     - If the document content appears to be a fallback message (e.g., "Document Content - [URL]" or "PDF Document Content - [filename]"), inform the user that the document could not be properly parsed and provide guidance on how to proceed
@@ -148,6 +130,109 @@ async function callLLMStream(
 
     Always maintain a professional, concise tone appropriate for Indian legal practice.
   `;
+}
+
+// Advanced token limit calculation for both modes
+function calculateDynamicTokenLimit(query: string, documentContent?: string, mode: 'pleadsmart' | 'docbare' = 'docbare'): number {
+  const hasDocument = !!(documentContent && documentContent.trim().length > 0);
+  
+  // Use advanced token calculation for both PleadSmart and DocBare
+  return TokenManager.calculateMaxTokens(query, hasDocument);
+}
+
+// Expert-recommended function to build messages array correctly
+function buildMessagesArray(
+  systemPrompt: string | null, 
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}>, 
+  currentUserMessage: string
+): Array<{role: 'system' | 'user' | 'assistant', content: string}> {
+  const messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
+  
+  // Add system prompt first
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+
+  // Add conversation history in chronological order (already sorted correctly)
+v   // Filter out the current user message to avoid duplication
+  const filteredHistory = conversationHistory.filter(item => 
+    item.content !== currentUserMessage || item.role !== 'user'
+  );
+  
+  filteredHistory.forEach(item => {
+    const role = item.role === "assistant" ? "assistant" : "user";
+    messages.push({ role, content: item.content });
+  });
+
+  // Add current user message last
+  messages.push({ role: "user", content: currentUserMessage });
+  
+  return messages;
+}
+
+// Import the callLLMStream function from the query route
+async function callLLMStream(
+  query: string, 
+  memoryContext: string = '', 
+  documentContent: string = '',
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [],
+  abortSignal?: AbortSignal,
+  mode: 'pleadsmart' | 'docbare' = 'docbare'
+) {
+  const startTime = Date.now();
+  
+  // 1. Retrieve knowledge base context
+  const kbChunks = await retrieveFromKB(query, 3);
+  
+  // Calculate detailed metrics for knowledge base content
+  const totalChunks = kbChunks.length;
+  const totalCharacters = kbChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const totalWords = kbChunks.reduce((sum, chunk) => sum + chunk.split(/\s+/).length, 0);
+  const estimatedTokens = Math.ceil(totalCharacters / 4); // Rough estimate: 1 token ≈ 4 characters
+  
+  const knowledgeContext = kbChunks.length > 0 
+    ? `\n\n**Legal Knowledge Base Context:**\n${kbChunks.join("\n\n---\n\n")}`
+    : '';
+  
+  // Add document content to the context if provided
+  const documentContext = documentContent && documentContent.trim().length > 0
+    ? `\n\n**Document Content:**\n${documentContent}`
+    : '';
+  
+  // Log document context information (development only)
+  if (process.env.NODE_ENV === 'development') {
+    aiLogger.info("🟦 [streaming][INFO] Document context status", {
+      hasDocumentContent: !!documentContent,
+      documentContentLength: documentContent ? documentContent.length : 0,
+      hasDocumentContext: !!documentContext,
+      documentContextLength: documentContext ? documentContext.length : 0
+    });
+  }
+  
+  // Log detailed knowledge base metrics (development only)
+  if (process.env.NODE_ENV === 'development') {
+    aiLogger.info("🟦 [streaming][INFO] Knowledge base content metrics", {
+      query: query.substring(0, 100),
+      chunksRetrieved: totalChunks,
+      totalCharacters: totalCharacters,
+      totalWords: totalWords,
+      estimatedTokens: estimatedTokens,
+      averageChunkSize: totalChunks > 0 ? Math.round(totalCharacters / totalChunks) : 0,
+      hasKnowledgeContext: knowledgeContext.length > 0,
+      knowledgeContextLength: knowledgeContext.length
+    });
+  }
+  
+  // Simple conditional system prompt based on mode
+  let systemPrompt: string;
+  
+  if (mode === 'pleadsmart') {
+    // Use PleadSmart system prompt
+    systemPrompt = getPleadSmartSystemPrompt(knowledgeContext, documentContent);
+  } else {
+    // Use DocBare system prompt (current implementation)
+    systemPrompt = getDocBareSystemPrompt(knowledgeContext, documentContent);
+  }
 
   // Optimize context to fit within token limits
   const optimizedContext = ContextOptimizer.optimizeContext(
@@ -201,11 +286,19 @@ async function callLLMStream(
   }
 
   try {
-    // Calculate dynamic max_tokens based on query complexity
-    const maxTokens = calculateDynamicTokenLimit(query, documentContent);
+    // Calculate dynamic max_tokens based on query complexity and mode
+    const maxTokens = calculateDynamicTokenLimit(query, documentContent, mode);
     
     // Build messages array with conversation history (expert-recommended approach)
     const messages = buildMessagesArray(enhancedSystemPrompt, conversationHistory, query);
+    
+    // DEBUG: Log the exact messages being sent to the AI
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🟦 [DEBUG] Messages being sent to AI:', JSON.stringify(messages.map(m => ({
+        role: m.role,
+        content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '')
+      })), null, 2));
+    }
 
     // Store request details for final comprehensive logging
     const requestDetails = {
@@ -294,6 +387,7 @@ export interface StreamingContext {
   conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>;
   memoryContext?: string;
   abortSignal?: AbortSignal;
+  mode?: 'pleadsmart' | 'docbare';
 }
 
 export class StreamingOrchestrator {
@@ -376,27 +470,28 @@ export class StreamingOrchestrator {
     return new ReadableStream({
       async start(controller) {
         try {
-          // Use memory context passed from query route, or generate if not provided
-          let memoryContext = context.memoryContext || '';
-          if (!memoryContext) {
-            try {
-              if (context.sessionId && context.userId) {
-                memoryContext = await memoryManager.generateMemoryContext(context.sessionId, context.userId, context.query);
-              } else {
-                memoryContext = await memoryManager.generateMemoryContext(context.sessionId || '', context.userId || '', context.query);
-              }
-            } catch (memErr) {
-              aiLogger.warn('🟨 [streaming][WARN] Failed to generate memory context', { error: String(memErr) });
-              memoryContext = '';
-            }
-          }
+          // TEMPORARILY DISABLE MEMORY CONTEXT TO TEST CONVERSATION HISTORY ISSUE
+          let memoryContext = '';
+          // if (!memoryContext) {
+          //   try {
+          //     if (context.sessionId && context.userId) {
+          //       memoryContext = await memoryManager.generateMemoryContext(context.sessionId, context.userId, context.query);
+          //     } else {
+          //       memoryContext = await memoryManager.generateMemoryContext(context.sessionId || '', context.userId || '', context.query);
+          //     }
+          //   } catch (memErr) {
+          //     aiLogger.warn('🟨 [streaming][WARN] Failed to generate memory context', { error: String(memErr) });
+          //     memoryContext = '';
+          //   }
+          // }
 
           const response = await callLLMStream(
             context.query,
             memoryContext,
             context.documentContent || '', 
             context.conversationHistory || [],
-            context.abortSignal
+            context.abortSignal,
+            context.mode || 'docbare'
           );
           const reader = response.getReader();
           

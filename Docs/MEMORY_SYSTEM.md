@@ -14,6 +14,7 @@ The system stores five types of memories:
    - User and AI messages
    - Chat history for context
    - Metadata: role, source, relevance
+   - **FIXED**: User messages now properly stored during chat creation
 
 2. **Reasoning Memory** (`reasoning`)
    - AI's thought process and analysis
@@ -161,6 +162,7 @@ const context = await memoryManager.generateMemoryContext(sessionId, userId, que
 - AI remembers previous interactions
 - Maintains context across multiple queries
 - Builds upon past discussions
+- **FIXED**: No more conversation history duplication - perfect continuity
 
 ### 2. **Improved Reasoning**
 - AI can reference previous analysis

@@ -41,14 +41,32 @@ export async function POST(req: NextRequest) {
       // Store conversation memory for user messages
       if (role === 'USER' && sessionId && userId) {
         try {
+          console.log('🟦 [DEBUG] Starting user message storage:', {
+            sessionId,
+            userId,
+            role,
+            content: content.substring(0, 100),
+            timestamp: new Date().toISOString()
+          });
+          
           const { MemoryManager } = await import('@/lib/memory');
           const memoryManager = MemoryManager.getInstance();
-          await memoryManager.storeConversationMemory(
+          
+          console.log('🟦 [DEBUG] MemoryManager imported successfully');
+          
+          const memoryId = await memoryManager.storeConversationMemory(
             sessionId,
             userId,
             'user',
             content
           );
+          
+          console.log('🟦 [DEBUG] User message stored successfully:', {
+            memoryId,
+            sessionId,
+            userId,
+            content: content.substring(0, 100)
+          });
           
           if (process.env.NODE_ENV === 'development') {
             apiLogger.info('🟦 [chat][DEBUG] User message stored as conversation memory', {
@@ -57,12 +75,38 @@ export async function POST(req: NextRequest) {
               content: content.substring(0, 50) + '...'
             });
           }
+          
+          // DEBUG: Log the complete storage process
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [DEBUG] User message storage completed:', {
+              sessionId,
+              userId,
+              role,
+              content: content.substring(0, 100),
+              timestamp: new Date().toISOString()
+            });
+          }
         } catch (memoryError) {
           // Don't fail the request if memory storage fails
+          console.error('🟥 [DEBUG] User message storage failed:', {
+            error: memoryError,
+            sessionId,
+            userId,
+            role,
+            content: content.substring(0, 100)
+          });
+          
           if (process.env.NODE_ENV === 'development') {
             apiLogger.error('🟥 [chat][ERROR] Failed to store user message as memory', memoryError);
           }
         }
+      } else {
+        console.log('🟦 [DEBUG] User message storage skipped:', {
+          role,
+          sessionId,
+          userId,
+          reason: role !== 'USER' ? 'Not a user message' : !sessionId ? 'No sessionId' : 'No userId'
+        });
       }
       
       apiLogger.success('Chat message saved to Firestore', { 

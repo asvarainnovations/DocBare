@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ChatInput from "@/app/components/ChatInput";
 import { useSidebar } from "@/app/components/SidebarContext";
 import { useChat } from "@/app/components/ChatContext";
+import { useProductMode } from "@/app/contexts/ProductModeContext";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
 import { ThinkingDisplay } from "@/app/components/ThinkingDisplay";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
@@ -23,6 +24,8 @@ import ChatMessage from "./components/ChatMessage";
 export default function ChatPage({ params }: { params: { chatId: string } }) {
   const { sidebarOpen } = useSidebar();
   const { addChat, updateChat } = useChat();
+  const { isDocBareMode, toggleMode } = useProductMode();
+  
   const [input, setInput] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
   const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null);
@@ -67,7 +70,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     cancelledMessages,
     clearThinkingStates,
     cancelRequest,
-  } = useChatAI(params.chatId, session?.user?.id);
+  } = useChatAI(params.chatId, session?.user?.id, isDocBareMode ? 'docbare' : 'pleadsmart');
 
   // Enhanced file upload handler that clears thinking states
   const handleFileUploadWithCleanup = useCallback(
@@ -427,9 +430,9 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                 >
                   {/* Show Thinking Display before AI message when AI is thinking or streaming */}
                   {msg.role === "ASSISTANT" && thinkingStates[msg.id] && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                       className="w-full flex justify-start mb-4"
                     >
                       <div className="max-w-2xl mx-auto px-2 md:px-4 lg:px-0 py-2 w-full">
@@ -449,8 +452,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                           </div>
                         ) : null}
                       </div>
-                    </motion.div>
-                  )}
+                </motion.div>
+              )}
 
                   <ChatMessage
                     message={msg}
@@ -521,6 +524,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
               ))}
           </div>
         )}
+          
           <ChatInput
             variant="chat"
             onSend={handleSendMessage}
@@ -533,6 +537,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
             onChange={setInput}
             userId={session?.user?.id}
             onFileUpload={handleFileUploadWithCleanup}
+            isDocBareMode={isDocBareMode}
+            onModeToggle={toggleMode}
           />
           
         </div>

@@ -12,6 +12,7 @@ Below are the main API endpoints for DocBare. All endpoints are under `/api/`.
 - **POST /api/create_chat_session**: Create a new chat session
   - Request: `{ firstMessage: string, userId: string }`
   - Response: `{ chatId: string }`
+  - **Note**: Automatically stores the first user message in conversation memory
 - **GET /api/user_chats?userId=...**: List all chat sessions for a user
   - Response: `{ chats: Array<{ id, sessionName, ... }> }`
 - **GET /api/sessions/[sessionId]**: Get all messages for a chat session
@@ -23,9 +24,11 @@ Below are the main API endpoints for DocBare. All endpoints are under `/api/`.
 - **POST /api/chat**: Add a message to a chat session
   - Request: `{ sessionId, userId, role, content }`
   - Response: `{ message }`
+  - **Note**: Stores user messages in conversation memory for context
 - **POST /api/query**: Get AI response for a query (streamed)
-  - Request: `{ query, userId, sessionId }`
+  - Request: `{ query, userId, sessionId, mode? }`
   - Response: `{ answer }` (streamed)
+  - **Note**: Supports both 'pleadsmart' and 'docbare' modes, stores AI responses in conversation memory
 
 ## Documents
 - **POST /api/upload**: Upload one or more documents

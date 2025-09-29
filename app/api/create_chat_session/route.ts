@@ -85,6 +85,41 @@ export async function POST(req: NextRequest) {
     });
     console.info('🟩 [chat_session][SUCCESS] Created session in Postgres:', session.id);
 
+    // Store user message in conversation memory
+    try {
+      console.log('🟦 [DEBUG] Starting user message storage in conversation memory:', {
+        sessionId: session.id,
+        userId,
+        content: firstMessage.substring(0, 100),
+        timestamp: new Date().toISOString()
+      });
+      
+      const { MemoryManager } = await import('@/lib/memory');
+      const memoryManager = MemoryManager.getInstance();
+      
+      const memoryId = await memoryManager.storeConversationMemory(
+        session.id,
+        userId,
+        'user',
+        firstMessage
+      );
+      
+      console.log('🟦 [DEBUG] User message stored in conversation memory successfully:', {
+        memoryId,
+        sessionId: session.id,
+        userId,
+        content: firstMessage.substring(0, 100)
+      });
+    } catch (memoryError) {
+      console.error('🟥 [DEBUG] Failed to store user message in conversation memory:', {
+        error: memoryError,
+        sessionId: session.id,
+        userId,
+        content: firstMessage.substring(0, 100)
+      });
+      // Don't fail the request if memory storage fails
+    }
+
     // Create session in Firestore with document context
     const now = new Date();
     const firestoreSession = {

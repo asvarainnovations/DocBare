@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       return validation.error;
     }
 
-    const { query, userId, sessionId } = validation.data;
+    const { query, userId, sessionId, mode } = validation.data;
 
     // AI query request received
 
@@ -174,6 +174,7 @@ export async function POST(req: NextRequest) {
         conversationHistory: conversationHistory, // Pass conversation history
         memoryContext, // Pass memory context to streaming orchestrator
         abortSignal: req.signal, // Pass the request's abort signal
+        mode, // Pass the product mode
       };
 
       
@@ -241,6 +242,86 @@ export async function POST(req: NextRequest) {
           }
 
           controller.close();
+          
+          // 3. Store memories if sessionId is provided (AFTER streaming completes)
+          if (sessionId && !errorDuringStream) {
+            try {
+              if (process.env.NODE_ENV === 'development') {
+                aiLogger.info('🟦 [query][DEBUG] Storing conversation memories', {
+                  sessionId,
+                  userId,
+                  query: query.substring(0, 50) + '...',
+                  finalAnswer: finalAnswer.substring(0, 50) + '...'
+                });
+              }
+
+              // Store AI response as conversation memory - ONLY content, NOT reasoning_content
+              // Note: User message is already stored by /api/chat route, so we don't store it again here
+              // Remove any thinking content that might have leaked into finalAnswer
+              const cleanFinalAnswer = finalAnswer
+                .replace(/^THINKING:[\s\S]*?FINAL:/, '') // Remove thinking content prefix
+                .replace(/^FINAL:/, '') // Remove FINAL: prefix
+                .trim();
+              
+              // DEBUG: Log what we're storing
+              if (process.env.NODE_ENV === 'development') {
+                console.log('🟦 [DEBUG] Storing AI response:', {
+                  sessionId,
+                  userId,
+                  originalAnswerLength: finalAnswer.length,
+                  cleanedAnswerLength: cleanFinalAnswer.length,
+                  originalAnswer: finalAnswer.substring(0, 200),
+                  cleanedAnswer: cleanFinalAnswer.substring(0, 200),
+                  finalAnswerFull: finalAnswer, // Log the complete finalAnswer
+                  cleanFinalAnswerFull: cleanFinalAnswer // Log the complete cleaned answer
+                });
+              }
+
+              const assistantMemoryId = await memoryManager.storeConversationMemory(
+                sessionId,
+                userId,
+                "assistant",
+                cleanFinalAnswer
+              );
+
+              // Log final stored response
+              if (process.env.NODE_ENV === 'development') {
+                aiLogger.info('🟦 [CONVERSATION_FLOW] AI Response Stored to Memory', {
+                  sessionId,
+                  userId,
+                  originalAnswerLength: finalAnswer.length,
+                  cleanedAnswerLength: cleanFinalAnswer.length,
+                  originalAnswerStart: finalAnswer.substring(0, 100),
+                  cleanedAnswerStart: cleanFinalAnswer.substring(0, 100),
+                  originalAnswerEnd: finalAnswer.slice(-50),
+                  cleanedAnswerEnd: cleanFinalAnswer.slice(-50)
+                });
+              }
+
+              // Extract and store reasoning from the response
+              const reasoningMatch = finalAnswer.match(
+                /## Reasoning:([\s\S]*?)(?=##|$)/
+              );
+              if (reasoningMatch) {
+                await memoryManager.storeReasoningMemory(
+                  sessionId,
+                  userId,
+                  reasoningMatch[1].trim(),
+                  { source: "response_analysis" }
+                );
+              }
+            } catch (error) {
+              if (process.env.NODE_ENV === 'development') {
+                aiLogger.error('🟥 [query][ERROR] Failed to store conversation memories', {
+                  sessionId,
+                  userId,
+                  error: error instanceof Error ? error.message : String(error),
+                  stack: error instanceof Error ? error.stack : undefined
+                });
+              }
+              // Don't fail the request if memory storage fails
+            }
+          }
         } catch (error: any) {
           aiLogger.error("Stream error", { error: error.message });
           errorDuringStream = error;
@@ -249,78 +330,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 3. Store memories if sessionId is provided
-    if (sessionId && !errorDuringStream) {
-      try {
-        if (process.env.NODE_ENV === 'development') {
-          aiLogger.info('🟦 [query][DEBUG] Storing conversation memories', {
-            sessionId,
-            userId,
-            query: query.substring(0, 50) + '...',
-            finalAnswer: finalAnswer.substring(0, 50) + '...'
-          });
-        }
-
-        // Store user query as conversation memory
-        const userMemoryId = await memoryManager.storeConversationMemory(
-          sessionId,
-          userId,
-          "user",
-          query
-        );
-
-        // Store AI response as conversation memory - ONLY content, NOT reasoning_content
-        // Remove any thinking content that might have leaked into finalAnswer
-        const cleanFinalAnswer = finalAnswer
-          .replace(/^THINKING:[\s\S]*?FINAL:/, '') // Remove thinking content prefix
-          .replace(/^FINAL:/, '') // Remove FINAL: prefix
-          .trim();
-        
-        const assistantMemoryId = await memoryManager.storeConversationMemory(
-          sessionId,
-          userId,
-          "assistant",
-          cleanFinalAnswer
-        );
-
-        // Log final stored response
-        if (process.env.NODE_ENV === 'development') {
-          aiLogger.info('🟦 [CONVERSATION_FLOW] Final Stored Response', {
-            sessionId,
-            userId,
-            originalAnswerLength: finalAnswer.length,
-            cleanedAnswerLength: cleanFinalAnswer.length,
-            originalAnswerStart: finalAnswer.substring(0, 100),
-            cleanedAnswerStart: cleanFinalAnswer.substring(0, 100),
-            originalAnswerEnd: finalAnswer.slice(-50),
-            cleanedAnswerEnd: cleanFinalAnswer.slice(-50)
-          });
-        }
-
-        // Extract and store reasoning from the response
-        const reasoningMatch = finalAnswer.match(
-          /## Reasoning:([\s\S]*?)(?=##|$)/
-        );
-        if (reasoningMatch) {
-          await memoryManager.storeReasoningMemory(
-            sessionId,
-            userId,
-            reasoningMatch[1].trim(),
-            { source: "response_analysis" }
-          );
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          aiLogger.error('🟥 [query][ERROR] Failed to store conversation memories', {
-            sessionId,
-            userId,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
-          });
-        }
-        // Don't fail the request if memory storage fails
-      }
-    }
 
     // 4. Log the complete interaction
     // aiLogger.info("AI query completed", {

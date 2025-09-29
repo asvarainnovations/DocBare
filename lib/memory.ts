@@ -49,6 +49,14 @@ export class MemoryManager {
    */
   async storeMemory(entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'accessedAt' | 'accessCount'>): Promise<string> {
     try {
+      console.log('🟦 [DEBUG] Starting memory storage:', {
+        sessionId: entry.sessionId,
+        userId: entry.userId,
+        type: entry.type,
+        contentLength: entry.content.length,
+        content: entry.content.substring(0, 100)
+      });
+      
       const memoryEntry: Omit<MemoryEntry, 'id'> = {
         ...entry,
         createdAt: new Date(),
@@ -56,8 +64,16 @@ export class MemoryManager {
         accessCount: 1
       };
 
+      console.log('🟦 [DEBUG] Memory entry created, storing in Firestore...');
+
       // Store in Firestore for real-time access
       const docRef = await firestore.collection('agent_memory').add(memoryEntry);
+      
+      console.log('🟦 [DEBUG] Memory stored in Firestore:', {
+        docId: docRef.id,
+        sessionId: entry.sessionId,
+        type: entry.type
+      });
       
       // Also store in Prisma for analytics and backup (when available)
       try {
@@ -74,8 +90,11 @@ export class MemoryManager {
             accessCount: memoryEntry.accessCount
           }
         });
+        
+        console.log('🟦 [DEBUG] Memory stored in Prisma successfully');
       } catch (prismaError) {
         // If Prisma model doesn't exist yet, continue with Firestore only
+        console.log('🟦 [DEBUG] Prisma storage failed, using Firestore only:', prismaError);
         aiLogger.warn('Prisma AgentMemory model not available, using Firestore only', { error: prismaError });
       }
 
@@ -85,8 +104,22 @@ export class MemoryManager {
         contentLength: entry.content.length 
       });
 
+      console.log('🟦 [DEBUG] Memory storage completed successfully:', {
+        docId: docRef.id,
+        sessionId: entry.sessionId,
+        type: entry.type
+      });
+
       return docRef.id;
     } catch (error) {
+      console.error('🟥 [DEBUG] Memory storage failed:', {
+        error: error,
+        sessionId: entry.sessionId,
+        userId: entry.userId,
+        type: entry.type,
+        content: entry.content.substring(0, 100)
+      });
+      
       aiLogger.error('Failed to store memory', { error, entry });
       throw error;
     }
@@ -243,8 +276,8 @@ export class MemoryManager {
         } as MemoryEntry);
       });
 
-      // Sort in memory by createdAt descending (newest first)
-      memories.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Sort in memory by createdAt ascending (oldest first) for proper chronological order
+      memories.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
       // Take only the requested limit
       const limitedMemories = memories.slice(0, limit);
@@ -263,6 +296,20 @@ export class MemoryManager {
             content: m.content.substring(0, 50) + '...',
             createdAt: m.createdAt
           }))
+        });
+        
+        // DEBUG: Log the complete retrieval process
+        console.log('🟦 [DEBUG] Memory retrieval completed:', {
+          sessionId,
+          totalFound: memories.length,
+          limitedTo: limitedMemories.length,
+          allMemories: memories.map(m => ({
+            id: m.id,
+            role: m.metadata?.role,
+            content: m.content.substring(0, 100),
+            createdAt: m.createdAt.toISOString()
+          })),
+          timestamp: new Date().toISOString()
         });
       }
 
@@ -346,8 +393,8 @@ export class MemoryManager {
       // Convert memories to API message format
       const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
       
-      // Reverse the memories to get chronological order (oldest first) for the API
-      const chronologicalMemories = [...memories].reverse();
+      // Memories are already in chronological order (oldest first)
+      const chronologicalMemories = memories;
       
       for (const memory of chronologicalMemories) {
         // Get role from metadata (stored when saving conversation memory)
@@ -367,6 +414,16 @@ export class MemoryManager {
             role: role as 'user' | 'assistant',
             content: content
           });
+        } else {
+          // DEBUG: Log why content was filtered out
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [DEBUG] Filtered out empty content:', {
+              role,
+              originalContent: memory.content,
+              cleanedContent: content,
+              contentLength: content.length
+            });
+          }
         }
       }
       

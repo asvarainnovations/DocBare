@@ -3,6 +3,7 @@ import Sidebar from "./Sidebar";
 import NavBar from "./NavBar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { ChatProvider } from "./ChatContext";
+import { ProductModeProvider } from "../contexts/ProductModeContext";
 import { useState } from "react";
 import clsx from "clsx";
 import { usePathname } from "next/navigation";
@@ -60,7 +61,9 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
   return (
     <SidebarProvider>
       <ChatProvider>
-        <RootLayoutClientInner>{children}</RootLayoutClientInner>
+        <ProductModeProvider>
+          <RootLayoutClientInner>{children}</RootLayoutClientInner>
+        </ProductModeProvider>
       </ChatProvider>
     </SidebarProvider>
   );

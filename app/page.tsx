@@ -7,9 +7,11 @@ import { useSession, signIn, signOut } from "next-auth/react";
 
 import ChatInput from "./components/ChatInput";
 import LoadingSkeleton from "./components/LoadingSkeleton";
+import { useProductMode } from "./contexts/ProductModeContext";
 import { toast } from "sonner";
 
 export default function Home() {
+  const { isDocBareMode, toggleMode } = useProductMode();
   const [input, setInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<
     {
@@ -292,6 +294,8 @@ export default function Home() {
               onChange={setInput}
               userId={session?.user?.id}
               onFileUpload={handleFileUpload}
+              isDocBareMode={isDocBareMode}
+              onModeToggle={toggleMode}
             />
           </div>
         </div>
@@ -361,6 +365,8 @@ export default function Home() {
             onChange={setInput}
             userId={session?.user?.id}
             onFileUpload={handleFileUpload}
+            isDocBareMode={isDocBareMode}
+            onModeToggle={toggleMode}
           />
         </div>
       </div>

@@ -25,7 +25,7 @@ const generateUniqueId = (prefix: string) => {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
-export function useChatAI(chatId: string, userId?: string) {
+export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 'docbare' = 'pleadsmart') {
   const [loadingAI, setLoadingAI] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [thinkingStates, setThinkingStates] = useState<{ [messageId: string]: ThinkingState }>({});
@@ -81,12 +81,26 @@ export function useChatAI(chatId: string, userId?: string) {
   // Cleanup on unmount or chatId change
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        try { abortControllerRef.current.abort(); } catch (e) {}
+      if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+        try { 
+          abortControllerRef.current.abort(); 
+        } catch (e) {
+          // Ignore abort errors - they're expected when aborting
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [useChatAI][INFO] AbortController already aborted or error during cleanup:', e);
+          }
+        }
         abortControllerRef.current = null;
       }
       if (currentReaderRef.current) {
-        try { currentReaderRef.current.cancel(); } catch (e) {}
+        try { 
+          currentReaderRef.current.cancel(); 
+        } catch (e) {
+          // Ignore cancel errors - they're expected when canceling
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🟦 [useChatAI][INFO] Reader already cancelled or error during cleanup:', e);
+          }
+        }
         currentReaderRef.current = null;
       }
       cleanupThinkingStates();
@@ -138,6 +152,7 @@ export function useChatAI(chatId: string, userId?: string) {
         query: message.trim(),
         sessionId: chatId,
         userId: userId,
+        mode: mode,
       };
       
       // Send message to API
@@ -528,19 +543,27 @@ export function useChatAI(chatId: string, userId?: string) {
     
     try {
       // abort network fetch
-      if (abortControllerRef.current) {
+      if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
         console.log('🟦 [CANCEL][INFO] Aborting controller');
-        abortControllerRef.current.abort();
+        try {
+          abortControllerRef.current.abort();
+        } catch (e) {
+          console.log('🟦 [CANCEL][INFO] Controller already aborted or error:', e);
+        }
         // After aborting, null it to avoid reuse
         abortControllerRef.current = null;
       } else {
-        console.log('🟦 [CANCEL][WARNING] No abort controller found');
+        console.log('🟦 [CANCEL][WARNING] No abort controller found or already aborted');
       }
 
       // cancel stream reader (this is the key fix!)
       if (currentReaderRef.current) {
         console.log('🟦 [CANCEL][INFO] Cancelling reader');
-        currentReaderRef.current.cancel();
+        try {
+          currentReaderRef.current.cancel();
+        } catch (e) {
+          console.log('🟦 [CANCEL][INFO] Reader already cancelled or error:', e);
+        }
         currentReaderRef.current = null;
       } else {
         console.log('🟦 [CANCEL][WARNING] No reader found');

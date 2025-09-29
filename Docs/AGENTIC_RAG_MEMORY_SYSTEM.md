@@ -17,6 +17,7 @@ The Agentic RAG Memory System is a sophisticated memory management solution that
 - **Smart Memory Retrieval**: Relevant memories from all user sessions
 - **Context Enhancement**: Combines current session + historical context
 - **Relevance Scoring**: Intelligent filtering based on query context
+- **FIXED**: User messages now properly stored in conversation memory during chat creation
 
 ## Memory Types
 
@@ -24,6 +25,7 @@ The Agentic RAG Memory System is a sophisticated memory management solution that
 - User and AI messages
 - Maintains conversation flow
 - Cross-session continuity
+- **FIXED**: User messages now properly stored during chat creation
 
 ### 2. **Reasoning Memory**
 - AI's thought process and analysis

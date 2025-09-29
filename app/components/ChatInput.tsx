@@ -35,6 +35,9 @@ interface ChatInputProps {
     firestoreId?: string;
     abortController?: AbortController;
   }) => void;
+  // DocBare mode props
+  isDocBareMode?: boolean;
+  onModeToggle?: () => void;
 }
 
 export default function ChatInput({
@@ -51,6 +54,8 @@ export default function ChatInput({
   onChange: controlledOnChange,
   userId,
   onFileUpload,
+  isDocBareMode = false,
+  onModeToggle,
 }: ChatInputProps) {
   
   const [inputValue, setInputValue] = useState("");
@@ -121,11 +126,6 @@ export default function ChatInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    console.log("🟦 [ChatInput][INFO] KeyDown event:", {
-      key: e.key,
-      shiftKey: e.shiftKey,
-      loading,
-    });
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       console.log("🟦 [ChatInput][INFO] Enter pressed, calling handleSend");
@@ -442,10 +442,6 @@ export default function ChatInput({
             }}
             value={displayValue}
             onChange={(e) => {
-              console.log(
-                "🟦 [ChatInput][INFO] Textarea onChange:",
-                e.target.value
-              );
               if (controlledValue !== undefined) {
                 // Controlled mode - only call onChange
                 if (controlledOnChange) {
@@ -469,30 +465,50 @@ export default function ChatInput({
 
           {/* Buttons row */}
           <div className="flex flex-row items-center mt-0 gap-2 justify-between">
-            {/* Left: Attachment Icon */}
-            {showAttachments && (
+            {/* Left: Attachment Icon and DocBare Toggle */}
+            <div className="flex items-center gap-2">
+              {showAttachments && (
+                <div className="flex items-center relative group">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={handleFileButtonClick}
+                    className="p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors"
+                    aria-label="Upload PDF or image"
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : isHomeVariant ? (
+                      <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    ) : (
+                      <PaperClipIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    )}
+                  </button>
+                  <span className="absolute left-1/2 -translate-x-1/2 -top-8 bg-gray-900 text-xs text-white rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
+                    {uploading ? "Uploading..." : "Upload PDF or image"}
+                  </span>
+                </div>
+              )}
+
+              {/* DocBare Toggle Button */}
               <div className="flex items-center relative group">
                 <button
                   type="button"
                   tabIndex={-1}
-                  onClick={handleFileButtonClick}
-                  className="p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors"
-                  aria-label="Upload PDF or image"
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                  ) : isHomeVariant ? (
-                    <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  ) : (
-                    <PaperClipIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  onClick={onModeToggle}
+                  className={clsx(
+                    "px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-150",
+                    isDocBareMode
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-gray-700 text-white hover:bg-gray-600"
                   )}
+                  aria-label={isDocBareMode ? "Turn off DocBare mode" : "Turn on DocBare mode"}
+                >
+                  DocBare
                 </button>
-                <span className="absolute left-1/2 -translate-x-1/2 -top-8 bg-gray-900 text-xs text-white rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
-                  {uploading ? "Uploading..." : "Upload PDF or image"}
-                </span>
               </div>
-            )}
+            </div>
 
             {/* Right: Send/Cancel Button */}
             <div className="flex items-center gap-2">
