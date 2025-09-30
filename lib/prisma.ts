@@ -1,11 +1,10 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { isDevelopment, isProduction } from './env-validation';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 // Database configuration with connection pooling and build-time handling
 const prismaConfig: Prisma.PrismaClientOptions = {
-  log: isDevelopment() 
+  log: process.env.NODE_ENV === 'development' 
     ? ['query', 'info', 'warn', 'error']
     : ['warn', 'error'],
   datasources: {
@@ -65,13 +64,13 @@ async function connectWithFallback() {
     }
     
     // In development, allow the app to continue with warnings
-    if (isDevelopment()) {
+    if (process.env.NODE_ENV === 'development') {
       console.warn('⚠️ [PRISMA][WARNING] Database connection failed, but continuing in development mode');
       return;
     }
     
     // In production, this is a critical error
-    if (isProduction()) {
+    if (process.env.NODE_ENV === 'production') {
       console.error('🚨 [PRISMA][CRITICAL] Database connection failed in production');
       process.exit(1);
     }
@@ -114,6 +113,6 @@ process.on('unhandledRejection', async (reason, promise) => {
 });
 
 // Store in global for development hot reloading
-if (isDevelopment()) {
+if (process.env.NODE_ENV === 'development') {
   globalForPrisma.prisma = prisma;
 } 

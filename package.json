@@ -13,9 +13,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "test": "tsx scripts/run-tests.ts",
-    "test:document-ai": "tsx scripts/test-document-ai.ts",
-    "validate:env": "node scripts/validate-env.js",
-    "validate:env:generate-example": "node scripts/validate-env.js --generate-example"
+    "test:document-ai": "tsx scripts/test-document-ai.ts"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "4.4.0",
