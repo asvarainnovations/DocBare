@@ -29,7 +29,7 @@ import Providers from "./components/Providers";
 // });
 
 export const metadata: Metadata = {
-  title: "DocBare - Legal AI Platform",
+  title: "PleadSmart - Legal AI Platform",
   description: "Modern legal AI platform for document drafting and analysis",
 };
 

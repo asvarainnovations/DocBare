@@ -83,22 +83,11 @@ export default function ChatInput({
 
   const handleSend = () => {
     const trimmedValue = displayValue.trim();
-    console.log("🟦 [ChatInput][INFO] handleSend called with:", {
-      trimmedValue,
-      loading,
-      disabled,
-    });
 
     if (!trimmedValue || loading || disabled) {
-      console.log("🟦 [ChatInput][INFO] handleSend early return:", {
-        trimmedValue: !!trimmedValue,
-        loading,
-        disabled,
-      });
       return;
     }
 
-    console.log("🟦 [ChatInput][INFO] Calling onSend with:", trimmedValue);
     onSend(trimmedValue);
 
     // Clear the input
@@ -128,13 +117,9 @@ export default function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      console.log("🟦 [ChatInput][INFO] Enter pressed, calling handleSend");
       if (!loading) {
         handleSend();
       } else {
-        console.log(
-          "🟦 [ChatInput][INFO] Loading is true, not calling handleSend"
-        );
       }
     }
   };
@@ -214,10 +199,6 @@ export default function ChatInput({
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / (progressEvent.total || 1)
-            );
-            console.info(
-              "🟦 [chat_input][INFO] Upload progress:",
-              percentCompleted + "%"
             );
           },
         });
@@ -492,7 +473,7 @@ export default function ChatInput({
               )}
 
               {/* DocBare Toggle Button */}
-              <div className="flex items-center relative group">
+              {/* <div className="flex items-center relative group">
                 <button
                   type="button"
                   tabIndex={-1}
@@ -507,7 +488,7 @@ export default function ChatInput({
                 >
                   DocBare
                 </button>
-              </div>
+              </div> */}
             </div>
 
             {/* Right: Send/Cancel Button */}

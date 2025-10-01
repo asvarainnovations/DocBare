@@ -87,7 +87,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
         } catch (e) {
           // Ignore abort errors - they're expected when aborting
           if (process.env.NODE_ENV === 'development') {
-            console.log('🟦 [useChatAI][INFO] AbortController already aborted or error during cleanup:', e);
           }
         }
         abortControllerRef.current = null;
@@ -128,7 +127,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
     documents?: Array<{ documentId: string; fileName: string; firestoreId?: string }>
   ) => {
     if (!userId) {
-      console.error('🟥 [chat_ui][ERROR] No user ID');
       toast.error('Please log in to send messages');
       return;
     }
@@ -156,7 +154,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
       };
       
       // Send message to API
-      console.log('🟦 [FETCH][INFO] Starting fetch request with abort signal');
       const response = await fetch('/api/query', {
         method: 'POST',
         headers: {
@@ -166,12 +163,10 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
         signal: controller.signal,
       });
       
-      console.log('🟦 [FETCH][INFO] Fetch request completed, response status:', response.status);
       
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🟥 [chat_ui][ERROR] API error:', errorText);
         const errorMessage = errorText || 'Failed to send message';
         setSendError(errorMessage);
         toast.error(errorMessage);
@@ -180,7 +175,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
 
       const reader = response.body?.getReader();
       if (!reader) {
-        console.error('🟥 [chat_ui][ERROR] No response body reader');
         return;
       }
 
@@ -225,18 +219,12 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
 
       // Check if request was already aborted
       if (controller.signal.aborted) {
-        console.log('🟦 [STREAM][INFO] Request was aborted before stream processing');
         return;
       }
 
       while (!closed) {
         // Check if request was aborted before reading
         if (controller.signal.aborted || abortControllerRef.current?.signal.aborted) {
-          console.log('🟦 [chat_ui][INFO] Stream aborted by user during reading', {
-            controllerAborted: controller.signal.aborted,
-            refAborted: abortControllerRef.current?.signal.aborted,
-            hasReader: !!currentReaderRef.current
-          });
           reader.cancel();
           closed = true;
           break;
@@ -246,23 +234,17 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
         const readWithTimeout = async () => {
           // Check abort signal immediately
           if (controller.signal.aborted || abortControllerRef.current?.signal.aborted) {
-            console.log('🟦 [chat_ui][INFO] Abort detected in readWithTimeout', {
-              controllerAborted: controller.signal.aborted,
-              refAborted: abortControllerRef.current?.signal.aborted
-            });
             throw new Error('Request aborted');
           }
           
           // Create abort promise that resolves when signal is aborted
           const abortPromise = new Promise<never>((_, reject) => {
             if (controller.signal.aborted || abortControllerRef.current?.signal.aborted) {
-              console.log('🟦 [chat_ui][INFO] Abort promise created with already aborted signal');
               reject(new Error('Request aborted'));
               return;
             }
             
             const abortHandler = () => {
-              console.log('🟦 [chat_ui][INFO] Abort handler triggered');
               reject(new Error('Request aborted'));
             };
             
@@ -282,7 +264,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
           result = await readWithTimeout();
         } catch (error) {
           if (error instanceof Error && error.message === 'Request aborted') {
-            console.log('🟦 [chat_ui][INFO] Stream aborted by user during read');
             reader.cancel();
             closed = true;
             break;
@@ -362,7 +343,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
       try {
         reader.releaseLock();
       } catch (error) {
-        console.log('🟦 [chat_ui][INFO] Reader release error (ignored):', error);
       }
 
       // Finalize thinking state
@@ -380,9 +360,7 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
           content: aiResponse,
           reasoningContent: thinkingStates[aiMessage!.id]?.content || ''
         });
-        console.info('🟩 [chat_ui][SUCCESS] AI message saved to database');
       } catch (saveError) {
-        console.error('🟥 [chat_ui][ERROR] Failed to save AI message:', saveError);
       }
 
       // Cleanup thinking states after a delay
@@ -392,7 +370,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        console.log('🟦 [chat_ui][INFO] Request was aborted by user');
         // Clear current message ID when aborted
         currentMessageIdRef.current = null;
         setLoadingAI(false);
@@ -400,7 +377,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
         return;
       }
 
-      console.error('🟥 [chat_ui][ERROR] AI response generation failed:', error);
       setSendError('Failed to generate AI response');
       toast.error('Failed to generate AI response. Please try again.');
 
@@ -444,7 +420,6 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
     sessionMetadata?: any
   ) => {
     if (!userId) {
-      console.error('🟥 [chat_ui][ERROR] No user ID');
       toast.error('Please log in to send messages');
       return;
     }
@@ -488,9 +463,7 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
         content: message.trim(),
         documents: allDocuments
       });
-      console.info('🟩 [chat_ui][SUCCESS] User message saved to database');
     } catch (saveError) {
-      console.error('🟥 [chat_ui][ERROR] Failed to save user message:', saveError);
       // Don't fail the entire request if saving fails
     }
 
@@ -532,44 +505,29 @@ export function useChatAI(chatId: string, userId?: string, mode: 'pleadsmart' | 
   const cancelRequest = useCallback(() => {
     const messageId = currentMessageIdRef.current;
     
-    console.log('🟦 [CANCEL][INFO] Cancel request initiated', {
-      messageId,
-      hasAbortController: !!abortControllerRef.current,
-      hasReader: !!currentReaderRef.current,
-      loadingAI,
-      abortControllerSignal: abortControllerRef.current?.signal.aborted,
-      readerExists: !!currentReaderRef.current
-    });
     
     try {
       // abort network fetch
       if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
-        console.log('🟦 [CANCEL][INFO] Aborting controller');
         try {
           abortControllerRef.current.abort();
         } catch (e) {
-          console.log('🟦 [CANCEL][INFO] Controller already aborted or error:', e);
         }
         // After aborting, null it to avoid reuse
         abortControllerRef.current = null;
       } else {
-        console.log('🟦 [CANCEL][WARNING] No abort controller found or already aborted');
       }
 
       // cancel stream reader (this is the key fix!)
       if (currentReaderRef.current) {
-        console.log('🟦 [CANCEL][INFO] Cancelling reader');
         try {
           currentReaderRef.current.cancel();
         } catch (e) {
-          console.log('🟦 [CANCEL][INFO] Reader already cancelled or error:', e);
         }
         currentReaderRef.current = null;
       } else {
-        console.log('🟦 [CANCEL][WARNING] No reader found');
       }
     } catch (e) {
-      console.warn('🟥 [CANCEL][ERROR] Failed to abort streaming request', e);
     }
 
     // mark message as cancelled (so the UI can render differently)

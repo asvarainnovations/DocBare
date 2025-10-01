@@ -48,8 +48,8 @@ export default function NavBar({ showSidebarToggle, onSidebarToggle }: { showSid
             <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </button>
         )}
-        {/* DocBare Text */}
-        <span className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-white select-none pl-2 sm:pl-4">DocBare</span>
+        {/* PleadSmart Text */}
+        <span className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-white select-none pl-2 sm:pl-4">PleadSmart</span>
       </div>
       {/* User Avatar and Auth Button - Only visible on desktop */}
       <div className="hidden lg:flex items-center gap-2 sm:gap-4">

@@ -167,7 +167,7 @@ export default function Sidebar({
             transition={{ delay: 0.1, duration: 0.2 }}
             className="flex items-center justify-between p-4 border-b border-gray-700 lg:hidden"
           >
-            <span className="text-xl font-semibold text-white">DocBare</span>
+            <span className="text-xl font-semibold text-white">PleadSmart</span>
             <button
               onClick={onToggle}
               className="p-2 rounded hover:bg-gray-700 transition-colors"
