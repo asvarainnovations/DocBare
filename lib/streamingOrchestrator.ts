@@ -654,31 +654,27 @@ export class StreamingOrchestrator {
                       }
                     }
                     
-                    // Handle content (final response) - following DeepSeek pattern
-                    if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
-                      if (!hasStartedFinalResponse) {
-                        hasStartedFinalResponse = true;
-                        
-                        // Merge leftover reasoning buffer into the first final chunk to prevent character loss
-                        const preFinalPrefix = reasoningChunkBuffer || '';
-                        reasoningChunkBuffer = '';
-                        
-                        // Emit the FINAL marker so client knows final phase started
-                        controller.enqueue(encoder.encode('FINAL:'));
-                        
-                        const newContent = jsonData.choices[0].delta.content;
-                        
-                        // If there is preFinalPrefix, prepend it to the first newContent chunk
-                        if (preFinalPrefix) {
-                          controller.enqueue(encoder.encode(preFinalPrefix + newContent));
-                          // Also append to finalContent tracking
-                          finalContent += preFinalPrefix + newContent;
-                        } else {
-                          controller.enqueue(encoder.encode(newContent));
-                          finalContent += newContent;
-                        }
-                      } else {
-                        // Subsequent final chunks
+                                          // Handle content (final response) - following DeepSeek pattern
+                                        if (jsonData.choices && jsonData.choices[0] && jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                                          if (!hasStartedFinalResponse) {
+                                            hasStartedFinalResponse = true;
+                    
+                                            // EXPERT-SUGGESTED FIX:
+                                            // Flush any remaining reasoning content in the buffer before starting the final response
+                                            if (reasoningChunkBuffer.trim()) {
+                                              controller.enqueue(encoder.encode(`THINKING:${reasoningChunkBuffer}`));
+                                              reasoningChunkBuffer = ''; // Clear buffer after flushing
+                                            }
+                                            
+                                            // Emit the FINAL marker so client knows final phase started
+                                            controller.enqueue(encoder.encode('FINAL:'));
+                                            
+                                            const newContent = jsonData.choices[0].delta.content;
+                                            
+                                            // Always send the first content chunk directly
+                                            controller.enqueue(encoder.encode(newContent));
+                                            finalContent += newContent;
+                                          } else {                        // Subsequent final chunks
                         const newContent = jsonData.choices[0].delta.content;
                         finalContent += newContent;
                         controller.enqueue(encoder.encode(newContent));
