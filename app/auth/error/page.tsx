@@ -12,14 +12,29 @@ function AuthErrorPageInner() {
   const provider = params.get("provider") || (callbackUrl.includes("google") ? "google" : "credentials");
 
   useEffect(() => {
-    if (error === "OAuthAccountNotLinked") {
-      // Redirect to login with provider-mismatch error
+    // Only redirect for actual provider conflicts, not for new user signups
+    if (error === "OAuthAccountNotLinked" && provider !== "google") {
       router.replace(`/login?error=provider-mismatch&type=${provider}`);
     }
   }, [error, provider, router]);
 
-  if (error === "OAuthAccountNotLinked") {
-    return null; // Will redirect
+  if (error === "OAuthAccountNotLinked" && provider === "google") {
+    // Show signup completion page for Google users
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-white">
+        <div className="p-8 rounded shadow bg-gray-900">
+          <h1 className="text-2xl font-bold mb-4">Complete Your Signup</h1>
+          <p className="mb-4 text-green-400">Google authentication successful!</p>
+          <p className="mb-4">Please complete your account setup by clicking the button below.</p>
+          <button
+            onClick={() => router.push('/signup')}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Complete Signup
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
