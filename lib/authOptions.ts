@@ -117,7 +117,27 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile, email, credentials }) {
-      // Silent cross-platform authentication - no UI indicators
+      // For Google OAuth, check if user exists with that email
+      if (account?.provider === 'google' && profile) {
+        const userEmail = (profile as any)?.email;
+        if (userEmail) {
+          try {
+            // Check if user exists with this email
+            const existingUser = await prisma.user.findUnique({
+              where: { email: userEmail }
+            });
+            
+            if (existingUser) {
+              // User exists, allow sign-in (this will link the Google account)
+              return true;
+            }
+          } catch (error) {
+            console.error('Error checking existing user:', error);
+          }
+        }
+      }
+      
+      // Allow all other sign-ins
       return true;
     },
     async jwt({ token, user, account, profile }) {
