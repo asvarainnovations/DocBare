@@ -54,7 +54,14 @@ export default function Sidebar({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { chats, updateChat, removeChat, refreshTrigger, addChat, setChatsFromAPI } = useChat();
+  const {
+    chats,
+    updateChat,
+    removeChat,
+    refreshTrigger,
+    addChat,
+    setChatsFromAPI,
+  } = useChat();
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -212,7 +219,10 @@ export default function Sidebar({
             <ul className="space-y-1">
               {chats.map((chat, index) => (
                 <motion.li
-                  key={chat.id || `chat-${index}-${chat.createdAt?.getTime() || index}`}
+                  key={
+                    chat.id ||
+                    `chat-${index}-${chat.createdAt?.getTime() || index}`
+                  }
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{
@@ -230,6 +240,8 @@ export default function Sidebar({
                   onClick={() => {
                     router.push(`/c/${chat.id}`);
                     if (onSelectChat) onSelectChat(chat.id);
+                    // Close sidebar on mobile when chat is clicked
+                    onToggle();
                   }}
                 >
                   <div className="flex items-center gap-2 overflow-hidden w-full">

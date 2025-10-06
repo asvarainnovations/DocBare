@@ -153,22 +153,56 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
     }
   }, [sessionMeta, loadingMeta, params.chatId, addChat]);
 
-  // Auto-scroll to bottom only when chat initially loads (not during streaming)
+  // Auto-scroll to bottom when messages are initially loaded
   useEffect(() => {
-    if (chatRef.current && !loadingMessages && messages.length > 0 && !isStreaming && !userScrolling) {
-      // Small delay to ensure DOM is updated
+    if (!loadingMessages && messages.length > 0) {
+      console.log('🔄 [SCROLL] Attempting to scroll to bottom, messages:', messages.length);
+      
+      // Use scrollIntoView on the last message for more reliable scrolling
+      const scrollToLastMessage = () => {
+        if (lastMsgRef.current) {
+          console.log('🔄 [SCROLL] Scrolling to last message');
+          lastMsgRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'end' 
+          });
+        } else if (chatRef.current) {
+          console.log('🔄 [SCROLL] Fallback: scrolling container to bottom');
+          chatRef.current.scrollTo({
+            top: chatRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      };
+      
+      // Try immediately
+      scrollToLastMessage();
+      
+      // Try after a short delay
+      setTimeout(scrollToLastMessage, 100);
+      
+      // Try after a longer delay
+      setTimeout(scrollToLastMessage, 500);
+      
+      // Force scroll after 1 second (no smooth behavior)
       setTimeout(() => {
-        chatRef.current?.scrollTo({
-          top: chatRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-      }, 100);
+        if (lastMsgRef.current) {
+          console.log('🔄 [SCROLL] Force scrolling to last message');
+          lastMsgRef.current.scrollIntoView({ 
+            behavior: 'auto', 
+            block: 'end' 
+          });
+        } else if (chatRef.current) {
+          console.log('🔄 [SCROLL] Force scrolling container to bottom');
+          chatRef.current.scrollTop = chatRef.current.scrollHeight;
+        }
+      }, 1000);
     }
-  }, [loadingMessages, messages.length, isStreaming, userScrolling]);
+  }, [loadingMessages, messages.length]);
 
-  // Auto-scroll to bottom when streaming completes (if user is near bottom)
+  // Auto-scroll to bottom during streaming (if user is near bottom)
   useEffect(() => {
-    if (chatRef.current && !isStreaming && !userScrolling) {
+    if (chatRef.current && !isStreaming && !userScrolling && messages.length > 0) {
       const { scrollTop, scrollHeight, clientHeight } = chatRef.current;
       const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
       
@@ -182,7 +216,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         }, 100);
       }
     }
-  }, [isStreaming, userScrolling]);
+  }, [isStreaming, userScrolling, messages.length]);
+
 
   // Scroll detection for loading more messages
   useEffect(() => {
