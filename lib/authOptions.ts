@@ -14,14 +14,32 @@ function PatchedPrismaAdapter(prisma: PrismaClient) {
     throw new Error('Prisma adapter createUser method not found');
   }
   adapter.createUser = async (data: any) => {
-    if (!data.passwordHash) {
-      data.passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
+    try {
+      if (!data.passwordHash) {
+        data.passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
+      }
+      
+      // Check if user already exists (for cross-platform compatibility)
+      const existingUser = await prisma.user.findUnique({
+        where: { email: data.email }
+      });
+      
+      if (existingUser) {
+        console.log('✅ [AUTH] User already exists, returning existing user:', data.email);
+        return existingUser;
+      }
+      
+      const result = await originalCreateUser(data);
+      if (!result) {
+        throw new Error('Failed to create user');
+      }
+      
+      console.log('✅ [AUTH] New user created successfully:', data.email);
+      return result;
+    } catch (error) {
+      console.error('❌ [AUTH] Error in createUser:', error);
+      throw error;
     }
-    const result = await originalCreateUser(data);
-    if (!result) {
-      throw new Error('Failed to create user');
-    }
-    return result;
   };
   return adapter;
 }
@@ -117,7 +135,7 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile, email, credentials }) {
-      // For Google OAuth, check if user exists with that email
+      // For Google OAuth, handle cross-platform account linking
       if (account?.provider === 'google' && profile) {
         const userEmail = (profile as any)?.email;
         if (userEmail) {
@@ -129,10 +147,17 @@ export const authOptions: AuthOptions = {
             
             if (existingUser) {
               // User exists, allow sign-in (this will link the Google account)
+              console.log('✅ [AUTH] Existing user found, allowing Google sign-in:', userEmail);
+              return true;
+            } else {
+              // User doesn't exist, allow creation
+              console.log('✅ [AUTH] New user, allowing Google sign-in:', userEmail);
               return true;
             }
           } catch (error) {
-            console.error('Error checking existing user:', error);
+            console.error('❌ [AUTH] Error checking existing user:', error);
+            // Allow sign-in even if database check fails
+            return true;
           }
         }
       }

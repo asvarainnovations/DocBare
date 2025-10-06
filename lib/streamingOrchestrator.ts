@@ -50,9 +50,21 @@ function getPleadSmartSystemPrompt(knowledgeContext: string, documentContent: st
     - Use professional Indian legal formatting and terminology
     - Include relevant Indian legal analysis and recommendations
     - Reference applicable Indian statutes, sections, and precedents
+    - **ALWAYS format legal citations properly:**
+      - Case citations: "Case Name, (Year) Court Citation"
+      - Statute citations: "Section X of [Act Name], [Year]"
+      - Constitutional provisions: "Article X of the Constitution of India"
     - Maintain concise, clear language
-    - NO internal pipeline steps or analysis markers
+    - NO internal pipeline steps or analysis pipeline markers
     - Ensure the response is complete and actionable
+
+    **LEGAL CITATION STANDARDS:**
+    - Case Law: "XYZ v. ABC, (2023) SCC 123" or "XYZ v. ABC, AIR 2023 SC 456"
+    - Statutes: "Section 420 of the Indian Penal Code, 1860"
+    - Constitutional: "Article 21 of the Constitution of India"
+    - High Court Cases: "XYZ v. ABC, (2023) 2 KLJ 789"
+    - Always include year and proper court designation
+    - Use standard Indian legal citation format consistently
 
     ${knowledgeContext ? `\n\n**Legal Knowledge Base Context:**\n${knowledgeContext}\n\nUse this knowledge to enhance your Indian legal analysis and ensure accuracy.` : ''}
     ${documentContent ? `\n\n**Document Content:**\n${documentContent}\n\nAnalyze the provided document content in relation to the user's query.` : ''}
